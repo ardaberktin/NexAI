@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from . import goal_follow_ups
 from .feed import stamp
-from .goal_definition import summary
+from .goal_definition import field, summary
 from .goal_runner import run_prompt
 from .goal_schedule import schedule_after_resume
 from .prompt_goals import finish_prompt, save_prompt
@@ -104,6 +104,23 @@ class Goals:
                     (request, language if language in ("en", "tr") else None, identifier),
                 )
             return result
+
+    def set_pdf_format(self, identifier, revision, instruction):
+        instruction = field({"pdf_instruction": instruction}, "pdf_instruction", 420)
+        if not instruction:
+            raise ValueError("Specify the PDF output format.")
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            require(db, "goals")
+            goal = self.find(db, identifier)
+            self.check_revision(goal, revision)
+            if instruction != goal["pdf_instruction"]:
+                now = stamp(datetime.now(UTC))
+                db.execute("UPDATE goals SET pdf_instruction=?,updated=?,revision=revision+1 WHERE id=?",
+                           (instruction, now, identifier))
+                self.record(db, identifier, now, "Goal format updated", instruction)
+                goal = self.find(db, identifier)
+            return summary(goal)
 
     def save_assessment(self, db, old, goal, anchor, revision, request, language, check_in, chat_request_id):
         identifier = goal["id"]

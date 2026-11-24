@@ -14,12 +14,13 @@ from nex.conversation.document_routing import (
     CHOOSE_DOCUMENT_ACTION,
     PLAN_PDF,
     PLAN_PDF_GOAL,
+    REVIEW_PDF_DELIVERY,
 )
 from nex.conversation.goal_management_prompts import (
     EDIT_GOAL,
     GOAL_INTENT,
-    SELECT_GOAL,
-    VERIFY_CHANGE,
+    SELECT_PDF_GOAL,
+    VERIFY_PDF_CHANGE,
 )
 from nex.conversation.reply import (
     VERIFY_GOAL,
@@ -35,7 +36,7 @@ from nex.pdf.document import WRITE_DOCUMENT
 from nex.pdf.scheduled import VERIFY_SKIP_PDF, WRITE_NOTE
 from nex.pdf.web import VERIFY_DOCUMENT_WEB, WRITE_WEB_DOCUMENT
 from nex.privacy import public
-from nex.scheduled_plan import PLAN, RETRY_PLAN
+from nex.scheduled_plan import PLAN
 from nex.store import Store
 from nex.web_html import Page
 from nex.web_transport import WebReadError
@@ -167,7 +168,6 @@ class PDFRoutingTests(unittest.TestCase):
         identifier = str(uuid4())
         task = "Report when the new library reading room opens."
         instruction = "Publish every report as a newspaper PDF."
-        revised_task = f"{task}\n\n{instruction}"
         goals = Goals(self.store)
         goals.save(identifier, {"title": "Morning check-in", "prompt": task, "zone": "UTC",
                                 "frequency_minutes": 1440, "scheduled_at": anchor.isoformat()})
@@ -181,38 +181,44 @@ class PDFRoutingTests(unittest.TestCase):
                 return "DOCUMENT"
             if prompt == CHOOSE_DOCUMENT_ACTION:
                 self.assertEqual(data["question"], question)
-                return "FORMAT"
-            if prompt == SELECT_GOAL:
+                return "REPEAT"
+            if prompt.startswith(PLAN_PDF_GOAL):
+                return tools({"name": "goal", "query": task, "start": anchor.strftime("%Y-%m-%dT%H:%M")})
+            if prompt == REVIEW_PDF_DELIVERY:
+                self.assertEqual(data["question"], question)
+                return '{"action":"FORMAT"}'
+            if prompt == SELECT_PDF_GOAL:
+                self.assertEqual(data["goals"][0]["title"], "Morning check-in")
+                self.assertEqual(data["goals"][0]["frequency"], 1440)
                 return '{"target":1,"title":"Morning check-in"}'
             if prompt.startswith(EDIT_GOAL):
                 self.assertEqual(data["selected_goal"]["task"], task)
                 self.assertTrue(data["format_only"])
                 return json.dumps({"format_instruction": instruction})
-            if prompt == VERIFY_CHANGE:
+            if prompt == VERIFY_PDF_CHANGE:
                 self.assertEqual(data["proposed_operation"], {"edit": {"format_instruction": instruction}})
-                return "MATCH"
+                return "YES"
             if prompt == VERIFY_GOAL_FORMAT:
                 return "YES"
             self.assertEqual(prompt, WRITE_GOAL_FORMAT)
             self.assertEqual(data["tools"]["goal"]["format_instruction"], instruction)
             return "Updated the format for the Morning check-in."
 
-        self.ask(question, edit)
+        saved_receipt = self.ask(question, edit)
         saved = goals.detail(identifier)
-        self.assertEqual(saved["prompt"], revised_task)
+        self.assertEqual(saved_receipt["goal_id"], identifier)
+        self.assertEqual(len(goals.overview()), 1)
+        self.assertEqual(saved["prompt"], task)
+        self.assertEqual(saved["pdf_instruction"], instruction)
         self.assertEqual(saved["frequency_minutes"], 1440)
         self.assertEqual(datetime.fromisoformat(saved["next_run"]), anchor)
 
         def generate(messages, _tokens):
             prompt = messages[0]["content"]
             data = json.loads(messages[1]["content"])
-            self.assertEqual(data["goal"], revised_task)
-            if prompt == PLAN and calls == 0:
-                return tools({"name": "web"}, {"name": "web"})
-            if prompt == RETRY_PLAN:
-                return tools("create_pdf")
+            self.assertEqual(data["goal"], task)
             if prompt == PLAN:
-                return tools({"name": "create_pdf", "query": "newspaper"})
+                return '{"sources":["none"]}'
             if prompt.startswith(EXECUTE):
                 return "NO_UPDATE" if calls == 0 else STORY
             if prompt == VERIFY_SKIP_PDF:
@@ -220,6 +226,7 @@ class PDFRoutingTests(unittest.TestCase):
                 return "NO"
             if prompt == WRITE_DOCUMENT:
                 self.assertEqual(data["verified_update"], "" if calls == 0 else STORY)
+                self.assertEqual(data["document_brief"], instruction)
                 return json.dumps(EDITION | {"sections": [{"paragraphs": [STORY]}]})
             self.assertEqual(prompt, WRITE_NOTE)
             return "The update is in Files and the goal's Artifacts."

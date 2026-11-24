@@ -49,6 +49,8 @@ edit, delete, complete, keep = change a saved goal, cancel it, report a fulfille
 manage = respond to a clarification about which existing goal to change.
 
 Select answer, clarify, clock, schedule, recurring, check_in, mail_watch, document, and goal-management actions alone.
+Use document for a PDF request even when it refers to a recurring goal or the user is answering which
+goal should receive the PDF. Use history to connect a clarification answer to the original request.
 Examples:
 "How does a solar eclipse work?" -> {"capabilities":["answer"],"language":"en"}
 "What's on my calendar tomorrow?" -> {"capabilities":["agenda"],"language":"en"}

@@ -7,6 +7,7 @@ from .clock_alerts import ClockAlerts
 from .feed import Feed
 from .goal_follow_up_jobs import GoalFollowUpJobs
 from .goal_follow_up_notices import GoalFollowUpNotices
+from .goal_follow_up_pdfs import deliver_pdfs
 from .goals import Goals
 from .push_queue import PushQueue
 from .workspace_ideas import WorkspaceIdeas
@@ -44,6 +45,7 @@ def start_workspace_jobs(store, engines, settings, stop):
         (ClockAlerts(store).run, "alarms and timers", 1),
         (follow_ups.decide, "goal follow-up decisions", 5),
         (follow_ups.deliver, "goal follow-up delivery", 5),
+        (lambda: deliver_pdfs(store, engines.generate_background), "goal follow-up PDFs", 5),
         (notices.run, "goal follow-up confirmations", 5),
         (PushQueue(store).run, "iPhone push", 2),
     )

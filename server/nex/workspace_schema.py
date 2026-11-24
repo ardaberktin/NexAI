@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS goals (
     status TEXT NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL,
     revision INTEGER NOT NULL DEFAULT 1, next_run TEXT, last_checked TEXT, error TEXT, latest TEXT,
     requested INTEGER NOT NULL DEFAULT 0, watch_provider TEXT,
-    original_request TEXT NOT NULL DEFAULT '', reply_language TEXT
+    original_request TEXT NOT NULL DEFAULT '', reply_language TEXT, pdf_instruction TEXT
 )"""
 GOALS_INDEX = "CREATE INDEX IF NOT EXISTS goals_due ON goals(status, next_run)"
 
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS goal_follow_ups (
     id TEXT PRIMARY KEY, goal_id TEXT NOT NULL, due TEXT NOT NULL,
     question TEXT NOT NULL, choices TEXT NOT NULL, uses_goal_run INTEGER NOT NULL,
     published_at TEXT, selected_choice INTEGER, answered_at TEXT,
-    cancelled INTEGER NOT NULL DEFAULT 0
+    cancelled INTEGER NOT NULL DEFAULT 0, pdf_instruction TEXT, pdf_retry_at TEXT
 );
 CREATE INDEX IF NOT EXISTS goal_follow_ups_by_goal ON goal_follow_ups(goal_id);
 CREATE INDEX IF NOT EXISTS goal_follow_ups_due ON goal_follow_ups(due)
@@ -134,6 +134,12 @@ def migrate_workspace(db, root):
         from .goal_chat_receipts import migrate_chat_receipts
 
         migrate_chat_receipts(db, root)
+    card_columns = {column["name"] for column in db.execute("PRAGMA table_info(goal_follow_ups)")}
+    for column in ("pdf_instruction", "pdf_retry_at"):
+        if column not in card_columns:
+            db.execute(f"ALTER TABLE goal_follow_ups ADD COLUMN {column} TEXT")
+    db.execute("CREATE INDEX IF NOT EXISTS goal_follow_up_pdf_due ON goal_follow_ups(pdf_retry_at) "
+               "WHERE pdf_retry_at IS NOT NULL")
     migrate_goal_context(db)
     db.execute("CREATE INDEX IF NOT EXISTS goal_work_request ON goal_follow_up_work(chat_request_id) "
                "WHERE chat_request_id IS NOT NULL")
@@ -150,6 +156,8 @@ def migrate_goal_context(db):
     if "reply_language" not in columns:
         db.execute("ALTER TABLE goals ADD COLUMN reply_language TEXT")
         db.execute("UPDATE goals SET reply_language=(SELECT language FROM goal_follow_up_work WHERE goal_id=goals.id)")
+    if "pdf_instruction" not in columns:
+        db.execute("ALTER TABLE goals ADD COLUMN pdf_instruction TEXT")
 
 
 def migrate_goal_activity(db):

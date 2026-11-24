@@ -3,6 +3,7 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from ..goal_definition import field
 from ..goal_writing import json_object, model_messages
 from .calendar_scope import scope_prompt, weekday_selector, with_weekday
 from .goal_context import clarification_exchange
@@ -61,9 +62,11 @@ async def plan_edit(turn, goal, context, generate):
     data["selected_goal"] = describe(goal, 1, None) | {"task": goal["prompt"]}
     data["upcoming_days"] = scope_prompt(turn.text, turn.zone, turn.started, "")["upcoming_days"]
     instructions = EDIT_GOAL
-    if data.get("format_only"):
+    format_only = data.get("format_only", False)
+    if format_only:
         instructions += ('\nThis is a format-only change. Return exactly {"format_instruction":"..."} with '
-                         "the requested format, layout, and delivery details copied from the user's request.")
+                         "the PDF and any requested layout or delivery details in up to 420 characters. "
+                         "If the latest message supplies a target, use the earlier request for the output change.")
     for _ in range(2):
         changes = json_object(await generate(model_messages(instructions, data), 260) or "")
         if changes.keys() == {"question"}:
@@ -71,8 +74,12 @@ async def plan_edit(turn, goal, context, generate):
             if isinstance(question, str) and 0 < len(question.strip()) <= 480 and question.strip().endswith("?"):
                 return question.strip()
         try:
-            if data.get("format_only") and changes.keys() != {"format_instruction"}:
-                raise ValueError("Only format_instruction may change for this request.")
+            if format_only:
+                if changes.keys() != {"format_instruction"} or not (
+                    instruction := field(changes, "format_instruction", 420)
+                ):
+                    raise ValueError("Only a nonempty format_instruction may change for this request.")
+                return {"format_instruction": instruction}, None
             if (isinstance(start := changes.get("start"), str) and len(start) > 10
                     and (weekday := weekday_selector({"query": changes.get("timing")}))):
                 day = with_weekday({}, weekday, turn.zone, turn.started)["start_date"]
