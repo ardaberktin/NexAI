@@ -7,26 +7,33 @@ struct ChatMessageRow: View {
     let openPDF: (NexArtifact) -> Void
     let openSource: (String) async -> Void
     let readAloud: () -> Void
-    let canRead: Bool
+    let reply: () -> Void
+    #if os(iOS)
+    let selectText: (String) -> Void
+    #endif
 
     private var outgoing: Bool { message.role == .user }
 
     var body: some View {
         #if os(macOS)
         if outgoing {
-            contents
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(WorkspaceStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-                .frame(maxWidth: 560, alignment: .trailing)
-                .padding(.leading, 40)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 5) {
+                contents
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(WorkspaceStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                footer
+            }
+            .frame(maxWidth: 560, alignment: .trailing)
+            .padding(.leading, 40)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
             HStack(alignment: .top, spacing: 11) {
                 NexMark(size: 28)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Nex").font(.subheadline.weight(.semibold))
                     contents
+                    footer
                 }
             }
             .frame(maxWidth: 690, alignment: .leading)
@@ -34,15 +41,27 @@ struct ChatMessageRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         #else
-        contents
-            .padding(.horizontal, 15)
-            .padding(.vertical, 13)
-            .background {
-                RoundedRectangle(cornerRadius: 20).fill(
-                    outgoing ? WorkspaceStyle.accent.opacity(0.15) : Color.primary.opacity(0.055))
+        VStack(alignment: outgoing ? .trailing : .leading, spacing: 5) {
+            contents
+            footer
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 13)
+        .background {
+            RoundedRectangle(cornerRadius: 20).fill(
+                outgoing ? WorkspaceStyle.accent.opacity(0.15) : Color.primary.opacity(0.055))
+        }
+        .contextMenu {
+            if let text = message.copyableText {
+                Button("Copy", systemImage: "document.on.document", action: copy)
+                Button("Select text", systemImage: "selection.pin.in.out") { selectText(text) }
             }
-            .padding(outgoing ? .leading : .trailing, 28)
-            .frame(maxWidth: .infinity, alignment: outgoing ? .trailing : .leading)
+            if message.offersReply {
+                Button("Reply", systemImage: "arrowshape.turn.up.left", action: reply)
+            }
+        }
+        .padding(outgoing ? .leading : .trailing, 28)
+        .frame(maxWidth: .infinity, alignment: outgoing ? .trailing : .leading)
         #endif
     }
 
@@ -89,10 +108,6 @@ struct ChatMessageRow: View {
                     .font(.caption)
                 if let item = message.privateRequest {
                     PrivateAnswerActions(item: item, model: model, privacy: model.privacy, allowsDismissal: false)
-                } else if message.offersReadAloud {
-                    Button("Read aloud", systemImage: "speaker.wave.2", action: readAloud)
-                        .font(.caption)
-                        .disabled(!canRead)
                 }
             }
         }
@@ -102,11 +117,27 @@ struct ChatMessageRow: View {
         #endif
     }
 
+    private var footer: some View {
+        ChatMessageFooter(message: message, playing: model.chatSpeechID == message.id,
+                          canRead: model.canStartChatSpeech, readAloud: readAloud, copy: copy, reply: reply)
+    }
+
+    private func copy() {
+        guard let text = message.copyableText,
+              !message.isPrivate || (model.privacy.unlocked && model.privacy.connected) else { return }
+        copyChatText(text, privately: message.isPrivate)
+    }
+
     @ViewBuilder private var messageBody: some View {
+        #if os(macOS)
+        let selectable = true
+        #else
+        let selectable = false
+        #endif
         if outgoing {
-            MessageBody(message.text)
+            MessageBody(message.text, selectable: selectable)
         } else {
-            MarkdownMessageBody(message.text)
+            MarkdownMessageBody(message.text, selectable: selectable)
         }
     }
 }

@@ -51,7 +51,8 @@ struct ChatComposer: View {
             Button("Ask privately", systemImage: "lock") {
                 Task { await chat.send(model, privately: true) }
             }.disabled(!canSend)
-            Button("Search the web", systemImage: "globe") { submit(web: true) }.disabled(!canSend)
+            Button("Search the web", systemImage: "globe") { submit(web: true) }
+                .disabled(!canSend || chat.replyingPrivately)
             if model.playing { Button("Stop playback", systemImage: "stop.fill", action: model.stopPlayback) }
         } label: {
             #if os(macOS)
@@ -71,18 +72,20 @@ struct ChatComposer: View {
             .lineLimit(1...4)
             .focused($focused)
             .onSubmit { submit() }
+            .onChange(of: chat.replyInsertion) { focused = true }
     }
 
     @ViewBuilder private var trailingButton: some View {
         if canSend {
-            Button("Send message", systemImage: "arrow.up") { submit() }
+            Button(chat.replyingPrivately ? "Send privately" : "Send message",
+                   systemImage: chat.replyingPrivately ? "lock.fill" : "arrow.up") { submit() }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.circle)
                 #if os(iOS)
             .controlSize(.large)
                 #else
-            .help("Send message (⌘Return)")
+            .help(chat.replyingPrivately ? "Send privately (⌘Return)" : "Send message (⌘Return)")
                 #endif
                 .keyboardShortcut(.return, modifiers: .command)
         } else if !chat.sending {

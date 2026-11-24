@@ -11,6 +11,9 @@ struct WorkspaceChatView: View {
     @State private var source: MemoryItem?
     @State private var sourceError: String?
     @State private var pdf: NexArtifact?
+    #if os(iOS)
+    @State private var selection: ChatTextSelection?
+    #endif
 
     var body: some View {
         let items = privacy.unlocked && privacy.connected ? privacy.items : []
@@ -34,7 +37,7 @@ struct WorkspaceChatView: View {
             thread(messages)
             #endif
             if model.pairing != nil {
-                if let error = chat.sendError ?? sourceError ?? model.liveError ?? voiceIssue {
+                if let error = chat.sendError ?? sourceError ?? model.chatSpeechError ?? model.liveError ?? voiceIssue {
                     WorkspaceIssue(message: error)
                         .padding(.horizontal, WorkspaceStyle.inset)
                 }
@@ -53,7 +56,15 @@ struct WorkspaceChatView: View {
             WorkspaceSheet(title: "File") { PDFArtifactDocument(model: model, artifact: artifact) }
                 .privacySensitive()
         }
-        .onChange(of: privacy.generation) { _, _ in pdf = nil }
+        #if os(iOS)
+        .sheet(item: $selection) { ChatSelectionSheet(selection: $0) }
+        #endif
+        .onChange(of: privacy.generation) {
+            pdf = nil
+            #if os(iOS)
+            if selection?.isPrivate == true { selection = nil }
+            #endif
+        }
     }
 
     private func thread(_ messages: [WorkspaceMessage]) -> some View {
@@ -65,19 +76,8 @@ struct WorkspaceChatView: View {
             if messages.isEmpty && !chat.sending { welcome }
             #endif
             historyIssue
-            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                VStack(spacing: 16) {
-                    if showTimestamp(at: index, in: messages) {
-                        Text(NexDate.display(message.date))
-                            .font(.caption).foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity)
-                    }
-                    ChatMessageRow(
-                        message: message, model: model, openGoal: openGoal, openPDF: openPDF, openSource: openSource,
-                        readAloud: { readAloud(message) },
-                        canRead: !model.playing && !model.capture.voice && model.liveState == nil)
-                }
-                .id(message.id)
+            ForEach(messages) { message in
+                row(message).id(message.id)
             }
             if chat.sending {
                 ProgressView("Nex is thinking…").controlSize(.small)
@@ -145,29 +145,33 @@ struct WorkspaceChatView: View {
         if privacy.unlocked && privacy.connected { pdf = artifact }
     }
 
-    private func readAloud(_ message: WorkspaceMessage) {
-        guard message.offersReadAloud else { return }
-        let reply = Reply(
-            text: message.text, language: speechLanguage(for: message),
-            sources: message.sources, engine: "chat")
-        Task { await model.speak(reply) }
+    private func row(_ message: WorkspaceMessage) -> some View {
+        let read = { model.readChatMessage(message, language: speechLanguage(for: message)) }
+        let reply = {
+            if !message.isPrivate || (privacy.unlocked && privacy.connected) { chat.insertReply(to: message) }
+        }
+        #if os(iOS)
+        return ChatMessageRow(
+            message: message, model: model, openGoal: openGoal, openPDF: openPDF, openSource: openSource,
+            readAloud: read, reply: reply
+        ) { text in
+            if !message.isPrivate || (privacy.unlocked && privacy.connected) {
+                selection = ChatTextSelection(id: message.id, text: text, isPrivate: message.isPrivate)
+            }
+        }
+        #else
+        return ChatMessageRow(message: message, model: model, openGoal: openGoal, openPDF: openPDF,
+                              openSource: openSource, readAloud: read, reply: reply)
+        #endif
     }
 
     private func speechLanguage(for message: WorkspaceMessage) -> String {
-        if let language = message.language { return language }
+        if let language = message.language, language != NexLanguage.auto.rawValue { return language }
         if model.language != .auto { return model.language.rawValue }
         return NLLanguageRecognizer.dominantLanguage(for: String(message.text.prefix(1000))) == .turkish ? "tr" : "en"
     }
 
     private var voiceIssue: String? {
         model.voiceUnrecognized && model.liveState == nil ? "Nex couldn’t hear that clearly. Try again." : nil
-    }
-
-    private func showTimestamp(at index: Int, in messages: [WorkspaceMessage]) -> Bool {
-        guard index > 0 else { return true }
-        guard let previous = WorkspaceDate.instant(messages[index - 1].date),
-            let current = WorkspaceDate.instant(messages[index].date)
-        else { return false }
-        return current.timeIntervalSince(previous) > 1200
     }
 }

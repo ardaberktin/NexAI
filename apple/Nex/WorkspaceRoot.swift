@@ -49,6 +49,10 @@ private struct WorkspaceRoot: View {
             }
             .onReceive(model.voiceChatMessages) { chat.receiveVoiceMessage($0) }
             .onReceive(privacy.$items) { chat.reconcilePrivate($0) }
+            .onChange(of: privacy.generation) {
+                chat.clearPrivateReply()
+                model.stopPrivateChatSpeech()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .nexInboxChanged)) { _ in
                 if privacy.connected { Task { await chat.load(model) } }
             }

@@ -2,7 +2,10 @@ import SwiftUI
 
 @MainActor
 final class WorkspaceChat: ObservableObject {
-    @Published var draft = ""
+    @Published var draft = "" {
+        didSet { if draft.isEmpty { privateDraftBackup = nil } }
+    }
+    @Published private(set) var replyInsertion = 0
     @Published private(set) var messages: [WorkspaceMessage] = []
     @Published private(set) var sending = false
     @Published private(set) var loaded = false
@@ -13,11 +16,31 @@ final class WorkspaceChat: ObservableObject {
     @Published private(set) var olderError: String?
     private var archived: [WorkspaceMessage] = []
     private var current: [WorkspaceMessage] = []
-    private var pending: (text: String, draft: String, id: String, privately: Bool)?
+    private var pending: (text: String, draft: String, id: String, privately: Bool, quotedPrivately: Bool)?
+    private var privateDraftBackup: String?
+    private var privateDraftGeneration = UUID()
     private var cursor: String?
     private var oldestArchived: WorkspaceMessage?
     private var newestArchived: WorkspaceMessage?
     private var privateExchangeIDs: Set<String> = []
+
+    var replyingPrivately: Bool { privateDraftBackup != nil }
+
+    func insertReply(to message: WorkspaceMessage) {
+        guard message.offersReply, let text = message.copyableText else { return }
+        if message.isPrivate && !replyingPrivately { privateDraftBackup = draft }
+        draft = draft.isEmpty ? text + "\n\n" : draft + "\n\n" + text + "\n\n"
+        replyInsertion += 1
+    }
+
+    func clearPrivateReply() {
+        privateDraftGeneration = UUID()
+        if let backup = privateDraftBackup {
+            privateDraftBackup = nil
+            draft = backup
+        }
+        if pending?.quotedPrivately == true { pending = nil }
+    }
 
     func observe(_ model: Controller) async {
         var wait = false
@@ -151,20 +174,27 @@ final class WorkspaceChat: ObservableObject {
     func send(_ model: Controller, web: Bool = false, privately: Bool = false) async {
         let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sending, !value.isEmpty else { return }
-        let text = web ? WebLookup.request(for: value) : value
+        let backup = privateDraftBackup
+        let generation = privateDraftGeneration
+        let isQuotedPrivateReply = backup != nil
+        let privately = privately || isQuotedPrivateReply
+        let text = web && !isQuotedPrivateReply ? WebLookup.request(for: value) : value
         let id = pending.flatMap { $0.text == text && $0.privately == privately ? $0.id : nil } ?? nexID()
-        pending = (text, value, id, privately)
+        pending = (text, value, id, privately, isQuotedPrivateReply)
         sendError = nil
         sending = true
         draft = ""
-        let sent = NexDate.wire()
-        add(WorkspaceMessage(id: "q-" + id, role: .user, text: value, date: sent, sources: []))
+        if !isQuotedPrivateReply {
+            add(WorkspaceMessage(id: "q-" + id, role: .user, text: value, date: NexDate.wire(), sources: []))
+        }
         defer { sending = false }
         do {
             let reply = try await model.ask(text, id: id, publishReply: false, privately: privately)
-            add(WorkspaceMessage(id: "a-" + id, role: .assistant, text: reply.text,
-                                 date: NexDate.wire(), sources: reply.sources, language: reply.language,
-                                 privateNotice: reply.engine == "private_request"))
+            if !isQuotedPrivateReply {
+                add(WorkspaceMessage(id: "a-" + id, role: .assistant, text: reply.text,
+                                     date: NexDate.wire(), sources: reply.sources, language: reply.language,
+                                     privateNotice: reply.engine == "private_request"))
+            }
             pending = nil
         } catch {
             if privateExchangeIDs.contains(id) || archived.contains(where: { $0.id == "a-" + id }) {
@@ -173,7 +203,11 @@ final class WorkspaceChat: ObservableObject {
             }
             current.removeAll { $0.id == "q-" + id }
             publish()
-            if draft.isEmpty { draft = value }
+            if isQuotedPrivateReply && generation != privateDraftGeneration { return }
+            if draft.isEmpty {
+                privateDraftBackup = backup
+                draft = value
+            }
             sendError = error.localizedDescription
         }
     }
