@@ -337,17 +337,18 @@ async def select_document(turn, generate, data):
     if action in {"REPEAT", "ONCE"}:
         context["document_delivery"] = action
         instructions = PLAN_PDF_GOAL + f"\nThe selected delivery mode is {action}."
-        plan = await generate_plan(turn, generate, model_messages(instructions, context),
+        schema = plan_schema({"goal"}, goal_type="recurring" if action == "REPEAT" else None)
+        plan = await generate_plan(turn, generate, model_messages(instructions, context, schema=schema),
                                    available={"goal"}, goal_review=context)
         if not plan.error:
             return plan if plan.tools else Plan((), clarify=True)
         prompt = model_messages(REVIEW_PDF_DELIVERY, context, schema=PDF_RECOVERY_SCHEMA)
         action = json_object(await generate(prompt, 35) or "").get("action")
-        if action not in {"FORMAT", "EDIT", "CLARIFY"}:
+        if action not in {"FORMAT", "CLARIFY"}:
             return plan
     if action in {"FORMAT", "EDIT"}:
         return Plan(({"name": "manage_goal", "operation": "edit", "format_only": action == "FORMAT"},))
-    if action in {"CLARIFY", "ADVICE"}:
+    if action in {"CLARIFY", "ADVICE", "SKIP"}:
         return Plan((), clarify=action == "CLARIFY")
     return Plan((), "model_unavailable")
 

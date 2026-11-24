@@ -9,10 +9,10 @@ from conversation_fixtures import unlock
 from nex.assistant import Assistant
 from nex.conversation.document_routing import CHOOSE_DOCUMENT_ACTION
 from nex.conversation.goal_management_prompts import (
-    EDIT_GOAL,
+    EDIT_PDF_FORMAT,
     FIND_PDF_GOALS,
     SELECT_PDF_GOAL,
-    VERIFY_PDF_CHANGE,
+    VERIFY_PDF_CLARIFICATION,
     VERIFY_PDF_TARGET,
 )
 from nex.conversation.reply import (
@@ -51,6 +51,7 @@ class GoalPDFEditTests(unittest.TestCase):
         second = self.save("Kitchen check", "Report on the pantry.")
         unrelated = [self.save(f"Library pickup {index}", "Remind me to pick up a book.") for index in range(7)]
         initial = "Add a PDF to each of my check-ins."
+        instruction = initial
         clarification = "Which goal should get a PDF, Garden check or Kitchen check?"
         follow_up = "garden check"
         assistant = Assistant(self.store, None, None)
@@ -95,14 +96,14 @@ class GoalPDFEditTests(unittest.TestCase):
                 self.assertEqual(data["selected_goal"]["title"], first["title"])
                 self.assertEqual(data["other_candidates"][0]["title"], second["title"])
                 return "YES"
-            if prompt.startswith(EDIT_GOAL):
-                self.assertEqual(data["clarification"][0]["content"], initial)
-                if "Correct the previous edit" not in prompt:
-                    return json.dumps({"format_instruction": self.instruction, "frequency": 60})
-                self.assertIn("Only a nonempty format_instruction may change", prompt)
-                return json.dumps({"format_instruction": self.instruction})
-            if prompt == VERIFY_PDF_CHANGE:
+            if prompt.startswith(EDIT_PDF_FORMAT):
+                self.assertEqual(data["user_messages"], {"current": follow_up, "earlier": initial})
+                if prompt == EDIT_PDF_FORMAT:
+                    return '{"format_source":"earlier","frequency":60}'
+                return '{"format_source":"earlier"}'
+            if prompt == VERIFY_PDF_CLARIFICATION:
                 self.assertEqual(data["preceding_clarification"][0]["content"], initial)
+                self.assertEqual(data["proposed_operation"], {"edit": {"format_instruction": initial}})
                 return "YES"
             if prompt == WRITE_GOAL_FORMAT:
                 self.assertEqual(data["tools"]["goal"]["title"], first["title"])
@@ -133,7 +134,7 @@ class GoalPDFEditTests(unittest.TestCase):
         self.assertEqual(ask(identifiers[1], session)["goal_id"], first["id"])
         self.assertEqual(requests.inbox(self.store.privacy)["items"][0]["answer"], "I saved PDF output for Garden check.")
         updated = self.goals.detail(first["id"])
-        self.assertEqual(updated["pdf_instruction"], self.instruction)
+        self.assertEqual(updated["pdf_instruction"], instruction)
         for key in ("prompt", "title", "scheduled_at", "next_run", "frequency_minutes", "zone"):
             self.assertEqual(updated[key], first[key])
         self.assertEqual(self.goals.detail(second["id"])["revision"], second["revision"])

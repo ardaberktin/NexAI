@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 from textwrap import wrap
+from unicodedata import category
 
 from .feed import stamp
 from .goal_writing import ask, json_object
@@ -23,9 +24,11 @@ COPY_LAYOUT_SCHEMA = {"type": "object", "required": ["title", "layout"], "additi
 def update_copy(row, generate):
     context = {"goal_title": row["title"], "document_brief": row["brief"], "language": row["language"]}
     layout = json_object(ask(generate, CHOOSE_COPY_LAYOUT, context, 128, schema=COPY_LAYOUT_SCHEMA))
-    paragraphs = [part for line in row["detail"].splitlines() if line.strip() for part in wrap(line, width=2400)]
+    text = "".join(char for char in row["detail"] if category(char) != "Cf")
+    paragraphs = [part for line in text.splitlines() if line.strip() for part in wrap(line, width=2400)]
     sections = [{"paragraphs": paragraphs[index:index + 24]} for index in range(0, len(paragraphs), 24)]
-    return render(Document.read(json.dumps(layout | {"sections": sections}, ensure_ascii=False)))
+    document = Document.read(json.dumps(layout | {"sections": sections}, ensure_ascii=False))
+    return render(document, label_unsupported_symbols=True)
 
 
 def deliver_update_pdfs(store, generate, anchor=None):

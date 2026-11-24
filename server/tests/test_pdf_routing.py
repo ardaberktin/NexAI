@@ -17,7 +17,6 @@ from nex.conversation.document_routing import (
     REVIEW_PDF_DELIVERY,
 )
 from nex.conversation.goal_management_prompts import (
-    EDIT_GOAL,
     SELECT_PDF_GOAL,
     VERIFY_PDF_CHANGE,
 )
@@ -26,6 +25,7 @@ from nex.conversation.reply import (
     VERIFY_GOAL_FORMAT,
     WRITE,
     WRITE_GOAL,
+    WRITE_GOAL_CLARIFICATION,
     WRITE_GOAL_FORMAT,
 )
 from nex.conversation.routing_prompt import ROUTE_HEADER
@@ -63,6 +63,39 @@ class PDFRoutingTests(unittest.TestCase):
     def ask(self, question, generate):
         self.assistant.generate_conversation = generate
         return public.chat(self.assistant, str(uuid4()), "mac", question, "en", "UTC", session=self.session)
+
+    def test_text_only_preference_cannot_enable_pdf_even_if_routed_as_an_edit(self):
+        goals = Goals(self.store)
+        goal = goals.save(str(uuid4()), {"title": "Garden check", "prompt": "Report on the greenhouse.", "zone": "UTC"})
+        before = goals.detail(goal["id"])
+        question = "Please keep the Garden check as text only. Do not add PDFs."
+        for action in ("SKIP", "FORMAT"):
+            with self.subTest(action=action):
+                reviewed = []
+
+                def generate(messages, *_args, action=action, reviewed=reviewed, **_options):
+                    prompt = messages[0]["content"]
+                    data = json.loads(messages[1]["content"])
+                    if prompt.startswith(ROUTE_HEADER):
+                        return "DOCUMENT"
+                    if prompt == CHOOSE_DOCUMENT_ACTION:
+                        return json.dumps({"action": action, "sources": []})
+                    if prompt.startswith(SELECT_PDF_GOAL):
+                        return '{"target":1,"title":"Garden check"}'
+                    if prompt == VERIFY_PDF_CHANGE:
+                        reviewed.append(data["latest_message"])
+                        return "NO"
+                    if prompt == WRITE_GOAL_CLARIFICATION:
+                        return '{"question":"Is there another change you want for the Garden check?"}'
+                    self.assertEqual(prompt, WRITE)
+                    return "The Garden check will continue as text."
+
+                result = self.ask(question, generate)
+                self.assertFalse(result.get("goal_id"))
+                self.assertEqual(bool(reviewed), action == "FORMAT")
+                self.assertTrue(all(item == question for item in reviewed))
+                self.assertEqual(goals.detail(goal["id"]), before)
+                self.assertFalse(artifacts(self.store))
 
     def test_immediate_news_pdf_recovers_from_agenda_only_plan(self):
         for question in ("Could you make a PDF of today's news?", "Put the day's top headlines in a newspaper PDF."):
@@ -166,11 +199,11 @@ class PDFRoutingTests(unittest.TestCase):
         anchor = (datetime.now(UTC) + timedelta(hours=1)).replace(second=0, microsecond=0)
         identifier = str(uuid4())
         task = "Report when the new library reading room opens."
-        instruction = "Publish every report as a newspaper PDF."
         goals = Goals(self.store)
         goals.save(identifier, {"title": "Morning check-in", "prompt": task, "zone": "UTC",
                                 "frequency_minutes": 1440, "scheduled_at": anchor.isoformat()})
-        question = "Create PDFs for every Morning check-in from now on."
+        question = "Create a two-column newspaper PDF for every Morning check-in from now on."
+        instruction = question
 
         def edit(messages, *_args, **_options):
             prompt = messages[0]["content"]
@@ -186,16 +219,12 @@ class PDFRoutingTests(unittest.TestCase):
             if prompt == REVIEW_PDF_DELIVERY:
                 self.assertEqual(data["question"], question)
                 return '{"action":"FORMAT"}'
-            if prompt == SELECT_PDF_GOAL:
+            if prompt.startswith(SELECT_PDF_GOAL):
                 self.assertEqual(data["goals"][0]["title"], "Morning check-in")
                 self.assertEqual(data["goals"][0]["frequency"], 1440)
                 return '{"target":1,"title":"Morning check-in"}'
-            if prompt.startswith(EDIT_GOAL):
-                self.assertEqual(data["selected_goal"]["task"], task)
-                self.assertTrue(data["format_only"])
-                return json.dumps({"format_instruction": instruction})
             if prompt == VERIFY_PDF_CHANGE:
-                self.assertEqual(data["proposed_operation"], {"edit": {"format_instruction": instruction}})
+                self.assertEqual(data, {"selected_goal": "Morning check-in", "latest_message": instruction})
                 return "YES"
             if prompt == VERIFY_GOAL_FORMAT:
                 return "YES"
@@ -212,6 +241,8 @@ class PDFRoutingTests(unittest.TestCase):
         self.assertEqual(saved["frequency_minutes"], 1440)
         self.assertEqual(datetime.fromisoformat(saved["next_run"]), anchor)
 
+        update = f"{STORY} ✅"
+
         def generate(messages, _tokens):
             prompt = messages[0]["content"]
             data = json.loads(messages[1]["content"])
@@ -219,7 +250,7 @@ class PDFRoutingTests(unittest.TestCase):
             if prompt == PLAN:
                 return '{"sources":["none"]}'
             self.assertEqual(prompt, EXECUTE)
-            return "NO_UPDATE" if calls == 0 else STORY
+            return "NO_UPDATE" if calls == 0 else update
 
         runner = Goals(self.store, generate=generate)
         calls = 0
@@ -229,11 +260,11 @@ class PDFRoutingTests(unittest.TestCase):
         due = anchor + timedelta(days=1)
         runner.run(due)
         text_update, = [row for row in chat_history(self.store) if row.get("goal_id") == identifier]
-        self.assertEqual(text_update["text"], STORY)
+        self.assertEqual(text_update["text"], update)
         self.assertNotIn("pdf_attachment", text_update)
         with self.assertLogs("nex.goal_update_pdfs", level="WARNING"):
             deliver_update_pdfs(self.store, lambda *_: None, due)
-        self.assertEqual(goals.detail(identifier)["latest"], STORY)
+        self.assertEqual(goals.detail(identifier)["latest"], update)
         self.assertIsNone(goals.detail(identifier)["error"])
 
         def layout(messages, _tokens):
@@ -251,8 +282,9 @@ class PDFRoutingTests(unittest.TestCase):
         with PdfDocument(content(self.store, item["id"])) as pdf:
             actual = pdf[0].get_textpage().get_text_bounded()
             self.assertIn(STORY, " ".join(actual.split()))
+            self.assertIn("[White Heavy Check Mark]", " ".join(actual.split()))
             self.assertNotIn("never published", actual)
         message, = [row for row in chat_history(self.store) if row.get("goal_id") == identifier]
-        self.assertEqual(message["text"], STORY)
+        self.assertEqual(message["text"], update)
         self.assertEqual(message["pdf_attachment"]["id"], item["id"])
         self.assertEqual(datetime.fromisoformat(goals.detail(identifier)["next_run"]), due + timedelta(days=1))

@@ -43,6 +43,11 @@ def seed(store, turn, group):
         Goals(store).save(str(uuid4()), {"title": "Plant-watering reminder", "prompt": "Remind me to water the plants.",
                                         "zone": "UTC", "scheduled_at": (turn.started + timedelta(days=5)).isoformat()},
                           anchor=turn.started)
+    if group == "PDF format edit":
+        Goals(store).save(str(uuid4()), {"title": "Garden report", "prompt": "Report on garden opening hours.",
+                                        "zone": "UTC", "frequency_minutes": 1440,
+                                        "scheduled_at": (turn.started + timedelta(days=1)).isoformat()},
+                          anchor=turn.started)
     if group == "clock":
         ClockAlerts(store).create(str(uuid4()), "timer", "Kitchen timer", "UTC",
                                   lambda now: now + timedelta(minutes=40))
@@ -77,9 +82,18 @@ async def execute(turn, group, plan, generate):
                   session=unlock(store), plan=plan, screen=True)
             item, = inbox(store.privacy)["items"]
             return {"passed": item["state"] == "screen" and item["answer"] is None, "engine": item["state"]}
+        goals = Goals(store)
+        before = goals.overview() if group == "PDF format edit" else []
         result = await run(store, turn, plan, generate, private=plan.private)
         names = {tool["name"] for tool in plan.tools}
         saved = ("create_pdf" not in names or bool(artifacts(store))) and ("goal" not in names or bool(result.get("goal_id")))
+        if group == "PDF format edit":
+            old, = before
+            current, = goals.overview()
+            saved = (result.get("goal_id") == old["id"] and bool(current.get("pdf_instruction"))
+                     and all(current[key] == old[key] for key in ("prompt", "next_run", "frequency_minutes")))
+        if group == "recurring PDF" and saved:
+            saved = bool(goals.detail(result["goal_id"])["frequency_minutes"])
         return {"passed": bool(result["text"]) and saved, "engine": result["engine"], "text": result["text"]}
 
 

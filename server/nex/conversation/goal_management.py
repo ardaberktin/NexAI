@@ -26,6 +26,7 @@ from .goal_management_prompts import (
     VERIFY_CHANGE,
     VERIFY_NAMED_DELETE,
     VERIFY_PDF_CHANGE,
+    VERIFY_PDF_CLARIFICATION,
     VERIFY_PDF_TARGET,
 )
 from .goal_tools import goal_receipt
@@ -122,6 +123,10 @@ async def manage_goal(store, turn, generate, operation=None, *, format_only=Fals
         matches = await shortlist(descriptions, context, generate, verify_match=check_matches or check_pdf_matches)
         if format_only and exact_titles and exact_titles.isdisjoint(row["target"] for row in matches):
             matches.extend(row for row in descriptions if row["target"] in exact_titles)
+        if format_only and len(matches) < len(descriptions) <= PAGE_SIZE:
+            if matches:
+                context["suggested_targets"] = [row["target"] for row in matches]
+            matches = descriptions
         if not matches:
             return outcome("clarification_needed" if format_only else "no_matching_goal")
         if len(matches) > PAGE_SIZE:
@@ -221,9 +226,11 @@ async def confirmed_change(goal, decision, context, generate, named):
     review = {"saved_goal": {"name": goal["title"], "task": goal["prompt"]}, "proposed_operation": operation,
               "local_time": context["local_time"], "latest_message": context["question"]}
     if context.get("format_only"):
-        if clarification := context.get("clarification"):
-            review["preceding_clarification"] = clarification
-        return yes_no(await generate(model_messages(VERIFY_PDF_CHANGE, review), 8)) is True
+        if not (clarification := context.get("clarification")):
+            data = {"selected_goal": goal["title"], "latest_message": context["question"]}
+            return yes_no(await generate(model_messages(VERIFY_PDF_CHANGE, data), 8)) is True
+        review["preceding_clarification"] = clarification
+        return yes_no(await generate(model_messages(VERIFY_PDF_CLARIFICATION, review), 8)) is True
     if action == "edit" and (goal["check_in_due"] or goal["scheduled_at"]):
         review["previous_schedule"] = describe(goal, decision["target"], None).get("scheduled_local")
     for _ in range(2):
