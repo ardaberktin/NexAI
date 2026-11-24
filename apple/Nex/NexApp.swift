@@ -47,7 +47,7 @@ struct NexApp: App {
         Settings {
             if let model = setup.model {
                 PrivacyGate(model: model) { SettingsView(model: model) }
-                    .frame(width: 560, height: 540)
+                    .frame(width: 720, height: 540)
                     .tint(WorkspaceStyle.accent)
             }
         }
