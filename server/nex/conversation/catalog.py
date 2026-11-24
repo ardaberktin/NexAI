@@ -196,7 +196,7 @@ Return exactly YES or NO. A check-in without a requested time is complete with c
 Nex's scheduler chooses the time later. If the user stated the reminder time, verify start matches it.
 For a requested recurrence, require its numeric frequency and a start for a new goal. Timing mentioned
 only inside query has no scheduling effect. For requested PDF delivery, require the document format
-and requested contents in query.
+and requested contents in query. Preserve any restriction on where the task may get its facts.
 If timing is present, it must ask for the proposed time or delegate the choice.
 A time mentioned as background or as an outcome's deadline does not necessarily schedule a reminder.
 When the task requires the user's confirmation of an outcome, require check_in:true. A repeat that depends

@@ -90,9 +90,12 @@ class PDFRoutingTests(unittest.TestCase):
                         if "revision_needed" not in data:
                             return json.dumps(EDITION | {"sections": [{"paragraphs": ["It opened at 10:30 a.m. [1]"]}]})
                         self.assertIn("not stated in the cited source", data["revision_needed"])
-                        return json.dumps(EDITION)
+                        return json.dumps(EDITION | {"sections": [{"paragraphs": [
+                            STORY + " [1]", "It opened at 10:30 a.m. [1]",
+                        ]}]})
                     if prompt == VERIFY_DOCUMENT_WEB:
                         self.assertEqual(data["cited_pages"][0]["excerpt"], PAGE.text)
+                        self.assertNotIn("10:30", data["document"])
                         return "YES"
                     self.assertTrue(prompt.startswith(WRITE))
                     self.assertEqual(data["tools"]["create_pdf"]["status"], "saved")
@@ -210,7 +213,9 @@ class PDFRoutingTests(unittest.TestCase):
             prompt = messages[0]["content"]
             data = json.loads(messages[1]["content"])
             self.assertEqual(data["goal"], revised_task)
-            if prompt == PLAN:
+            if prompt == PLAN and calls == 0:
+                return tools({"name": "create_pdf"}, {"name": "web"}, {"name": "web"})
+            if prompt.startswith(PLAN):
                 return tools({"name": "create_pdf", "query": "newspaper"})
             if prompt.startswith(EXECUTE):
                 return "NO_UPDATE" if calls == 0 else STORY

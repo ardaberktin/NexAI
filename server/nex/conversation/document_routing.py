@@ -43,10 +43,11 @@ REPEAT means deliver a fresh PDF at each requested interval. A specified first r
 ONCE means deliver one PDF at a future time. Choose using question and use history only for references."""
 
 PLAN_PDF_GOAL = """Plan the PDF delivery requested in question. Return only JSON with one goal object.
-Use query for the actual task, keeping the requested content, PDF format and layout.
+Use query for the actual task, keeping the requested content, PDF format, layout, and source restrictions.
+If the user supplies the only facts to use, preserve that restriction and those facts in query.
 Put the first run in start as a local YYYY-MM-DDTHH:MM using local_time. For repeating delivery use
 frequency in minutes: 15 for every 15 minutes, 60 for hourly, 1440 for daily, 10080 for weekly.
-For daily delivery, the shape is {"tools":[{"name":"goal","query":"Publish a PDF of the lab bulletin",
+For daily delivery, the shape is {"tools":[{"name":"goal","query":"<requested task and PDF format>",
 "frequency":1440,"start":"YYYY-MM-DDTHH:MM"}]}. Replace the example query and start with the requested values.
 For one-time delivery copy the actual requested time phrase to timing and omit frequency.
 Do not use check_in for a report. Return {"tools":[]} only when an essential time or detail needs clarification.

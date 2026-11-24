@@ -105,6 +105,20 @@ class PromptResult:
 
 def plan_for(generate, data):
     plan = json_object(ask(generate, PLAN, data, 224))
+    tools = read_plan(plan)
+    if tools is not None:
+        return tools
+    proposal = plan.get("tools")
+    if not isinstance(proposal, list) or not any(
+        isinstance(tool, dict) and tool.get("name") == "create_pdf" for tool in proposal
+    ):
+        return None
+    correction = ("\nThe PDF plan could not be used. Try again with each tool named at most once. "
+                  "Select only the tools needed for the saved goal.")
+    return read_plan(json_object(ask(generate, PLAN + correction, data, 224)))
+
+
+def read_plan(plan):
     try:
         tools = plan["tools"]
         if not isinstance(tools, list) or len(tools) > 5:

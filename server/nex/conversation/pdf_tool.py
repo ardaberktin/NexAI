@@ -70,7 +70,7 @@ async def create_pdf(store, turn, tool, evidence, generate):
             context["cite_web_with_numbers"] = True
         instructions = WRITE_WEB_DOCUMENT if web else WRITE_DOCUMENT
         revision = ""
-        for _ in range(2):
+        for attempt in range(2):
             raw = await generate(model_messages(instructions + revision, context), 2600)
             if not raw:
                 context["revision_needed"] = "Return the complete document as concise JSON using the supplied evidence."
@@ -79,7 +79,7 @@ async def create_pdf(store, turn, tool, evidence, generate):
             try:
                 document = Document.read(raw)
                 if web:
-                    document = await document_with_sources(document, turn, evidence, generate)
+                    document = await document_with_sources(document, turn, evidence, generate, revised=bool(attempt))
                 pdf = await asyncio.to_thread(render, document)
             except PDFError as error:
                 if error.code == "renderer_unavailable":
