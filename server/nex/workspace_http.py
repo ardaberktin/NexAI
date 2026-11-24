@@ -7,6 +7,7 @@ from . import goal_follow_ups, shared_weather, workspace_features
 from .clock_alerts import ClockAlerts
 from .feed import Feed
 from .goals import IDENTIFIER, Goals
+from .pdf.artifacts import content as pdf_content
 from .push_queue import PushQueue
 from .workspace_chat_pages import chat_page, paged_chat_snapshot
 from .workspace_content import artifacts, chat_snapshot
@@ -133,6 +134,8 @@ def workspace_request(api, method, path, query, device, problem):
             return goals.action(identifier, data.get("action"), data.get("revision"))
     elif method == "GET" and path == "/v1/workspace/artifacts":
         return {"items": artifacts(store)}
+    elif method == "GET" and (pdf := re.fullmatch(r"/v1/workspace/artifacts/(" + IDENTIFIER + ")/pdf", path)):
+        return pdf_content(store, pdf[1])
     raise problem(404, "This Nex workspace endpoint was not found.")
 
 

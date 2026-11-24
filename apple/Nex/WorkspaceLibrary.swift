@@ -59,7 +59,7 @@ struct GoalArtifactList: View {
                         .padding(.horizontal, WorkspaceStyle.inset)
                 }
                 if let items, !items.isEmpty {
-                    MacArtifactBrowser(items: items) { opened = $0 }
+                    MacArtifactBrowser(model: model, items: items) { opened = $0 }
                 } else {
                     listStatus
                 }
@@ -85,14 +85,14 @@ struct GoalArtifactList: View {
         .refreshable { await load() }
         .task { await load() }
         .sheet(item: $opened) { artifact in
-            WorkspaceSheet(title: "File") { ArtifactDocument(artifact: artifact) }
+            WorkspaceSheet(title: "File") { ArtifactDocument(model: model, artifact: artifact) }
         }
     }
 
     @ViewBuilder private var listStatus: some View {
         if items?.isEmpty == true {
             WorkspaceEmpty(title: "No files yet", symbol: "doc.text",
-                           detail: goal == nil ? "Daily news editions and reports from your goals appear here." :
+                           detail: goal == nil ? "Generated PDFs, daily news editions, and goal reports appear here." :
                             "Reports will appear here after Nex finds a match or reaches a reminder time.")
         } else if items == nil && error == nil {
             ProgressView("Opening files…").padding(.vertical, 30)
@@ -103,7 +103,7 @@ struct GoalArtifactList: View {
     private func row(_ item: NexArtifact) -> some View {
         Button { opened = item } label: {
             HStack(spacing: 13) {
-                WorkspaceIcon(symbol: item.kind == "feed" ? "newspaper" : "doc.text")
+                WorkspaceIcon(symbol: item.symbol)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title).font(.headline)
                     Text(item.subtitle + "  ·  " + NexDate.display(item.date))

@@ -22,6 +22,12 @@ GOAL_ACTIVITY_INDEXES = (
 )
 
 WORKSPACE_SCHEMA = ";\n".join((GOALS_TABLE, GOALS_INDEX, GOAL_ACTIVITY_TABLE, *GOAL_ACTIVITY_INDEXES)) + ";\n" + """
+CREATE TABLE IF NOT EXISTS pdf_artifacts (
+    id TEXT PRIMARY KEY, goal_id TEXT, created TEXT NOT NULL,
+    title TEXT NOT NULL, pages INTEGER NOT NULL, pdf BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS pdf_artifacts_goal ON pdf_artifacts(goal_id, created DESC);
+CREATE INDEX IF NOT EXISTS pdf_artifacts_recent ON pdf_artifacts(created DESC);
 CREATE TABLE IF NOT EXISTS clock_alerts (
     id TEXT PRIMARY KEY, request_id TEXT NOT NULL UNIQUE,
     kind TEXT NOT NULL CHECK(kind IN ('timer','alarm')), label TEXT NOT NULL,

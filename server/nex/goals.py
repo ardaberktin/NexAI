@@ -46,8 +46,10 @@ class Goals:
                 "SELECT id,created,title,detail,artifact FROM goal_activity WHERE goal_id=? "
                 "ORDER BY created DESC,rowid DESC LIMIT 100", (identifier,),
             ).fetchall()
-            count = db.execute("SELECT count(*) FROM goal_activity WHERE goal_id=? AND artifact=1",
-                               (identifier,)).fetchone()[0]
+            count = db.execute(
+                "SELECT count(*) FROM (SELECT id FROM goal_activity WHERE goal_id=? AND artifact=1 "
+                "UNION SELECT id FROM pdf_artifacts WHERE goal_id=?)", (identifier, identifier),
+            ).fetchone()[0]
             follow_up = goal_follow_ups.for_goal(db, identifier)
         return summary(row) | {
             "activity": [dict(item) | {"artifact": bool(item["artifact"])} for item in activity],
@@ -141,6 +143,7 @@ class Goals:
                     (identifier,),
                 )
                 db.execute("DELETE FROM goal_activity WHERE goal_id=?", (identifier,))
+                db.execute("DELETE FROM pdf_artifacts WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_seen WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_mail_review WHERE goal_id=?", (identifier,))
                 goal_follow_ups.delete(db, identifier)

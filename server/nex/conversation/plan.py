@@ -142,6 +142,8 @@ def validated(tools):
         needs_query = name in {"web", "save_memory"} or (name == "goal" and ("target" not in tool or "query" in tool))
         if needs_query and not tool.get("query", "").strip():
             raise ValueError(f"{name} requires a nonempty query.")
+        if "goal_query" in tool and not tool["goal_query"].strip():
+            raise ValueError("Name or describe the goal to attach the PDF to, or omit goal_query.")
         if "watch_provider" in tool and tool["watch_provider"] != "gmail":
             raise ValueError("Choose a supported watch provider.")
         if name == "weather_city" and (tool.get("operation") not in {"set", "clear"} or
@@ -191,8 +193,8 @@ def validate_context(turn, plan):
             named = re.compile(r"(?<!\w)" + re.escape(city.strip()) + r"(?!\w)", re.IGNORECASE)
             if not weather_city(city) or not any(named.search(text) for text in utterances):
                 raise ValueError("Omit query for local weather. Only copy a city named by the user.")
-    if turn.journal and any(tool["name"] != "daybook" for tool in plan.tools):
-        raise ValueError("Only daybook is available inside the selected journal entry.")
+    if turn.journal and any(tool["name"] not in {"daybook", "create_pdf"} for tool in plan.tools):
+        raise ValueError("Use daybook for journal facts and create_pdf for a requested file.")
 
 
 async def choose(turn, generate):

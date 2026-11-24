@@ -151,6 +151,7 @@
 		7EF100000000000000001602 /* WorkspaceCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001601; };
 		7EF100000000000000001702 /* DaybookOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001701; };
 		7EF100000000000000001802 /* ArtifactDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001801; };
+		7EF100000000000000001F02 /* PDFArtifactDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001F01; };
 		7EF100000000000000001302 /* PhoneWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001301; };
 		7EF100000000000000001103 /* WorkspaceTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001101; };
 		7EF100000000000000001403 /* ChatComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001401; };
@@ -171,6 +172,7 @@
 		7EF100000000000000001603 /* WorkspaceCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001601; };
 		7EF100000000000000001703 /* DaybookOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001701; };
 		7EF100000000000000001803 /* ArtifactDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001801; };
+		7EF100000000000000001F03 /* PDFArtifactDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001F01; };
 		7EF100000000000000001903 /* MacArtifactBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001901; };
 		7EF100000000000000001203 /* MacWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001201; };
 		7EF500000000000000000102 /* RecordingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF500000000000000000101; };
@@ -401,6 +403,7 @@
 		7EF100000000000000001601 /* WorkspaceCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceCollection.swift; sourceTree = "<group>"; };
 		7EF100000000000000001701 /* DaybookOverview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookOverview.swift; sourceTree = "<group>"; };
 		7EF100000000000000001801 /* ArtifactDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtifactDocument.swift; sourceTree = "<group>"; };
+		7EF100000000000000001F01 /* PDFArtifactDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFArtifactDocument.swift; sourceTree = "<group>"; };
 		7EF100000000000000001901 /* MacArtifactBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacArtifactBrowser.swift; sourceTree = "<group>"; };
 		7EF100000000000000001201 /* MacWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacWorkspaceView.swift; sourceTree = "<group>"; };
 		7EF500000000000000000101 /* RecordingStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingStatus.swift; sourceTree = "<group>"; };
@@ -570,6 +573,7 @@
 				7EF100000000000000001601 /* WorkspaceCollection.swift */,
 				7EF100000000000000001701 /* DaybookOverview.swift */,
 				7EF100000000000000001801 /* ArtifactDocument.swift */,
+				7EF100000000000000001F01 /* PDFArtifactDocument.swift */,
 				7EF100000000000000001901 /* MacArtifactBrowser.swift */,
 				7EF100000000000000001201 /* MacWorkspaceView.swift */,
 				7EF500000000000000000101 /* RecordingStatus.swift */,
@@ -918,6 +922,7 @@
 				7EF100000000000000001602 /* WorkspaceCollection.swift in Sources */,
 				7EF100000000000000001702 /* DaybookOverview.swift in Sources */,
 				7EF100000000000000001802 /* ArtifactDocument.swift in Sources */,
+				7EF100000000000000001F02 /* PDFArtifactDocument.swift in Sources */,
 				7EF100000000000000001302 /* PhoneWorkspaceView.swift in Sources */,
 				7EF100000000000000000202 /* WorkspaceAPI.swift */,
 				7EF100000000000000000302 /* WorkspaceAccess.swift */,
@@ -1022,6 +1027,7 @@
 				7EF100000000000000001603 /* WorkspaceCollection.swift in Sources */,
 				7EF100000000000000001703 /* DaybookOverview.swift in Sources */,
 				7EF100000000000000001803 /* ArtifactDocument.swift in Sources */,
+				7EF100000000000000001F03 /* PDFArtifactDocument.swift in Sources */,
 				7EF100000000000000001903 /* MacArtifactBrowser.swift in Sources */,
 				7EF100000000000000001203 /* MacWorkspaceView.swift in Sources */,
 				7EF500000000000000000102 /* RecordingStatus.swift in Sources */,

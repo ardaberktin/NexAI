@@ -2,6 +2,7 @@
 import SwiftUI
 
 struct MacArtifactBrowser: View {
+    let model: Controller
     let items: [NexArtifact]
     let open: (NexArtifact) -> Void
     @State private var selection: NexArtifact.ID?
@@ -18,7 +19,7 @@ struct MacArtifactBrowser: View {
                     .frame(minWidth: 230, idealWidth: 280, maxWidth: 360)
                     ZStack {
                         if let selected = items.first(where: { $0.id == selection }) {
-                            ArtifactDocument(artifact: selected).id(selected.id)
+                            ArtifactDocument(model: model, artifact: selected).id(selected.id)
                         } else {
                             ContentUnavailableView("Select a file", systemImage: "doc.text")
                         }
@@ -45,7 +46,7 @@ struct MacArtifactBrowser: View {
 
     private func row(_ item: NexArtifact) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: item.kind == "feed" ? "newspaper" : "doc.text")
+            Image(systemName: item.symbol)
                 .foregroundStyle(WorkspaceStyle.accent)
                 .frame(width: 20)
                 .accessibilityHidden(true)

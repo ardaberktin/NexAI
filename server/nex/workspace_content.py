@@ -6,6 +6,7 @@ import json
 from .conversation_history import SHARED_QUESTION, TURN_ID
 from .goal_follow_ups import for_messages
 from .goals import Goals
+from .pdf import artifacts as pdf_artifacts
 from .store import CURRENT_EVIDENCE
 from .workspace_chat_pages import GOAL_NOTICES, GOAL_UPDATES, chat_message
 from .workspace_ideas import ideas
@@ -51,6 +52,7 @@ def chat_snapshot(store, cursor):
 
 def artifacts(store, goal=None):
     with store.connect() as db:
+        db.execute("BEGIN")
         if goal:
             Goals.find(db, goal)
             editions = []
@@ -59,9 +61,11 @@ def artifacts(store, goal=None):
         updates = db.execute(
             "SELECT a.id,a.created,a.title,a.detail,a.goal_id,g.title AS goal "
             "FROM goal_activity a JOIN goals g ON a.goal_id=g.id WHERE a.artifact=1 "
-            "AND (? IS NULL OR a.goal_id=?) ORDER BY a.created DESC,a.rowid DESC LIMIT 50", (goal, goal),
+            "AND (? IS NULL OR a.goal_id=?) AND NOT EXISTS (SELECT 1 FROM pdf_artifacts p WHERE p.id=a.id) "
+            "ORDER BY a.created DESC,a.rowid DESC LIMIT 50", (goal, goal),
         ).fetchall()
-    files = [edition_artifact(row) for row in editions]
+        files = pdf_artifacts.files(db, goal)
+    files.extend(edition_artifact(row) for row in editions)
     files.extend({
         "id": row["id"], "title": row["goal"], "subtitle": row["title"], "date": row["created"], "kind": "goal",
         "text": row["detail"], "goal_id": row["goal_id"],

@@ -14,6 +14,7 @@ from ..web_intent import request_text
 from .access import needs_unlock
 from .clock_tool import clock_call
 from .goal_management import manage_goal
+from .pdf_tool import create_pdf
 from .question_quotes import select_quotes
 from .tools import Evidence, fetch
 
@@ -100,8 +101,12 @@ async def compute(turn, tool, generate):
 
 async def collect(store, turn, plan, generate, private, coordinates):
     evidence = {}
+    pdf_tool = None
     for tool in plan.tools:
         name = tool["name"]
+        if name == "create_pdf":
+            pdf_tool = tool
+            continue
         if name == "web" and not may_search(turn, plan, tool.get("query", "")):
             result = Evidence({"unavailable": "A public topic is required to search from this private conversation."})
         elif name == "manage_goal":
@@ -115,6 +120,15 @@ async def collect(store, turn, plan, generate, private, coordinates):
         if isinstance(result.data, QuestionCandidates):
             result.data, result.sources, result.recall_cursor = await select_quotes(turn, result.data, generate)
         evidence[name] = result
+    if pdf_tool:
+        async def verify(text):
+            return await verified_web(text, evidence, turn.text, generate)
+
+        web = evidence.get("web")
+        budget = min(4300, 6800 // max(1, len(evidence)))
+        inputs = {name: bounded(item.data, budget) for name, item in evidence.items()}
+        result = await create_pdf(store, turn, pdf_tool, inputs, generate, verify if web and web.sources else None)
+        evidence["create_pdf"] = Evidence(result, engine="create_pdf")
     return evidence
 
 
@@ -186,6 +200,15 @@ async def compose(turn, evidence, generate, *, clarify=False):
     goal = evidence.get("goal") or evidence.get("manage_goal")
     if goal and isinstance(goal.data, dict) and "schedule_text" in goal.data:
         return await compose_goal(turn, goal.data, generate, tokens)
+    if pdf := evidence.get("create_pdf"):
+        instructions = WRITE + (
+            "\nAnswer the PDF request using only the file tool outcome. For status saved, tell the user the "
+            "PDF title and that it is available in Library Files, and in the goal's Artifacts if goal_id is set. "
+            "For any other status, explain the issue or ask for the needed clarification."
+        )
+        data = {"tools": {"create_pdf": pdf.data}, "spoken": turn.spoken, **turn.prompt()}
+        text = await generate(model_messages(instructions, data), tokens)
+        return text.strip() if isinstance(text, str) else ""
     budget = min(4300, 6800 // max(1, len(evidence)))
     data = {"spoken": turn.spoken, "clarify_transcript": clarify, "tools": {
         name: bounded(item.data, budget) for name, item in evidence.items()}, **turn.prompt()}
