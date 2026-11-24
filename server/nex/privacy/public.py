@@ -1,7 +1,8 @@
 """Model-directed public Chat and recorded voice with private handoff and replay."""
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime
+from functools import partial
 
 from ..conversation.access import can_preflight, needs_unlock
 from ..conversation.clock import DeviceClock
@@ -12,6 +13,7 @@ from ..conversation.sync import execute, make_turn, select
 from ..live.weather_location import Coordinates
 from ..personal_learning import enqueue_context
 from ..store import now
+from .chat_recall import recall_chat
 from .keys import validate_session
 from .requests import queue, request_notice, resolve
 
@@ -23,7 +25,7 @@ def location_request(turn):
 def handoff(assistant, turn, plan, **options):
     return queue(assistant.store.privacy, turn.id, turn.device, turn.text, turn.language, turn.zone,
                  journal=turn.journal, screen=plan.screen, plan=plan, history=turn.history, assistant=assistant,
-                 exclude=turn.exclude, device_clock=turn.device_clock, **options)
+                 exclude=turn.exclude, device_clock=turn.device_clock, recalled_chat=turn.recalled_chat, **options)
 
 
 def answer(assistant, state, identifier, device, text, preference, zone, *, journal=None, force=False, spoken=False,
@@ -99,6 +101,30 @@ def save_public(store, turn, result, *, pending=False, learn=False):
                 enqueue_context(db, "q-" + turn.id, "dialogue", turn.text, now())
 
 
+def plan_chat(assistant, turn, saved, session, *, force, lookup_only):
+    store = assistant.store
+    history = turn.history
+    recall = partial(recall_chat, store, turn, session) if session and not lookup_only else None
+    if saved:
+        turn.started = datetime.fromisoformat(saved["started"]) if saved.get("started") else turn.started
+        turn.resolved_language = saved.get("language")
+        turn.device_clock = DeviceClock.read(saved.get("device_clock"))
+        turn.recalled_chat = saved.get("recalled_chat")
+        plan = replace(validated(saved["pending_tools"]), clarify=bool(saved.get("clarify")))
+    else:
+        turn.history = with_goal_state(store, history)
+        plan = select(assistant, turn, recall=recall)
+    private = needs_unlock(turn, plan, force)
+    # A private follow-up's context must never enter a public answer or public search terms.
+    if history and history[-1].get("private") and not private:
+        turn.history = ()
+        turn.recalled_chat = None
+        turn.resolved_language = None
+        plan = select(assistant, turn, recall=recall)
+        private = needs_unlock(turn, plan, force)
+    return plan, private
+
+
 def chat(assistant, identifier, device, text, preference, zone, *, journal=None, force=False, lookup_only=False,
          followups=None, session=None, ask_location=False, location=None, device_clock=None):
     store = assistant.store
@@ -120,22 +146,9 @@ def chat(assistant, identifier, device, text, preference, zone, *, journal=None,
         raise ValueError("This question ID already belongs to a public exchange.")
     if saved and "pending_tools" not in saved:
         return saved if not lookup_only or saved["engine"] in {"web_lookup", "python_sandbox", "calculation"} else None
-    if saved and saved.get("started"):
-        turn.started = datetime.fromisoformat(saved["started"])
-        turn.resolved_language = saved.get("language")
-        turn.device_clock = DeviceClock.read(saved.get("device_clock"))
-    if saved:
-        plan = validated(saved["pending_tools"])
-    else:
-        turn.history = with_goal_state(store, turn.history)
-        plan = select(assistant, turn)
-    private = needs_unlock(turn, plan, force)
-    # A private follow-up's context must never enter a public answer or public search terms.
-    if history and history[-1].get("private") and not private:
-        turn.history = ()
-        turn.resolved_language = None
-        plan = select(assistant, turn)
-        private = needs_unlock(turn, plan, force)
+    if lookup_only and saved and saved.get("recalled_chat") is not None:
+        return None
+    plan, private = plan_chat(assistant, turn, saved, session, force=force, lookup_only=lookup_only)
     if plan.error == "model_unavailable":
         return None if lookup_only else reply(turn, "", plan.error)
     if lookup_only and (private or not can_preflight(plan)):
@@ -153,6 +166,10 @@ def chat(assistant, identifier, device, text, preference, zone, *, journal=None,
         pending = {"pending_tools": plan.tools, "started": turn.started.isoformat(), "language": turn.language}
         if turn.device_clock is not None:
             pending["device_clock"] = asdict(turn.device_clock)
+        if turn.recalled_chat is not None:
+            pending["recalled_chat"] = turn.recalled_chat
+        if plan.clarify:
+            pending["clarify"] = True
         save_public(store, turn, pending, pending=True)
     if ask:
         return location_request(turn)
@@ -161,5 +178,5 @@ def chat(assistant, identifier, device, text, preference, zone, *, journal=None,
         return result
     save_public(store, turn, result, learn=bool(session and not lookup_only))
     if followups:
-        followups.remember(device, session, text, result)
+        followups.remember(device, session, identifier, text, result)
     return result

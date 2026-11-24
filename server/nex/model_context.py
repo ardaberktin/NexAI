@@ -10,7 +10,7 @@ DEFAULT_CONTEXT = 4096
 TEMPLATE_MARGIN = 8
 LARGE_REPLY_FLOOR = 900
 HISTORY_FIELDS = ("history", "recent", "earlier_answers", "conversation")
-EVIDENCE_FIELDS = ("tools", "evidence", "cited_pages", "other_tools")
+EVIDENCE_FIELDS = ("tools", "evidence", "cited_pages", "other_tools", "recalled_chat")
 EXCERPT_FIELDS = {"body", "content", "excerpt", "preview", "text"}
 RECEIPT_TOOLS = {"clock", "create_pdf", "goal", "manage_goal", "save_memory", "weather_city"}
 

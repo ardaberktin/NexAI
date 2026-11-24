@@ -17,7 +17,6 @@ from nex.conversation.document_routing import (
 )
 from nex.conversation.goal_management_prompts import (
     EDIT_GOAL,
-    GOAL_INTENT,
     SELECT_GOAL,
     VERIFY_CHANGE,
 )
@@ -28,6 +27,7 @@ from nex.conversation.reply import (
     WRITE_GOAL,
     WRITE_GOAL_FORMAT,
 )
+from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.goal_runner import EXECUTE
 from nex.goals import Goals
 from nex.pdf.artifacts import content
@@ -70,7 +70,7 @@ class PDFRoutingTests(unittest.TestCase):
                 def generate(messages, *_args, question=question, **_options):
                     prompt = messages[0]["content"]
                     data = json.loads(messages[1]["content"])
-                    if prompt == GOAL_INTENT:
+                    if prompt.startswith(ROUTE_HEADER):
                         self.assertEqual(data["latest_message"], question)
                         return "DOCUMENT"
                     self.assertEqual(data["question"], question)
@@ -112,7 +112,7 @@ class PDFRoutingTests(unittest.TestCase):
     def test_missing_web_evidence_cannot_publish_a_pdf(self):
         def generate(messages, *_args, **_options):
             prompt = messages[0]["content"]
-            if prompt == GOAL_INTENT:
+            if prompt.startswith(ROUTE_HEADER):
                 return "DOCUMENT"
             if prompt == CHOOSE_DOCUMENT_ACTION:
                 return "NOW"
@@ -139,7 +139,7 @@ class PDFRoutingTests(unittest.TestCase):
         def generate(messages, *_args, **_options):
             prompt = messages[0]["content"]
             data = json.loads(messages[1]["content"])
-            if prompt == GOAL_INTENT:
+            if prompt.startswith(ROUTE_HEADER):
                 self.assertEqual(data["latest_message"], question)
                 return "DOCUMENT"
             if prompt == CHOOSE_DOCUMENT_ACTION:
@@ -176,7 +176,7 @@ class PDFRoutingTests(unittest.TestCase):
         def edit(messages, *_args, **_options):
             prompt = messages[0]["content"]
             data = json.loads(messages[1]["content"])
-            if prompt == GOAL_INTENT:
+            if prompt.startswith(ROUTE_HEADER):
                 self.assertEqual(data["latest_message"], question)
                 return "DOCUMENT"
             if prompt == CHOOSE_DOCUMENT_ACTION:

@@ -9,7 +9,6 @@ from nex.assistant import Assistant
 from nex.conversation.goal_management_prompts import (
     EDIT_GOAL,
     FIND_GOALS,
-    GOAL_INTENT,
     MANAGE_GOALS,
     SELECT_GOAL,
     VERIFY_CHANGE,
@@ -22,6 +21,7 @@ from nex.conversation.reply import (
     WRITE_GOAL,
     WRITE_GOAL_STATUS,
 )
+from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.goal_follow_up_jobs import GoalFollowUpJobs
 from nex.goals import Goals
 from nex.privacy import public, requests
@@ -53,7 +53,7 @@ class ChatGoalManagementTests(unittest.TestCase):
     def generate(self, messages, *args, **kwargs):
         prompt = messages[0]["content"]
         data = json.loads(messages[1]["content"])
-        if prompt == GOAL_INTENT:
+        if prompt.startswith(ROUTE_HEADER):
             self.assertNotIn("goals", data)
             return self.intent
         if prompt == FIND_GOALS:

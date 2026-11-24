@@ -75,6 +75,8 @@ async def manage_goal(store, turn, generate, operation=None, *, format_only=Fals
             return outcome("no_saved_goals")
         prompt = turn.prompt()
         context = {key: prompt[key] for key in ("question", "local_time", "language", "history")}
+        if turn.recalled_chat is not None:
+            context["recalled_chat"] = turn.recalled_chat
         context["history"] = prompt_history(turn.history, include_tools=False)[-4:]
         context["goal_time_zone"] = turn.zone
         if exchange := clarification_exchange(turn.history):

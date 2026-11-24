@@ -21,6 +21,8 @@
 
 Interactive requests first select capabilities and a reply language. Ordinary answers move directly to the reply writer. Tool planning loads the selected capabilities and their argument rules. Clocks, scheduled actions, and PDF requests load their detailed planning rules only for the selected workflow. JSON schemas constrain model output where supported. Application validators still check arguments and execution permissions.
 
+In unlocked typed Chat, the model can request an archive lookup when recent history leaves a reference unresolved. The lookup reads bounded excerpts from completed exchanges in the shared timeline. Nex sees the lookup outcome before choosing how to answer or which tools to use. Public web queries on a turn with recalled exchanges must use a topic supplied in the current request.
+
 The reply writer uses the current request, relevant history, and tool outcomes. Authorized private replies can receive a short excerpt of the owner's `SOUL.md` for presentation preferences. The memory tool retrieves relevant `MEMORY.md` and `NOW.md` excerpts when selected. Scheduled execution uses the current saved definition, the original request, the saved language when available, and the goal's local time.
 
 The model backend counts input using its chat tokenizer and reserves space for generation. Older relays use a conservative estimate. Nex first reduces older context and then shortens long excerpts while retaining the latest request, receipts, and source identifiers. Debug logs record token counts and timing without prompt or reply text.

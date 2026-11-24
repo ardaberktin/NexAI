@@ -16,7 +16,9 @@ class ModelContextTests(unittest.TestCase):
         question = "Full current request, including its last instruction."
         data = {"question": question, "history": history, "tools": {
             "save_memory": receipt, "web": [{"number": 2, "url": "https://example.org/", "excerpt": "z" * 650}],
-        }}
+        }, "recalled_chat": {"status": "found", "exchanges": [
+            {"messages": [{"role": "assistant", "text": "r" * 650}]},
+        ]}}
         options = {"messages": model_messages("Instructions", data), "max_tokens": 180}
         budget = ContextBudget(options, 1024)
         for candidate in budget.candidates():
@@ -31,6 +33,9 @@ class ModelContextTests(unittest.TestCase):
         self.assertEqual(current["tools"]["save_memory"], receipt)
         self.assertEqual(current["tools"]["web"][0]["number"], 2)
         self.assertEqual(current["tools"]["web"][0]["url"], "https://example.org/")
+        self.assertEqual(current["recalled_chat"]["status"], "found")
+        self.assertEqual(current["recalled_chat"]["exchanges"][0]["messages"],
+                         [{"role": "assistant", "text": "r" * 360 + "…"}])
         self.assertEqual(json.loads(options["messages"][1]["content"]), data)
 
     def test_large_reply_can_use_the_remaining_window_and_keep_its_sources(self):
