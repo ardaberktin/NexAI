@@ -125,8 +125,9 @@ class LiveFollowupTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.session.timed_out())
 
     async def test_direct_speech_chimes_on_the_first_words_and_keeps_the_whole_turn(self):
-        from nex.live.session import Session
         from pipecat.audio.vad.vad_analyzer import VADState
+
+        from nex.live.session import Session
 
         speech = self.session.speech
         session = Session(self.socket, "mac", "en", "UTC", False, speech, self.dialogue, self.verifier, local_chime=True)

@@ -15,6 +15,7 @@ class WatchReplyVoiceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         import httpx
         from fastapi import FastAPI
+
         from nex.live.watch_reply_voice import install_watch_reply_voice
 
         app = FastAPI()

@@ -1,0 +1,3 @@
+target-version = "py312"
+# unittest adds tests/ to the import path during discovery.
+src = [".", "tests"]

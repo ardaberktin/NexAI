@@ -12,8 +12,9 @@ class TurnAudioTests(unittest.IsolatedAsyncioTestCase):
                 await self.check_packet_size(packet_size)
 
     async def check_packet_size(self, packet_size):
-        from nex.live.turn_audio import TurnAudio
         from pipecat.audio.vad.vad_analyzer import VADState
+
+        from nex.live.turn_audio import TurnAudio
 
         frame = 512 * 2
         pcm = bytes(frame * 3) + bytes([1, 0]) * (512 * 2 + 39)
