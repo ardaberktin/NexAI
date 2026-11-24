@@ -1,11 +1,14 @@
 """Use the shared planner with the foreground voice model and ask the device for context."""
 import asyncio
 
+import httpx
+
 from ..conversation.access import needs_unlock
 from ..conversation.plan import Turn as ConversationTurn
 from ..conversation.plan import choose
 from ..conversation.reply import run, spoken_text
 from ..privacy.requests import queue
+from ..privacy.voice import with_approval_notice
 from ..voice_stream import SpeechChunks
 
 
@@ -23,7 +26,12 @@ async def public_reply(dialogue, voice, history, emit, locate=None, *, read_cloc
         result = await asyncio.to_thread(queue, dialogue.memory.privacy, turn.id, turn.device, turn.text,
                                          turn.language, turn.zone, journal=turn.journal, screen=plan.screen,
                                          plan=plan, history=history, speaker=voice.speaker,
-                                         asked_at=turn.started.isoformat(), device_clock=turn.device_clock)
+                                         asked_at=turn.started.isoformat(), device_clock=turn.device_clock, spoken=True)
+        try:
+            result = await with_approval_notice(result, generate)
+        except (httpx.HTTPError, IndexError, KeyError, TypeError, ValueError):
+            # The committed request can still be shown and approved in the app.
+            pass
     else:
         if plan.location and locate:
             await locate(voice)

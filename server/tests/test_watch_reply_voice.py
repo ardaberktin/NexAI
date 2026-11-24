@@ -53,6 +53,14 @@ class WatchReplyVoiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await self.client.get(self.path)).status_code, 404)
         self.speech.speak.assert_not_called()
 
+    async def test_private_recording_can_play_only_the_approval_notice(self):
+        self.reply.update(engine="private_request", text="Previously stored reply text")
+        self.assertEqual((await self.client.get(self.path)).status_code, 404)
+        self.speech.speak.assert_not_called()
+        self.reply.update(approval_notice="Approve the pending request in Nex.")
+        self.assertEqual((await self.client.get(self.path)).status_code, 200)
+        self.speech.speak.assert_called_once_with(self.reply["approval_notice"], "en")
+
     async def test_failed_render_and_busy_voice_allow_local_fallback(self):
         entered, release = Event(), Event()
 

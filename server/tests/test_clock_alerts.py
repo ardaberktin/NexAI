@@ -58,6 +58,7 @@ class ClockAlertTests(unittest.TestCase):
                     reply = public.chat(self.assistant, identifier, "mac", question, "en", ZONE,
                                         session=self.session, device_clock=clock)
                     self.assertEqual((reply["engine"], reply["text"]), ("private_request", ""))
+                    self.assertNotIn("approval_notice", reply)
                 item = next(row for row in requests.inbox(self.store.privacy, self.store)["items"]
                             if row["id"] == identifier)
                 alert = item["clock_alert"]
@@ -71,8 +72,15 @@ class ClockAlertTests(unittest.TestCase):
                 self.assertIn("Saved as", item["answer"])
         self.assertEqual(len(self.alerts.overview()), 3)
 
-    def test_voice_paths_save_only_after_existing_workspace_approval(self):
-        self.assistant.generate_conversation = model([TIMER], compose="Model-generated timer receipt.")
+    def test_voice_paths_announce_approval_and_save_only_after_it_is_granted(self):
+        notice = "Open Nex to approve your pending request."
+
+        def plan(payload):
+            self.assertIn(payload["question"], {"Start a countdown for two hours", "Two-hour timer please"})
+            return [TIMER]
+
+        self.assistant.generate_conversation = model(plan, compose="Model-generated timer receipt.",
+                                                     approval_notice=notice)
         complete = AsyncMock(side_effect=lambda _, messages, _tokens, **options:
                              self.assistant.generate_conversation(messages, **options))
         dialogue = Mock(memory=self.store, complete=complete)
@@ -81,16 +89,27 @@ class ClockAlertTests(unittest.TestCase):
                                 language="en", zone=ZONE, started=datetime.now(UTC), journal=None,
                                 speaker="recognized")
         live = asyncio.run(public_reply(dialogue, voice, (), emit))
-        emit.assert_not_called()
+        emit.assert_called_once_with(notice, "en")
         self.assertEqual(live["text"], "")
+        self.assertEqual(live["approval_notice"], notice)
+        emit.reset_mock()
         identifier = str(uuid4())
         recorded = public.answer(self.assistant, self.store.privacy, identifier, "watch", "Two-hour timer please",
                                  "en", ZONE, spoken=True, asked_at=voice.started.isoformat(), emit=emit)
         self.assertEqual(recorded["text"], "")
-        emit.assert_not_called()
+        self.assertEqual(recorded["approval_notice"], notice)
+        self.assertEqual(recorded["engine"], "private_request")
+        emit.assert_called_once_with(notice, "en")
         self.assertEqual(self.alerts.overview(), [])
         for pending in (voice.id, identifier):
             requests.resolve(self.store.privacy, "mac", self.session, pending, self.assistant, None)
+        self.assertEqual(len(self.alerts.overview()), 2)
+
+        emit.reset_mock()
+        retry = public.answer(self.assistant, self.store.privacy, identifier, "watch", "Two-hour timer please",
+                              "en", ZONE, spoken=True, asked_at=voice.started.isoformat(), emit=emit)
+        self.assertNotIn("approval_notice", retry)
+        emit.assert_not_called()
         self.assertEqual(len(self.alerts.overview()), 2)
 
     def test_model_can_decline_the_tool_or_use_its_error(self):
