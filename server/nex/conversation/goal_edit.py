@@ -3,12 +3,15 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from ..goal_writing import json_object, model_messages
+from ..goal_writing import json_object, model_messages, yes_no
 from ..store import excerpt
 from .calendar_scope import scope_prompt, weekday_selector, with_weekday
 from .goal_context import clarification_exchange
 from .goal_lookup import describe
-from .goal_management_prompts import EDIT_GOAL, EDIT_PDF_FORMAT
+from .goal_management_prompts import (
+    EDIT_GOAL,
+    VERIFY_PDF_FORMAT_SOURCE,
+)
 from .goal_plans import goal_start
 from .goal_tools import goal_data
 from .plan import validated
@@ -82,25 +85,12 @@ async def plan_edit(turn, goal, context, generate):
 
 
 async def plan_pdf_format(turn, data, generate):
-    earlier = data.get("clarification")
-    if not earlier:
-        return {"format_instruction": excerpt(turn.text, 419)}, None
-    sources = {"current": turn.text, "earlier": earlier[0]["content"]}
-    schema = {"anyOf": [
-        {"type": "object", "required": ["format_source"], "additionalProperties": False,
-         "properties": {"format_source": {"enum": list(sources)}}},
-        {"type": "object", "required": ["question"], "additionalProperties": False,
-         "properties": {"question": {"type": "string"}}},
-    ]}
-    payload = {"user_messages": sources, "goal": data["selected_goal"]["title"], "language": turn.language}
-    instructions = EDIT_PDF_FORMAT
-    for _ in range(2):
-        choice = json_object(await generate(model_messages(instructions, payload, schema=schema), 160) or "")
-        if choice.keys() == {"question"}:
-            question = choice["question"]
-            if isinstance(question, str) and 0 < len(question.strip()) <= 480 and question.strip().endswith("?"):
-                return question.strip()
-        if choice.keys() == {"format_source"} and isinstance(source := choice["format_source"], str) and source in sources:
-            return {"format_instruction": excerpt(sources[source].strip(), 419)}, None
-        instructions = EDIT_PDF_FORMAT + "\nReturn format_source or question using the supplied schema."
-    return None
+    instruction = turn.text
+    if earlier := data.get("clarification"):
+        verify = model_messages(VERIFY_PDF_FORMAT_SOURCE, {"latest_message": turn.text})
+        adds_detail = yes_no(await generate(verify, 8))
+        if adds_detail is None:
+            return None
+        if not adds_detail:
+            instruction = earlier[0]["content"]
+    return {"format_instruction": excerpt(instruction.strip(), 419)}, None

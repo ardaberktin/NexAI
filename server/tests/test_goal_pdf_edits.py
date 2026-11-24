@@ -9,10 +9,10 @@ from conversation_fixtures import unlock
 from nex.assistant import Assistant
 from nex.conversation.document_routing import CHOOSE_DOCUMENT_ACTION
 from nex.conversation.goal_management_prompts import (
-    EDIT_PDF_FORMAT,
     FIND_PDF_GOALS,
     SELECT_PDF_GOAL,
     VERIFY_PDF_CLARIFICATION,
+    VERIFY_PDF_FORMAT_SOURCE,
     VERIFY_PDF_TARGET,
 )
 from nex.conversation.reply import (
@@ -96,11 +96,9 @@ class GoalPDFEditTests(unittest.TestCase):
                 self.assertEqual(data["selected_goal"]["title"], first["title"])
                 self.assertEqual(data["other_candidates"][0]["title"], second["title"])
                 return "YES"
-            if prompt.startswith(EDIT_PDF_FORMAT):
-                self.assertEqual(data["user_messages"], {"current": follow_up, "earlier": initial})
-                if prompt == EDIT_PDF_FORMAT:
-                    return '{"format_source":"earlier","frequency":60}'
-                return '{"format_source":"earlier"}'
+            if prompt == VERIFY_PDF_FORMAT_SOURCE:
+                self.assertEqual(data, {"latest_message": follow_up})
+                return "NO"
             if prompt == VERIFY_PDF_CLARIFICATION:
                 self.assertEqual(data["preceding_clarification"][0]["content"], initial)
                 self.assertEqual(data["proposed_operation"], {"edit": {"format_instruction": initial}})
