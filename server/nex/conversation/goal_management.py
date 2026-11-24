@@ -24,7 +24,7 @@ def outcome(status, **details):
     return Evidence({"status": status, "changed": False, **details}, engine="goal_management")
 
 
-def apply_change(store, turn, goal, action, edit):
+def apply_change(store, turn, goal, action, edit, *, format_instruction=None):
     goals = Goals(store)
     identifier, revision = goal["id"], goal["revision"]
     if action == "delete":
@@ -43,6 +43,8 @@ def apply_change(store, turn, goal, action, edit):
         saved = goals.save(identifier, data, request=request,
                            language=turn.language, check_in=required)
         receipt = goal_receipt(store, saved, updated=True) | {"action": "updated"}
+        if format_instruction:
+            receipt["format_instruction"] = format_instruction.strip()
     return Evidence(receipt, engine="goal_" + receipt["action"], goal_id=identifier)
 
 
@@ -66,7 +68,7 @@ def parse_decision(result, candidates):
     return target
 
 
-async def manage_goal(store, turn, generate, operation=None):
+async def manage_goal(store, turn, generate, operation=None, *, format_only=False):
     try:
         goals = await asyncio.to_thread(saved_goals, store)
         if not goals:
@@ -79,6 +81,8 @@ async def manage_goal(store, turn, generate, operation=None):
             context["clarification"] = prompt_history(exchange, include_tools=False)
         if operation:
             context["requested_action"] = operation
+        if format_only:
+            context["format_only"] = True
         recent = next((item["goal_id"] for item in reversed(turn.history) if item.get("goal_id")), None)
         descriptions = [describe(goal, i, recent) for i, goal in enumerate(goals, 1)]
         named = named_targets(turn.text, descriptions)
@@ -139,7 +143,10 @@ async def decide_change(store, turn, generate, goals, context, named):
             continue
         verdict = await confirmed_change(goal, result, selection, generate, named)
         if verdict is True:
-            return await asyncio.to_thread(apply_change, store, turn, goal, action, edit)
+            fields = result.get("changes", {})
+            format_instruction = fields.get("format_instruction") if fields.keys() == {"format_instruction"} else None
+            return await asyncio.to_thread(apply_change, store, turn, goal, action, edit,
+                                           format_instruction=format_instruction)
         if verdict is None and "history" not in selection and context["history"] and not named:
             selection = context
             continue

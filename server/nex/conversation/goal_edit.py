@@ -14,13 +14,22 @@ from .plan import validated
 
 def changes_for(turn, goal, changes):
     if not isinstance(changes, dict) or not changes or changes.keys() - {
-        "query", "title", "start", "timing", "frequency", "check_in"
+        "query", "title", "start", "timing", "frequency", "check_in", "format_instruction"
     }:
         raise ValueError("Specify the goal fields to change.")
     fields = dict(changes)
     title = fields.pop("title", None)
     if "title" in changes and (not isinstance(title, str) or not 1 <= len(title.strip()) <= 120):
         raise ValueError("Use a nonempty title of up to 120 characters.")
+    if "format_instruction" in fields:
+        instruction = fields.pop("format_instruction")
+        if not isinstance(instruction, str) or not instruction.strip() or "query" in fields:
+            raise ValueError("Use format_instruction on its own to change the output format while keeping the task.")
+        task = goal["prompt"]
+        instruction = instruction.strip()
+        fields["query"] = task if task.endswith(instruction) else f"{task}\n\n{instruction}"
+        if title is None:
+            title = goal["title"]
     tool, = validated([{"name": "goal", "target": 1, **fields}]).tools
     timing_turn = turn
     timing = tool.get("timing", "").casefold()
@@ -48,8 +57,11 @@ def changes_for(turn, goal, changes):
 
 async def plan_edit(turn, goal, context, generate):
     data = {key: value for key, value in context.items() if key != "goals"}
-    data["selected_goal"] = describe(goal, 1, None)
+    data["selected_goal"] = describe(goal, 1, None) | {"task": goal["prompt"]}
     instructions = EDIT_GOAL
+    if data.get("format_only"):
+        instructions += ('\nThis is a format-only change. Return exactly {"format_instruction":"..."} with '
+                         "the requested format, layout, and delivery details copied from the user's request.")
     for _ in range(2):
         changes = json_object(await generate(model_messages(instructions, data), 260) or "")
         if changes.keys() == {"question"}:
@@ -57,7 +69,9 @@ async def plan_edit(turn, goal, context, generate):
             if isinstance(question, str) and 0 < len(question.strip()) <= 480 and question.strip().endswith("?"):
                 return question.strip()
         try:
+            if data.get("format_only") and changes.keys() != {"format_instruction"}:
+                raise ValueError("Only format_instruction may change for this request.")
             return changes, changes_for(turn, goal, changes)
         except ValueError as error:
-            instructions = f"{EDIT_GOAL}\nCorrect the previous edit {changes!r}. {error}"
+            instructions = f"{instructions}\nCorrect the previous edit {changes!r}. {error}"
     return None

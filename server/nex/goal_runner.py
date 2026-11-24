@@ -25,21 +25,26 @@ from .goal_writing import (
     prioritize_mail,
     yes_no,
 )
+from .news_sources import news_date, validate_news_date
 from .pdf.document import PDFError
 from .pdf.render import ValidatedPDF
-from .pdf.scheduled import prepare_pdf
+from .pdf.scheduled import VERIFY_SKIP_PDF, prepare_pdf
 from .recall_dates import recall_dates, time_key, time_zone
 from .store import excerpt
 from .tool_dates import date_selection, local_bounds
 from .weather import Weather
 from .weather_intent import WeatherRequest, weather_city
+from .web_answers import news_pages
 from .web_grounding import VERIFY_WEB
 from .web_intent import web_request
 from .web_search import lookup
 from .web_transport import WebReadError
 
-PLAN = """Choose the tools needed to carry out the user's scheduled goal. Return only JSON such as
-{"tools":[{"name":"calendar","query":"today"},{"name":"weather","query":""}]}. Select up to four read tools and optionally create_pdf.
+PLAN = """Choose only the tools needed to carry out the saved goal. Return a JSON object with a tools array.
+Each tool is an object with a name and its arguments.
+Select up to four read tools. Include create_pdf whenever the saved goal requests a PDF for its update.
+Choose read tools only for facts the goal requires from outside its supplied text. A task that asks to
+use only the facts in the saved goal needs no read tools, even when its title sounds like a regular report.
 Available tools and query values:
 - create_pdf: publish a validated PDF with this goal's update when the goal requests a PDF. Set query to
   the requested layout or format, such as newspaper. Choose any needed read tools in the same plan.
@@ -55,7 +60,9 @@ Available tools and query values:
 - weather: city and region, or an empty query for the user's saved location. Current conditions only.
 - archive: short search keywords for recordings, optionally including the requested date range.
 - web: public search terms or a public HTTPS address from the goal. Exclude personal or account details.
-Example for a morning briefing asking for agenda, weather, and anything important:
+  For daily news, set date (today, yesterday, or YYYY-MM-DD).
+  With date, omit query for general headlines or copy the public topic from the goal.
+Example when the goal explicitly requests today's schedule, weather and important email:
 {"tools":[{"name":"agenda","query":"today"},{"name":"weather"},{"name":"gmail","unread":true,"priority":true}]}.
 Pick only sources that fit the user's request, including any stated exclusions. Only use trigger tools if the user
 asks for an update on new matches. A trigger tool already reads the new matches. Add the corresponding regular
@@ -110,6 +117,8 @@ def plan_for(generate, data):
                 raise ValueError
             if name == "create_pdf" and tool.keys() - {"name", "query"}:
                 raise ValueError
+            if name == "web" and "date" in tool:
+                validate_news_date(tool["date"])
             variants = tool.get("terms", [])
             if not isinstance(variants, list) or len(variants) > 3 or any(
                     not isinstance(term, str) or not 1 <= len(term) <= 110 for term in variants):
@@ -150,12 +159,17 @@ def weather_evidence(store, goal, query):
                        "Set a weather city or turn on location sharing in Nex Settings.")
 
 
-def web_evidence(goal, query):
-    request = web_request("Search the web for " + query)
-    if request.url and query.strip() not in goal["prompt"]:
-        raise WebReadError("Use a public HTTPS address from the goal prompt.")
-    return [{"title": page.title, "url": page.url, "text": excerpt(page.text, 520)}
-            for page in lookup(request)[:3]]
+def web_evidence(goal, anchor, tool):
+    query = tool.get("query", "").strip()
+    if "date" in tool:
+        zone = time_zone(goal["zone"])
+        pages = news_pages(news_date(tool["date"], anchor.astimezone(zone).date()), zone, anchor, query)
+    else:
+        request = web_request("Search the web for " + query)
+        if request.url and query not in goal["prompt"]:
+            raise WebReadError("Use a public HTTPS address from the goal prompt.")
+        pages = lookup(request)
+    return [{"title": page.title, "url": page.url, "text": excerpt(page.text, 520)} for page in pages[:4]]
 
 
 def evidence_for(store, goal, anchor, tool):
@@ -176,7 +190,7 @@ def evidence_for(store, goal, anchor, tool):
         bounds = tuple(map(time_key, local_bounds(selection, goal["zone"]))) if selection else None
         rows = store.search(query, limit=6, evidence_only=True, bounds=bounds or (scope.bounds if scope else None))
         return [{"date": row["started"], "text": excerpt(row["text"], 380)} for row in rows]
-    return web_evidence(goal, query)
+    return web_evidence(goal, anchor, tool)
 
 
 def format_evidence(name, value):
@@ -241,7 +255,8 @@ def run_prompt(store, row, anchor, generate, classify):
     }
     instructions = MAIL_EXECUTE if has_mail else EXECUTE
     if pdf_tool:
-        instructions += "\nWrite the content of the update. The application will handle formatting and PDF delivery."
+        instructions += ("\nWrite the content for the requested PDF now. The scheduler has already evaluated "
+                         "any trigger. Use the saved task's supplied facts and requested sources.")
     text = ask(generate, instructions, context, 900 if has_mail or "agenda" in evidence or pdf_tool else 425)
     if not text:
         return PromptResult(error=MODEL_ERROR)
@@ -250,7 +265,13 @@ def run_prompt(store, row, anchor, generate, classify):
     if update and evidence.get("web") and not verify_web_update(generate, data, evidence, update):
         return PromptResult(error="Nex couldn’t verify the web findings for this goal. It will retry.")
     result.text = update
-    if pdf_tool and update:
+    if pdf_tool:
+        if not update:
+            skip = yes_no(ask(generate, VERIFY_SKIP_PDF, context, 8))
+            if skip is None:
+                return PromptResult(error=MODEL_ERROR)
+            if skip:
+                return result
         draft_context = context | {"verified_update": update, "document_brief": pdf_tool.get("query", "")}
 
         def verify(text):
@@ -260,7 +281,7 @@ def run_prompt(store, row, anchor, generate, classify):
             result.pdf, note = prepare_pdf(generate, draft_context, verify if evidence.get("web") else None)
         except PDFError as error:
             return PromptResult(error=str(error))
-        result.text = f"{update}\n\n{note}"
+        result.text = f"{update}\n\n{note}" if update else note
     return result
 
 

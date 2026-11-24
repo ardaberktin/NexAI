@@ -4,10 +4,12 @@ import json
 from dataclasses import asdict
 from uuid import NAMESPACE_URL, uuid5
 
+from .news_sources import daily_stories
 from .store import excerpt, now
 from .voice_stream import SpeechChunks
 from .web_evidence import page_evidence
 from .web_grounding import CITATION, local_day, supported_answer, with_countdown
+from .web_html import Page
 from .web_intent import web_request
 from .web_search import lookup, read_page
 from .web_transport import WebReadError
@@ -36,6 +38,20 @@ def prepare_lookup(store, query):
     evidence = [page_evidence(i, page, request.terms or query) for i, page in enumerate(pages, start=1)]
     support = [page for page in evidence if page.get("source_answer")]
     return support or evidence, sources, ""
+
+
+def news_pages(day, zone, anchor, query):
+    topic = ""
+    if query:
+        request = web_request("Search for " + query)
+        if request.url:
+            raise WebReadError("Supply public search terms for dated news or open the URL without a date.")
+        topic = request.terms
+    stories = daily_stories(day, zone, anchor, topic)
+    if not stories:
+        raise WebReadError("No dated public news results were available for the requested day and topic.")
+    return [Page(row["title"], row["url"], f'{row["source"]}, {day.isoformat()}. {row["summary"]}')
+            for row in stories]
 
 
 def web_messages(query, evidence, language, spoken, *, lookup=None, asked_at=None, zone="UTC"):

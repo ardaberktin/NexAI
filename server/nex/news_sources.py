@@ -3,7 +3,7 @@
 import hashlib
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, timedelta
+from datetime import UTC, date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -35,6 +35,7 @@ ALTERNATE_SOURCES = {
 }
 NEWS_SEARCH = "https://www.bing.com/news/search"
 DEFAULT_TOPICS = ("Canada", "World", "Technology", "Science")
+RELATIVE_DAYS = {"today": 0, "yesterday": 1}
 PHOTO_HOSTS = {"i.cbc.ca", "ichef.bbci.co.uk", "media.guim.co.uk", "i.guim.co.uk"}
 MEDIA = "{http://search.yahoo.com/mrss/}"
 
@@ -165,3 +166,32 @@ def search_topic(topic, anchor):
     except WebReadError:
         return []
     return parse_stories(document.content, topic, None, anchor)
+
+
+def validate_news_date(value):
+    if value not in RELATIVE_DAYS:
+        date.fromisoformat(value)
+
+
+def news_date(value, local_day):
+    if value in RELATIVE_DAYS:
+        return local_day - timedelta(days=RELATIVE_DAYS[value])
+    return date.fromisoformat(value)
+
+
+def daily_stories(day, zone, anchor, topic=""):
+    """Return dated public headlines from the local day the caller requested."""
+    if day > anchor.astimezone(zone).date():
+        return []
+    if topic:
+        category = next((name for name in SOURCES if name.casefold() == topic.casefold()), topic)
+        topics = (category,)
+    else:
+        topics = DEFAULT_TOPICS
+    rows = collect(topics, anchor)
+    stories = [row for row in rows if datetime.fromisoformat(row["published"]).astimezone(zone).date() == day]
+    if topic:
+        return sorted(stories, key=lambda row: row["published"], reverse=True)[:5]
+    return [newest for name in topics
+            if (newest := max((row for row in stories if row["topic"] == name),
+                              key=lambda row: row["published"], default=None))]

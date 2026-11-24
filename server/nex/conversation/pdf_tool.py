@@ -8,6 +8,7 @@ from ..goals import Goals
 from ..pdf import artifacts
 from ..pdf.document import WRITE_DOCUMENT, Document, PDFError
 from ..pdf.render import render
+from ..pdf.web import WRITE_WEB_DOCUMENT, document_with_sources
 from ..store import now
 from ..workspace_features import FeatureDisabled, require
 from ..workspace_schema import WorkspaceMissing
@@ -51,10 +52,13 @@ async def find_goal(store, turn, query, generate):
     return await asyncio.to_thread(Goals(store).detail, goals[target - 1]["id"])
 
 
-async def create_pdf(store, turn, tool, evidence, generate, verify):
+async def create_pdf(store, turn, tool, evidence, generate):
     identifier = str(uuid5(NAMESPACE_URL, f"nex:pdf:{turn.device}:{turn.id}"))
     if receipt := await asyncio.to_thread(load_receipt, store, identifier):
         return receipt
+    web = evidence.get("web")
+    if isinstance(web, dict) and (failure := web.get("unavailable")):
+        return {"status": "web_unavailable", "detail": failure}
     goal = None
     try:
         if tool.get("goal_query"):
@@ -62,16 +66,19 @@ async def create_pdf(store, turn, tool, evidence, generate, verify):
         context = turn.prompt() | {"document_brief": tool.get("query", ""), "evidence": evidence}
         if goal:
             context["saved_goal"] = {key: goal[key] for key in ("title", "prompt", "latest")}
-        if verify:
+        if web:
             context["cite_web_with_numbers"] = True
+        instructions = WRITE_WEB_DOCUMENT if web else WRITE_DOCUMENT
         for _ in range(2):
-            raw = await generate(model_messages(WRITE_DOCUMENT, context), 2600)
+            raw = await generate(model_messages(instructions, context), 2600)
             if not raw:
-                return {"status": "model_unavailable"}
+                context["revision_needed"] = "Return the complete document as concise JSON using the supplied evidence."
+                status = "model_unavailable"
+                continue
             try:
                 document = Document.read(raw)
-                if verify and not await verify(document.text()):
-                    raise PDFError("source_verification_failed", "The draft's web claims could not be verified.")
+                if web:
+                    document = await document_with_sources(document, turn, evidence, generate)
                 pdf = await asyncio.to_thread(render, document)
             except PDFError as error:
                 if error.code == "renderer_unavailable":

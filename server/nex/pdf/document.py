@@ -21,8 +21,8 @@ columns. Use report for a single-column document. Use the user's requested langu
 document, without commentary about creating or saving it. Markdown, markup, and emoji are unsupported.
 Retain the requested details, including times and deadlines. Use supplied evidence for current or private facts
 and disclose relevant gaps. If cite_web_with_numbers is true, use the supplied bracketed citation numbers
-in the claims they support and include their source titles and exact URLs in a Sources section. Otherwise
-use exact URLs for web citations. Include only URLs in the evidence or explicitly supplied by the user."""
+in the claims they support. Otherwise use exact URLs for web citations. Include only URLs in the
+evidence or explicitly supplied by the user."""
 
 
 class PDFError(ValueError):

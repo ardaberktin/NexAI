@@ -13,6 +13,7 @@ from ..conversation_history import recent_dialogue
 from ..conversation_recall import recent_question_reply, selected_questions
 from ..daybook import Daybook, DayContext
 from ..goal_writing import mail_context
+from ..news_sources import news_date
 from ..passages import matching_passage
 from ..personal_age import age_reply
 from ..personal_files import PersonalFiles, safe_line
@@ -21,7 +22,7 @@ from ..store import excerpt, search_prefixes
 from ..tool_dates import date_selection, local_bounds
 from ..weather import Weather
 from ..weather_intent import WeatherRequest, weather_city
-from ..web_answers import prepare_lookup
+from ..web_answers import news_pages, prepare_lookup, save_pages
 from ..web_intent import PRIVATE, web_request
 from ..web_transport import WebReadError
 from ..workspace_features import FeatureDisabled, require_enabled
@@ -66,7 +67,16 @@ def change_weather_city(store, turn, tool):
     return Evidence({"saved_city": place.label}, engine="weather")
 
 
-def web_result(store, turn, query):
+def web_result(store, turn, tool):
+    query = tool.get("query", "").strip()
+    if "date" in tool:
+        zone = time_zone(turn.device_clock.time_zone if turn.device_clock else turn.zone)
+        local = turn.device_clock.local_time() if turn.device_clock else turn.started.astimezone(zone)
+        day = news_date(tool["date"], local.date())
+        pages = news_pages(day, zone, turn.started, query)
+        items = [{"number": index, "title": page.title, "url": page.url, "excerpt": page.text}
+                 for index, page in enumerate(pages, start=1)]
+        return Evidence(items, save_pages(store, pages), "web_lookup")
     if not query or PRIVATE.search(query):
         raise WebReadError("This lookup needs a public topic without private details.")
     command = "Search the web for " + query
@@ -182,7 +192,7 @@ def fetch(store, turn, tool, *, private, coordinates):
     name = tool["name"]
     try:
         if name == "web":
-            return web_result(store, turn, tool.get("query", ""))
+            return web_result(store, turn, tool)
         if name == "weather":
             return weather_result(store, turn, tool, coordinates)
         if private:

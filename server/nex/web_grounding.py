@@ -50,6 +50,10 @@ def supported_answer(text, evidence, topic=""):
     availability = AVAILABILITY.search(topic) or AVAILABILITY.search(answer)
     if availability and any(name.search(answer) and not name.search(facts) for name in DISTRIBUTION_NAMES):
         return False
+    return supported_numbers(answer, facts)
+
+
+def supported_numbers(answer, facts):
     dates = set(date_mentions(facts))
     dates.update((None, month, day) for _, month, day in tuple(dates))
     if not set(date_mentions(answer)).issubset(dates):

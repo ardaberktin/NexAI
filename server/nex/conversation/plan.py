@@ -10,10 +10,12 @@ from ..conversation_history import MAX_EXCHANGES, prompt_history
 from ..daybook import DayContext
 from ..goal_schedule import FREQUENCIES
 from ..goal_writing import json_object, model_messages
+from ..news_sources import validate_news_date
 from ..recall_dates import time_zone
 from ..store import excerpt
 from ..tool_dates import clock_bounds, date_selection
 from ..weather_intent import weather_city
+from ..web_intent import literal_web_topic
 from .calendar_scope import CALENDAR_READS, repair_calendar_scopes
 from .catalog import (
     CATALOG,
@@ -29,6 +31,15 @@ from .catalog import (
 )
 from .clock import DeviceClock
 from .clock_tool import PLAN_CLOCK
+from .document_routing import (
+    CHOOSE_DOCUMENT_ACTION,
+    CHOOSE_PDF_CADENCE,
+    PDF_READ_TOOLS,
+    PLAN_PDF,
+    PLAN_PDF_GOAL,
+    normalize_source_url,
+    repair_document_search,
+)
 from .goal_context import goal_references
 from .goal_management_prompts import GOAL_INTENT, OPERATIONS
 from .goal_plans import (
@@ -104,8 +115,9 @@ def validated(tools):
         raise ValueError("Expected up to four tools.")
     names = set()
     for tool in tools:
-        if not isinstance(tool, dict) or not isinstance(name := tool.get("name"), str) or name not in CATALOG:
-            raise ValueError("Unknown tool.")
+        name = tool.get("name") if isinstance(tool, dict) else None
+        if not isinstance(name, str) or name not in CATALOG:
+            raise ValueError('Use objects with a known tool name, such as {"name":"agenda","query":"today"}.')
         if name in names:
             raise ValueError(f"Select {name} only once.")
         allowed = {"name"} | OPTIONS.get(name, set())
@@ -115,7 +127,7 @@ def validated(tools):
             raise ValueError(f"{name} only accepts these fields: {', '.join(sorted(allowed))}.")
         names.add(name)
         for key, value in tool.items():
-            if key in {"unread", "lists", "priority", "access_check", "exact", "check_in"}:
+            if key in {"unread", "lists", "priority", "access_check", "exact", "check_in", "format_only"}:
                 valid = type(value) is bool
             elif key == "terms":
                 valid = (isinstance(value, list) and len(value) <= 3
@@ -139,7 +151,8 @@ def validated(tools):
         if name in {"memory", "save_memory"} and tool.get("file", "memory") not in (
                 {"memory", "soul"} if name == "save_memory" else {"now", "memory", "soul"}):
             raise ValueError("Unknown memory file.")
-        needs_query = name in {"web", "save_memory"} or (name == "goal" and ("target" not in tool or "query" in tool))
+        needs_query = (name == "web" and "date" not in tool) or name == "save_memory" or (
+            name == "goal" and ("target" not in tool or "query" in tool))
         if needs_query and not tool.get("query", "").strip():
             raise ValueError(f"{name} requires a nonempty query.")
         if "goal_query" in tool and not tool["goal_query"].strip():
@@ -149,6 +162,8 @@ def validated(tools):
         if name == "weather_city" and (tool.get("operation") not in {"set", "clear"} or
                                        bool(tool.get("query")) != (tool["operation"] == "set")):
             raise ValueError("Choose set with the named city or clear without a city.")
+        if name == "web" and "date" in tool:
+            validate_news_date(tool["date"])
         if name in {"weather", "daybook", "activities"} and "date" in tool:
             date.fromisoformat(tool["date"])
         if "start_date" in tool or "end_date" in tool:
@@ -167,15 +182,20 @@ def validated(tools):
             if tool.get("mode") == "current" and (times or dates):
                 raise ValueError("Current activity uses fresh recordings. Use range for a date or time window.")
         if name == "manage_goal" and ("query" in tool or
-                ("operation" in tool and tool["operation"] not in OPERATIONS)):
-            raise ValueError("Use manage_goal with only an optional supported operation.")
+                ("operation" in tool and tool["operation"] not in OPERATIONS) or
+                ("format_only" in tool and tool.get("operation") != "edit")):
+            raise ValueError("Use a supported manage_goal operation. format_only applies to an edit.")
     if len(names) > 1 and names.intersection({"screen", "goal", "manage_goal", "save_memory", "weather_city", "clock"}):
         raise ValueError("Request a change or a screen inspection on its own.")
     return Plan(tuple(tools))
 
 
 def validate_context(turn, plan):
+    writes_pdf = any(tool["name"] == "create_pdf" for tool in plan.tools)
     for tool in plan.tools:
+        if (writes_pdf and tool["name"] == "web" and (query := tool.get("query", "").strip())
+                and not literal_web_topic(turn.text, query)):
+            raise ValueError("Copy a public topic or the supplied public URL verbatim into the web query.")
         if tool["name"] in CALENDAR_READS:
             validate_scope(tool, turn.zone, turn.started)
         if tool["name"] == "past_questions" and "count" not in tool:
@@ -232,6 +252,8 @@ async def select_tools(turn, generate, data):
         return await select_schedule(turn, generate, data)
     if not turn.journal and label == "clock":
         return await generate_plan(turn, generate, model_messages(PLAN_CLOCK, data), available={"clock"})
+    if label == "document" and not turn.journal:
+        return await select_document(turn, generate, data)
     clock = f"Reading from the asking device's clock: {data['local_time_display']} ({data['local_time']})."
     instructions = INSTRUCTIONS + routing_examples(data["local_time"]) + "\n" + clock
     if turn.journal:
@@ -247,9 +269,34 @@ async def select_tools(turn, generate, data):
         if verdict == "REPLAN":
             data = data | {"history": []}
             plan = await generate_plan(turn, generate, model_messages(instructions, data))
-    if proposal := next((tool for tool in plan.tools if tool["name"] in {"agenda", "goal"}), None):
+    proposal = next((tool for tool in plan.tools if tool["name"] in {"agenda", "goal"}), None)
+    if proposal and all(tool["name"] != "create_pdf" for tool in plan.tools):
         return await select_schedule(turn, generate, data, proposal, plan.tools)
     return plan
+
+
+async def select_document(turn, generate, data):
+    context = schedule_context(turn, data)
+    raw = await generate(model_messages(CHOOSE_DOCUMENT_ACTION, context), 12)
+    action = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
+    if action in {"FORMAT", "EDIT"}:
+        return Plan(({"name": "manage_goal", "operation": "edit", "format_only": action == "FORMAT"},))
+    if action not in {"CREATE", "SCHEDULE"}:
+        return Plan((), "" if action == "CLARIFY" else "model_unavailable")
+    raw = await generate(model_messages(CHOOSE_PDF_CADENCE, context), 8)
+    cadence = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
+    if cadence == "NOW":
+        descriptions = "\n".join(
+            f"{name}: {description}" for name, description in CATALOG.items() if name in PDF_READ_TOOLS
+        )
+        return await generate_plan(turn, generate, model_messages(f"{PLAN_PDF}\n{descriptions}", data),
+                                   available=PDF_READ_TOOLS, required="create_pdf")
+    if cadence in {"REPEAT", "ONCE"}:
+        context["document_delivery"] = cadence
+        instructions = PLAN_PDF_GOAL + f"\nThe selected delivery mode is {cadence}."
+        return await generate_plan(turn, generate, model_messages(instructions, context),
+                                   available={"goal"}, goal_review=context)
+    return Plan((), "model_unavailable")
 
 
 async def select_schedule(turn, generate, data, proposal=None, tools=()):
@@ -263,6 +310,9 @@ async def select_schedule(turn, generate, data, proposal=None, tools=()):
         context["mail_watch"] = True
         watch = {key: context[key] for key in ("local_time", "goal_time_zone", "question")}
         return await generate_plan(turn, generate, model_messages(PLAN_MAIL_WATCH, watch), goal_review=context)
+    if proposal is None and "edit_target" not in context:
+        context["require_goal"] = True
+        instructions += "\nPlan future delivery using goal. Include the requested format and contents in its query."
     review = {
         **context, "first_choice": proposal["name"] if proposal else None, "proposal": proposal,
         "related_tools": [tool for tool in tools if tool is not proposal],
@@ -278,7 +328,7 @@ def schedule_context(turn, data):
             "history": history, "goal_references": data.get("goal_references", []), "question": data["question"]}
 
 
-async def generate_plan(turn, generate, base, *, goal_review=None, available=None):
+async def generate_plan(turn, generate, base, *, goal_review=None, available=None, required=None):
     messages = base
     invalid_goal = False
     for _ in range(2):
@@ -287,13 +337,18 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
             break
         try:
             tools = json_object(raw).get("tools")
+            if required == "create_pdf":
+                tools = normalize_source_url(tools, turn.text)
             if goal_review and goal_review.get("mail_watch"):
                 tools = prepare_mail_watch(tools, turn)
             plan = validated(tools)
             if available is not None and any(tool["name"] not in available for tool in plan.tools):
                 raise ValueError("Use one of the tools described in this plan or return an empty tools array.")
+            if required and plan.tools and all(tool["name"] != required for tool in plan.tools):
+                raise ValueError(f"Include {required} with the read tools needed to complete the request.")
             validate_goal_action(plan.tools, goal_review)
             tools = await repair_calendar_scopes(turn, plan.tools, generate)
+            tools = await repair_document_search(turn, tools, generate)
             plan = validated(tools)
             validate_context(turn, plan)
             if goal_review is not None:

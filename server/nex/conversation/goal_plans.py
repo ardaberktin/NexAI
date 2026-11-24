@@ -23,6 +23,15 @@ def validate_goal_action(tools, review):
     tool, *other = tools
     if review.get("edit_target") and tool["name"] not in {"goal", "manage_goal"}:
         raise GoalPlanError("Return a goal update for the matched edit_target.")
+    if review.get("require_goal") and tool["name"] not in {"goal", "manage_goal", "clock"}:
+        raise GoalPlanError("Use a goal for future delivery. Preserve the requested cadence and output format.")
+    delivery = review.get("document_delivery")
+    if delivery and (not tool.get("start") or tool.get("check_in") or "target" in tool
+                     or bool(tool.get("frequency")) != (delivery == "REPEAT")):
+        raise GoalPlanError(
+            "Supply start for the first run. For repeating delivery supply frequency in minutes as a separate "
+            "field. Use 1440 for daily and 10080 for weekly. For a one-time start supply timing instead."
+        )
     if review.get("mail_watch") and (
         other or tool["name"] != "goal" or not tool.get("frequency") or "target" in tool
     ):
@@ -80,12 +89,14 @@ async def review_goal_plan(turn, tool, generate, data):
         raise GoalPlanError("Leave the watch provider to the email-watch planner.")
     if data.get("edit_target") is not None and tool.get("target") != data["edit_target"]:
         raise GoalPlanError("Use the matched edit_target in the goal tool.")
-    if not (target or data["goal_references"]) and known_new_goal_schedule(turn, tool, start, data):
+    if not (target or data["goal_references"] or data.get("document_delivery")) and known_new_goal_schedule(
+        turn, tool, start, data
+    ):
         return
     review = {**data, "proposal": tool}
     if yes_no(await generate(model_messages(VERIFY_GOAL_PLAN, review), 8)) is not True:
         raise GoalPlanError(
-            "Recheck the requested timing, whether the user needs a check-in, and any referenced goal. "
+            "Recheck the start and frequency fields, whether the user needs a check-in, and any referenced goal. "
             "Ask a clarification if needed."
         )
 

@@ -51,6 +51,11 @@ def is_web_request(text):
     return request_text(text) is not None
 
 
+def literal_web_topic(text, query):
+    pattern = r"(?<!\w)" + re.escape(query.replace("’", "'")) + r"(?!\w)"
+    return bool(query and re.search(pattern, text.replace("’", "'"), re.IGNORECASE))
+
+
 def web_request(text):
     target = request_text(text)
     if target is None:
