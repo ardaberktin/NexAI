@@ -52,11 +52,12 @@ class GoalPDFEditTests(unittest.TestCase):
         unrelated = [self.save(f"Library pickup {index}", "Remind me to pick up a book.") for index in range(7)]
         initial = "Add a PDF to each of my check-ins."
         clarification = "Which goal should get a PDF, Garden check or Kitchen check?"
-        follow_up = "The Garden check, please."
+        follow_up = "garden check"
         assistant = Assistant(self.store, None, None)
         followups = ChatFollowups()
         identifiers = [str(uuid4()), str(uuid4())]
         asked = initial
+        attempted_targets = []
 
         def generate(messages, *_args, **_options):
             prompt = messages[0]["content"]
@@ -70,20 +71,30 @@ class GoalPDFEditTests(unittest.TestCase):
                     self.assertEqual([msg["content"] for msg in data["history"]], [initial, clarification])
                 return "FORMAT"
             if prompt == FIND_PDF_GOALS:
-                titles = {first["title"], second["title"]} if asked == initial else {first["title"]}
+                self.assertEqual(asked, initial)
+                titles = {first["title"], second["title"], unrelated[0]["title"]}
                 return json.dumps({"matches": [row["title"] in titles for row in data["goals"]]})
             if prompt == SELECT_PDF_GOAL and asked == initial:
+                self.assertEqual(len(data["goals"]), 3)
+                unrelated_target, = [row["target"] for row in data["goals"] if row["title"] == unrelated[0]["title"]]
+                attempted_targets.append(unrelated_target)
+                return json.dumps({"action": "clarify", "targets": [
+                    row["target"] for row in data["goals"] if row["target"] != unrelated_target
+                ]})
+            if prompt.startswith(SELECT_PDF_GOAL):
                 self.assertCountEqual([row["title"] for row in data["goals"]], [first["title"], second["title"]])
-                choice = data["goals"][0]
-                return json.dumps({key: choice[key] for key in ("target", "title")})
-            if prompt == SELECT_PDF_GOAL:
-                choice, = data["goals"]
+                if len(attempted_targets) == 1:
+                    attempted_targets.append(None)
+                    return json.dumps({"target": attempted_targets[0], "title": unrelated[0]["title"]})
+                chosen_title = second["title"] if len(attempted_targets) == 2 else first["title"]
+                choice, = [row for row in data["goals"] if row["title"] == chosen_title]
+                attempted_targets.append(choice["target"])
                 return json.dumps({key: choice[key] for key in ("target", "title")})
             if prompt == VERIFY_PDF_TARGET:
-                self.assertEqual(data["latest_message"], initial)
-                self.assertCountEqual([data["selected_goal"]["title"], data["other_candidates"][0]["title"]],
-                                      [first["title"], second["title"]])
-                return "NO"
+                self.assertEqual(data["latest_message"], follow_up)
+                self.assertEqual(data["selected_goal"]["title"], first["title"])
+                self.assertEqual(data["other_candidates"][0]["title"], second["title"])
+                return "YES"
             if prompt.startswith(EDIT_GOAL):
                 self.assertEqual(data["clarification"][0]["content"], initial)
                 if "Correct the previous edit" not in prompt:
@@ -94,8 +105,12 @@ class GoalPDFEditTests(unittest.TestCase):
                 self.assertEqual(data["preceding_clarification"][0]["content"], initial)
                 return "YES"
             if prompt == WRITE_GOAL_FORMAT:
+                self.assertEqual(data["tools"]["goal"]["title"], first["title"])
+                return "I saved PDF output for Kitchen check."
+            if prompt.startswith(WRITE_GOAL_FORMAT):
                 return "I saved PDF output for Garden check."
             if prompt == VERIFY_GOAL_FORMAT:
+                self.assertIn("Garden check", data["draft"])
                 return "YES"
             self.assertEqual(prompt, WRITE_GOAL_CLARIFICATION)
             self.assertCountEqual(data["candidate_titles"], [first["title"], second["title"]])
@@ -112,14 +127,17 @@ class GoalPDFEditTests(unittest.TestCase):
         session = unlock(self.store)
         ask(identifiers[0], session)
         self.assertEqual(requests.inbox(self.store.privacy)["items"][0]["answer"], clarification)
+        self.assertCountEqual(followups.previous("mac", session)[-1]["goal_choices"], [first["id"], second["id"]])
         self.assertEqual(self.goals.overview(), sorted([first, second, *unrelated], key=lambda goal: goal["id"]))
         asked = follow_up
         self.assertEqual(ask(identifiers[1], session)["goal_id"], first["id"])
+        self.assertEqual(requests.inbox(self.store.privacy)["items"][0]["answer"], "I saved PDF output for Garden check.")
         updated = self.goals.detail(first["id"])
         self.assertEqual(updated["pdf_instruction"], self.instruction)
         for key in ("prompt", "title", "scheduled_at", "next_run", "frequency_minutes", "zone"):
             self.assertEqual(updated[key], first[key])
         self.assertEqual(self.goals.detail(second["id"])["revision"], second["revision"])
+        self.assertEqual(self.goals.detail(unrelated[0]["id"])["revision"], unrelated[0]["revision"])
 
     def test_preserves_an_existing_reserved_check_in_and_retries_its_pdf_independently(self):
         goal = self.save("Seedling check", "Ask if I watered the seedlings.", check_in=True)

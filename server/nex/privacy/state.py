@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS request_goals(
 CREATE TABLE IF NOT EXISTS request_recall(
     request_id TEXT PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE, cursor TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS request_goal_choices(
+    request_id TEXT PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE, choices TEXT NOT NULL
+);
 """
 
 

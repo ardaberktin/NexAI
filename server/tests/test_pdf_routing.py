@@ -30,17 +30,16 @@ from nex.conversation.reply import (
 )
 from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.goal_runner import EXECUTE
+from nex.goal_update_pdfs import CHOOSE_COPY_LAYOUT, deliver_update_pdfs
 from nex.goals import Goals
 from nex.pdf.artifacts import content
-from nex.pdf.document import WRITE_DOCUMENT
-from nex.pdf.scheduled import VERIFY_SKIP_PDF, WRITE_NOTE
 from nex.pdf.web import VERIFY_DOCUMENT_WEB, WRITE_WEB_DOCUMENT
 from nex.privacy import public
 from nex.scheduled_plan import PLAN
 from nex.store import Store
 from nex.web_html import Page
 from nex.web_transport import WebReadError
-from nex.workspace_content import artifacts
+from nex.workspace_content import artifacts, chat_history
 
 DATE = "2026-11-23"
 TITLE = "Library opens new reading room"
@@ -219,23 +218,41 @@ class PDFRoutingTests(unittest.TestCase):
             self.assertEqual(data["goal"], task)
             if prompt == PLAN:
                 return '{"sources":["none"]}'
-            if prompt.startswith(EXECUTE):
-                return "NO_UPDATE" if calls == 0 else STORY
-            if prompt == VERIFY_SKIP_PDF:
-                self.assertEqual(calls, 0)
-                return "NO"
-            if prompt == WRITE_DOCUMENT:
-                self.assertEqual(data["verified_update"], "" if calls == 0 else STORY)
-                self.assertEqual(data["document_brief"], instruction)
-                return json.dumps(EDITION | {"sections": [{"paragraphs": [STORY]}]})
-            self.assertEqual(prompt, WRITE_NOTE)
-            return "The update is in Files and the goal's Artifacts."
+            self.assertEqual(prompt, EXECUTE)
+            return "NO_UPDATE" if calls == 0 else STORY
 
         runner = Goals(self.store, generate=generate)
-        for calls in (0, 1):
-            due = anchor + timedelta(days=calls)
-            runner.run(due)
-            runner.run(due + timedelta(minutes=1))
-            files = artifacts(self.store, identifier)
-            self.assertEqual(len(files), calls + 1)
-            self.assertEqual(files, artifacts(self.store))
+        calls = 0
+        runner.run(anchor)
+        self.assertEqual(artifacts(self.store, identifier), [])
+        calls = 1
+        due = anchor + timedelta(days=1)
+        runner.run(due)
+        text_update, = [row for row in chat_history(self.store) if row.get("goal_id") == identifier]
+        self.assertEqual(text_update["text"], STORY)
+        self.assertNotIn("pdf_attachment", text_update)
+        with self.assertLogs("nex.goal_update_pdfs", level="WARNING"):
+            deliver_update_pdfs(self.store, lambda *_: None, due)
+        self.assertEqual(goals.detail(identifier)["latest"], STORY)
+        self.assertIsNone(goals.detail(identifier)["error"])
+
+        def layout(messages, _tokens):
+            self.assertEqual(messages[0]["content"], CHOOSE_COPY_LAYOUT)
+            payload = json.loads(messages[1]["content"])
+            self.assertEqual(payload["document_brief"], instruction)
+            return json.dumps({"title": EDITION["title"], "layout": "newspaper",
+                               "sections": [{"paragraphs": ["This text was never published."]}]})
+
+        deliver_update_pdfs(self.store, layout, due + timedelta(minutes=5))
+        deliver_update_pdfs(self.store, layout, due + timedelta(minutes=10))
+        item, = artifacts(self.store, identifier)
+        self.assertEqual(artifacts(self.store), [item])
+        self.assertEqual(item["id"], text_update["id"])
+        with PdfDocument(content(self.store, item["id"])) as pdf:
+            actual = pdf[0].get_textpage().get_text_bounded()
+            self.assertIn(STORY, " ".join(actual.split()))
+            self.assertNotIn("never published", actual)
+        message, = [row for row in chat_history(self.store) if row.get("goal_id") == identifier]
+        self.assertEqual(message["text"], STORY)
+        self.assertEqual(message["pdf_attachment"]["id"], item["id"])
+        self.assertEqual(datetime.fromisoformat(goals.detail(identifier)["next_run"]), due + timedelta(days=1))

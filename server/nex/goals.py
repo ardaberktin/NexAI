@@ -167,6 +167,7 @@ class Goals:
                     (identifier,),
                 )
                 db.execute("DELETE FROM goal_activity WHERE goal_id=?", (identifier,))
+                db.execute("DELETE FROM goal_update_pdfs WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM pdf_artifacts WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_seen WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_mail_review WHERE goal_id=?", (identifier,))

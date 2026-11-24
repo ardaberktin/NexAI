@@ -9,10 +9,18 @@ from ..workspace_features import FeatureDisabled
 from ..workspace_schema import WorkspaceConflict, WorkspaceMissing
 from .goal_context import clarification_exchange
 from .goal_edit import plan_edit
-from .goal_lookup import PAGE_SIZE, describe, named_targets, saved_goals, shortlist
+from .goal_lookup import (
+    PAGE_SIZE,
+    describe,
+    exact_title_targets,
+    named_targets,
+    pdf_clarification_targets,
+    pdf_target_schema,
+    saved_goals,
+    shortlist,
+)
 from .goal_management_prompts import (
     MANAGE_GOALS,
-    PDF_GOAL_CLARIFY_OPTIONS,
     SELECT_GOAL,
     SELECT_PDF_GOAL,
     VERIFY_CHANGE,
@@ -28,17 +36,10 @@ def outcome(status, **details):
     return Evidence({"status": status, "changed": False, **details}, engine="goal_management")
 
 
-def clarify_target(candidates):
-    return outcome("clarification_needed", candidate_titles=[row["title"] for row in candidates[:PAGE_SIZE]])
-
-
-def pdf_target_schema(candidates):
-    options = [
-        {"type": "object", "required": ["target", "title"], "additionalProperties": False,
-         "properties": {key: {"const": row[key]} for key in ("target", "title")}}
-        for row in candidates
-    ]
-    return {"anyOf": [*options, *PDF_GOAL_CLARIFY_OPTIONS]}
+def clarify_target(candidates, goals):
+    candidates = candidates[:PAGE_SIZE]
+    return outcome("clarification_needed", candidate_titles=[row["title"] for row in candidates],
+                   goal_choices=[goals[row["target"] - 1]["id"] for row in candidates])
 
 
 def apply_change(store, turn, goal, action, edit, *, format_instruction=None):
@@ -98,7 +99,8 @@ async def manage_goal(store, turn, generate, operation=None, *, format_only=Fals
             context["recalled_chat"] = turn.recalled_chat
         context["history"] = prompt_history(turn.history, include_tools=False)[-4:]
         context["goal_time_zone"] = turn.zone
-        if exchange := clarification_exchange(turn.history):
+        exchange = clarification_exchange(turn.history)
+        if exchange:
             context["clarification"] = prompt_history(exchange, include_tools=False)
         if operation:
             context["requested_action"] = operation
@@ -106,27 +108,36 @@ async def manage_goal(store, turn, generate, operation=None, *, format_only=Fals
             context["format_only"] = True
         recent = next((item["goal_id"] for item in reversed(turn.history) if item.get("goal_id")), None)
         descriptions = [describe(goal, i, recent) for i, goal in enumerate(goals, 1)]
+        exact_titles = exact_title_targets(turn.text, descriptions) if format_only else set()
+        offered = exchange[-1].get("goal_choices") if format_only and exchange else None
+        if offered:
+            descriptions = [row for row in descriptions if goals[row["target"] - 1]["id"] in offered]
+            if not descriptions or (exact_titles and exact_titles.isdisjoint(row["target"] for row in descriptions)):
+                return clarify_target(descriptions, goals)
         named = [] if format_only else named_targets(turn.text, descriptions)
         if operation in {"delete", "complete", "keep"} and named:
             descriptions = [row for row in descriptions if row["target"] in named]
         check_matches = operation == "delete" and len(named) != 1
-        check_pdf_matches = format_only and len(descriptions) > 1
+        check_pdf_matches = format_only and not offered and len(descriptions) > 1
         matches = await shortlist(descriptions, context, generate, verify_match=check_matches or check_pdf_matches)
+        if format_only and exact_titles and exact_titles.isdisjoint(row["target"] for row in matches):
+            matches.extend(row for row in descriptions if row["target"] in exact_titles)
         if not matches:
             return outcome("clarification_needed" if format_only else "no_matching_goal")
         if len(matches) > PAGE_SIZE:
             if format_only:
-                return clarify_target(matches)
+                return clarify_target(matches, goals)
             return outcome("ambiguous_goal")
         if check_matches and len(matches) > 1:
             return outcome("ambiguous_goal", candidate_titles=[row["title"] for row in matches])
         pdf_candidates = descriptions if format_only and len(descriptions) <= PAGE_SIZE else matches
-        return await decide_change(store, turn, generate, goals, context | {"goals": matches}, named, pdf_candidates)
+        return await decide_change(store, turn, generate, goals, context | {"goals": matches}, named, pdf_candidates,
+                                   exact_titles=exact_titles)
     except (FeatureDisabled, ValueError, WorkspaceConflict, WorkspaceMissing) as error:
         return outcome("change_rejected", detail=str(error))
 
 
-async def decide_change(store, turn, generate, goals, context, named, pdf_candidates):
+async def decide_change(store, turn, generate, goals, context, named, pdf_candidates, *, exact_titles):
     operation = context.get("requested_action")
     format_only = context.get("format_only", False)
     guidance = SELECT_PDF_GOAL if format_only else SELECT_GOAL if operation else MANAGE_GOALS
@@ -147,11 +158,13 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
         if operation and result.keys() == {"target", "title"}:
             result["action"] = operation
         try:
+            if format_only and result.get("action") in ("none", "clarify"):
+                return clarify_target(pdf_clarification_targets(result, context["goals"]), goals)
             target = parse_decision(result, context["goals"])
             if isinstance(target, Evidence):
-                if format_only and target.data["status"] == "no_change_requested":
-                    return clarify_target(context["goals"])
                 return target
+            if exact_titles and target not in exact_titles:
+                raise ValueError("The selected goal conflicts with the exact saved title in the latest reply.")
             goal = goals[target - 1]
             action = result["action"]
             if operation and operation != action:
@@ -161,7 +174,8 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
             edit = None
             if action == "edit":
                 if format_only and not await verified_pdf_target(context, pdf_candidates, target, generate):
-                    return clarify_target(pdf_candidates)
+                    choices = context["goals"] if len(context["goals"]) > 1 else pdf_candidates
+                    return clarify_target(choices, goals)
                 edit = await plan_edit(turn, goal, context, generate)
                 if isinstance(edit, str):
                     return outcome("clarification_needed", suggested_question=edit)
@@ -182,7 +196,7 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
             selection = context
             continue
         instructions = f"{guidance}\nThe verifier rejected {result!r}. Correct the action or target, or clarify."
-    return clarify_target(context["goals"]) if format_only else outcome("unverified_change")
+    return clarify_target(context["goals"], goals) if format_only else outcome("unverified_change")
 
 
 async def verified_pdf_target(context, candidates, target, generate):

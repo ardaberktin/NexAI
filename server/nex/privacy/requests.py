@@ -168,7 +168,7 @@ def complete(state, identifier, work, assistant, coordinates):
             fail(state, identifier, goal=goal)
             return goal
         finish(state, identifier, result["text"], "working", result.get("sources", []), goal=goal,
-               recall=result.get("recall_cursor"))
+               recall=result.get("recall_cursor"), goal_choices=result.get("goal_choices"))
         return goal
     except Exception:
         fail(state, identifier)
@@ -182,7 +182,7 @@ def fail(state, identifier, *, goal=None):
             db.execute("INSERT INTO request_goals VALUES(?,?)", (identifier, goal))
 
 
-def finish(state, identifier, answer, previous, sources=(), *, goal=None, recall=None):
+def finish(state, identifier, answer, previous, sources=(), *, goal=None, recall=None, goal_choices=None):
     if not isinstance(answer, str) or not 0 < len(answer) <= 64_000:
         raise ValueError("Invalid private answer.")
     with state.transaction(write=True) as db:
@@ -196,3 +196,5 @@ def finish(state, identifier, answer, previous, sources=(), *, goal=None, recall
             db.execute("INSERT INTO request_goals VALUES(?,?)", (identifier, goal))
         if recall:
             db.execute("INSERT INTO request_recall VALUES(?,?)", (identifier, json.dumps(recall)))
+        if goal_choices:
+            db.execute("INSERT INTO request_goal_choices VALUES(?,?)", (identifier, json.dumps(goal_choices)))

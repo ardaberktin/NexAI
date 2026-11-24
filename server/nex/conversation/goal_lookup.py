@@ -75,6 +75,40 @@ async def shortlist(descriptions, context, generate, *, verify_match=False):
     return matches
 
 
+def pdf_target_schema(candidates):
+    options = [
+        {"type": "object", "required": ["target", "title"], "additionalProperties": False,
+         "properties": {key: {"const": row[key]} for key in ("target", "title")}}
+        for row in candidates
+    ]
+    targets = {"type": "array", "minItems": 1, "maxItems": len(candidates),
+               "items": {"enum": [row["target"] for row in candidates]}}
+    clarification = {"type": "object", "required": ["action", "targets"], "additionalProperties": False,
+                     "properties": {"action": {"const": "clarify"}, "targets": targets}}
+    none = {"type": "object", "required": ["action"], "additionalProperties": False,
+            "properties": {"action": {"const": "none"}}}
+    return {"anyOf": [*options, clarification, none]}
+
+
+def pdf_clarification_targets(result, candidates):
+    if result == {"action": "none"}:
+        return candidates
+    targets = result.get("targets")
+    if (result.keys() != {"action", "targets"} or not isinstance(targets, list) or not targets
+            or any(type(target) is not int for target in targets)):
+        raise ValueError("Provide a nonempty targets array with only the supplied goal numbers.")
+    chosen = [row for row in candidates if row["target"] in targets]
+    if len(chosen) != len(targets):
+        raise ValueError("Use each supplied target number at most once.")
+    return chosen
+
+
+def exact_title_targets(text, candidates):
+    """Validate an exact goal-title reply independently of the proposed tool target."""
+    title = normalized(text.strip())
+    return {row["target"] for row in candidates if normalized(row["title"]) == title}
+
+
 def named_targets(question, goals):
     """Ground literal saved names on whole words, independently of the model's candidate numbering."""
     words = " " + " ".join(re.findall(r"\w+", normalized(question))) + " "
