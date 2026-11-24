@@ -47,6 +47,7 @@ class Engines:
         self.settings = settings
         self.runtime = Path(runtime)
         self.runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.live_socket = self.runtime.parent / "nex-live" / "daybook.sock"
         self.lock = threading.Lock()
         self.process = self.profile = None
         self.model_dir = self.runtime / "llama"
@@ -229,7 +230,7 @@ class Engines:
     def model_status(self):
         result = self.settings.status()
         if self.managed_live():
-            result["chat"] = "excalibur_live"
+            result["chat"] = "excalibur_live" if self.live_socket.is_socket() else "excalibur_unavailable"
         elif chat_route(self.settings.read()) == "mac":
             reachable = False
             try:
@@ -241,8 +242,7 @@ class Engines:
         return result
 
     def managed_live(self):
-        return ((self.settings.path.parent / "live-model").is_file()
-                and (self.runtime.parent / "nex-live" / "daybook.sock").is_socket())
+        return (self.settings.path.parent / "live-model").is_file()
 
     def generate_daybook(self, messages, tokens):
         return self.generate_warm(messages, tokens) or self.generate(messages, tokens, self.settings.read())
@@ -272,7 +272,6 @@ class Engines:
 
     def generate_warm(self, messages, tokens, *, decision=False, temperature=None):
         # The live daemon gives its active voice conversation priority over archive clients.
-        path = self.runtime.parent / "nex-live" / "daybook.sock"
         body = {"messages": messages, "max_tokens": tokens} | response_options(messages)
         if decision:
             body["decision"] = True
@@ -281,7 +280,7 @@ class Engines:
         try:
             with socket.socket(socket.AF_UNIX) as client:
                 client.settimeout(5 if decision else 34)
-                client.connect(str(path))
+                client.connect(str(self.live_socket))
                 client.sendall(json.dumps(body, ensure_ascii=False).encode() + b"\n")
                 with client.makefile("rb") as response:
                     result = json.loads(response.readline(32_768))
@@ -320,6 +319,7 @@ class Engines:
             if route == "live":
                 self.stop()
                 answer = self.generate_warm(messages, tokens, decision=decision, temperature=temperature)
+                self.last_chat_error = None if answer else "The Excalibur model did not answer."
                 if answer and on_text:
                     on_text(answer)
                 return answer

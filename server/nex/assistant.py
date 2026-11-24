@@ -44,7 +44,7 @@ class Assistant:
                 reply = self.engines.generate(messages, limit, config, thinking=False, **stream, **sampling)
             except ModelError:
                 reply = None
-            if not reply and use_warm:
+            if not reply and use_warm and not self.engines.managed_live():
                 reply = self.engines.generate_warm(messages, limit, **sampling)
                 if reply and chunks:
                     chunks.add(reply, language)

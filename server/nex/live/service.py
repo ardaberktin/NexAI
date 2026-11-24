@@ -65,7 +65,7 @@ async def voice_services(app, models):
         db.execute("SELECT 1 FROM live_turn_results LIMIT 1")
     app.state.speech = await asyncio.to_thread(Speech, ASSETS)
     mac = None if TEST_LOOPBACK or models else RUNTIME.parent / "nex" / "mac-model.sock"
-    dialogue = Dialogue(memory, models.socket if models else RUNTIME / "qwen.sock", mac)
+    dialogue = Dialogue(memory, models.socket if models else RUNTIME / "model.sock", mac)
     await dialogue.wait_ready()
     app.state.dialogue = dialogue
     app.state.active = asyncio.Lock()

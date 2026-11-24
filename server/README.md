@@ -39,7 +39,7 @@ Use the console’s **Models** panel. Place the runtimes and weights under `$NEX
 
 | Feature | Assets |
 | --- | --- |
-| Chat, model-written notes, and scheduled model work | [llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` and a compatible instruction-tuned GGUF, such as [Qwen3 1.7B GGUF](https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF) |
+| Chat, model-written notes, and scheduled model work | [llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` and a compatible instruction-tuned GGUF, such as [Gemma 3 4B GGUF](https://huggingface.co/ggml-org/gemma-3-4b-it-qat-GGUF) |
 | Archive transcription | Executable [FFmpeg](https://ffmpeg.org/) with AAC support, [whisper.cpp](https://github.com/ggml-org/whisper.cpp) `whisper-cli`, and a multilingual Whisper model such as `ggml-small.bin` |
 | Recorded voice synthesis | Optional [Piper](https://github.com/OHF-Voice/piper1-gpl) executable with voice ONNX and matching JSON metadata |
 

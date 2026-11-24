@@ -24,6 +24,7 @@ class ConversationContinuityTests(unittest.TestCase):
         self.store = Store(folder.name, 0, 2**20)
         self.memory = LiveMemory(folder.name)
         self.engine = Mock()
+        self.engine.managed_live.return_value = False
         self.assistant = Assistant(self.store, self.engine, SimpleNamespace(read=dict))
         self.now = datetime.now(UTC)
 

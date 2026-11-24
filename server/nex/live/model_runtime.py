@@ -1,4 +1,4 @@
-"""Own one llama.cpp process and persist successful Excalibur model selections."""
+"""Supervise Excalibur's Gemma process."""
 
 import asyncio
 import contextlib
@@ -13,43 +13,40 @@ import httpx
 from ..model_context import DEFAULT_CONTEXT
 
 LOG = logging.getLogger(__name__)
-MODELS = {
-    "qwen": ("Qwen 3 · 1.7B", "qwen.gguf"),
-    "gemma": ("Gemma 3 · 4B", "gemma-3-4b-it-qat-Q4_0.gguf"),
-}
+MODEL_ID = "gemma"
+MODEL_FILE = "gemma-3-4b-it-qat-Q4_0.gguf"
 
 
 class ModelRuntime:
-    def __init__(self, assets, runtime, preference):
+    def __init__(self, assets, runtime, marker):
         self.assets = Path(assets)
+        self.weights = self.assets / MODEL_FILE
         self.socket = Path(runtime) / "model.sock"
-        self.preference = Path(preference)
-        self.active = None
+        self.marker = Path(marker)
         self.process = None
         self.device = None
         self.lock = asyncio.Lock()
 
     def status(self):
-        running = self.process is not None and self.process.returncode is None
-        return {"active": self.active if running else None, "device": self.device if running else None,
-                "models": [{"id": key, "name": name, "available": (self.assets / file).is_file()}
-                           for key, (name, file) in MODELS.items()]}
+        ready = self.device is not None and self.process is not None and self.process.returncode is None
+        return {"active": MODEL_ID if ready else None, "device": self.device if ready else None,
+                "models": [{"id": MODEL_ID, "name": "Gemma 3 · 4B", "available": self.weights.is_file()}]}
 
-    def saved(self):
+    def mark_managed(self):
+        contents = f"{MODEL_ID}\n".encode()
         try:
-            selected = self.preference.read_text().strip()
+            if self.marker.read_bytes() == contents:
+                return
         except FileNotFoundError:
-            return "qwen"
-        return selected if selected in MODELS and (self.assets / MODELS[selected][1]).is_file() else "qwen"
-
-    def persist(self, selected):
-        with NamedTemporaryFile(mode="w", dir=self.preference.parent, delete=False) as file:
+            pass
+        # Keep the archive on the managed route even while Gemma is unavailable.
+        with NamedTemporaryFile(dir=self.marker.parent, delete=False) as file:
             path = Path(file.name)
             try:
-                file.write(selected + "\n")
+                file.write(contents)
                 file.flush()
                 os.fsync(file.fileno())
-                path.replace(self.preference)
+                path.replace(self.marker)
             finally:
                 path.unlink(missing_ok=True)
 
@@ -63,11 +60,11 @@ class ModelRuntime:
                 with contextlib.suppress(ProcessLookupError):
                     self.process.kill()
                 await self.process.wait()
-        self.process = self.active = self.device = None
+        self.process = self.device = None
         self.socket.unlink(missing_ok=True)
 
     async def ready(self):
-        deadline = monotonic() + 35
+        deadline = monotonic() + 90
         transport = httpx.AsyncHTTPTransport(uds=str(self.socket))
         async with httpx.AsyncClient(transport=transport, timeout=1) as client:
             while self.process.returncode is None and monotonic() < deadline:
@@ -79,8 +76,9 @@ class ModelRuntime:
                 await asyncio.sleep(0.25)
         return False
 
-    async def start(self, selected):
-        model = self.assets / MODELS[selected][1]
+    async def start(self):
+        if not self.weights.is_file():
+            raise RuntimeError(f"Missing Excalibur model weights: {MODEL_FILE}")
         runtimes = [("CPU", self.assets, ["-ngl", "0"])]
         if os.environ.get("NEX_LIVE_DEVICE") != "cpu":
             runtimes.insert(0, ("Vulkan", self.assets / "vulkan", ["--device", "Vulkan0", "-ngl", "99"]))
@@ -91,36 +89,36 @@ class ModelRuntime:
             self.socket.unlink(missing_ok=True)
             try:
                 self.process = await asyncio.create_subprocess_exec(
-                    str(binary), "--model", str(model), "--host", str(self.socket), "--reasoning", "off",
+                    str(binary), "--model", str(self.weights), "--host", str(self.socket), "--reasoning", "off",
                     "--no-ui", "-t", "3", "-c", str(DEFAULT_CONTEXT), "--parallel", "1", "-lv", "1", *flags,
                     stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,
                 )
                 if await self.ready():
-                    self.active, self.device = selected, device
-                    LOG.info("Started Excalibur model %s on %s", selected, device)
+                    self.device = device
+                    LOG.info("Started Excalibur model %s on %s", MODEL_ID, device)
                     return
+                LOG.warning("%s on %s did not become ready (exit status: %s)",
+                            MODEL_ID, device, self.process.returncode)
             except OSError:
-                LOG.warning("Could not launch %s on %s", selected, device)
+                LOG.warning("Could not launch %s on %s", MODEL_ID, device)
             await self.stop()
         raise RuntimeError("The Excalibur model could not start on GPU or CPU.")
 
     async def select(self, selected):
-        if selected not in MODELS or not (self.assets / MODELS[selected][1]).is_file():
+        if selected != MODEL_ID or not self.weights.is_file():
             raise ValueError("This model is unavailable on Excalibur.")
+        return await self.ensure_started()
+
+    async def ensure_started(self):
         async with self.lock:
-            if self.status()["active"] == selected:
-                return self.status()
-            previous = self.active
-            await self.stop()
-            try:
-                await self.start(selected)
-                self.persist(selected)
-            except (RuntimeError, OSError, asyncio.CancelledError):
+            if self.status()["active"] is None:
                 await self.stop()
-                if previous and previous != selected:
-                    await self.start(previous)
-                raise
+                try:
+                    await self.start()
+                except (RuntimeError, OSError, asyncio.CancelledError):
+                    await self.stop()
+                    raise
             return self.status()
 
     async def monitor(self):
@@ -128,20 +126,15 @@ class ModelRuntime:
             await asyncio.sleep(2)
             if not self.lock.locked() and self.status()["active"] is None:
                 try:
-                    await self.select(self.saved())
-                except (OSError, RuntimeError, ValueError):
+                    await self.ensure_started()
+                except (OSError, RuntimeError):
                     LOG.exception("Excalibur model restart failed")
 
     @contextlib.asynccontextmanager
     async def running(self):
         try:
-            selected = self.saved()
-            try:
-                await self.select(selected)
-            except RuntimeError:
-                if selected == "qwen":
-                    raise
-                await self.select("qwen")
+            self.mark_managed()
+            await self.ensure_started()
             watchdog = asyncio.create_task(self.monitor())
             try:
                 yield self

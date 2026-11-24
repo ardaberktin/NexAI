@@ -41,10 +41,6 @@ if [[ "${NEX_STAGE_VULKAN:-0}" == 1 && ! -x "$assets/vulkan/llama-b12359/llama-s
     fetch "$llama/llama-b12359-bin-ubuntu-vulkan-x64.tar.gz" "$stage/llama-vulkan.tgz"
     tar xzf "$stage/llama-vulkan.tgz" -C "$assets/vulkan"
 fi
-if [[ ! -f "$assets/qwen.gguf" ]]; then
-    qwen=https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/dcb19155b962dbb6389f4691a982043a8e651022
-    fetch "$qwen/Qwen_Qwen3-1.7B-Q4_K_M.gguf" "$stage/qwen.gguf"
-    mv "$stage/qwen.gguf" "$assets/qwen.gguf"
-fi
+bash "$src/stage-gemma.sh"
 HF_HOME="$assets/hf" "$python" -c 'from ema_lightning import EMA; EMA(device="cpu").say("Hazırım.")'
 bash "$src/stage-room-context.sh"
