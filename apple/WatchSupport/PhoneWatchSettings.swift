@@ -14,8 +14,6 @@ struct PhoneWatchSettings: View {
             if let error = relay.syncError {
                 Text(error).foregroundStyle(.red)
             }
-        } header: {
-            Text("Apple Watch")
         } footer: {
             Text("The paired watch can sync its microphone recordings through this iPhone. To open the private workspace on your watch, unlock Nex on iPhone first.")
         }

@@ -12,7 +12,7 @@ struct AccountConnectionsView: View {
     }
 
     var body: some View {
-        Section("Connected accounts") {
+        Section {
             account("Gmail", key: "gmail")
             account("Google Calendar", key: "calendar")
             if model.pairing != nil {

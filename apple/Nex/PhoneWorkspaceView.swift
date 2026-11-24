@@ -27,15 +27,26 @@ struct PhoneWorkspaceView<Content: View>: View {
         }
         .background(WorkspaceStyle.background(scheme).ignoresSafeArea())
         .sheet(item: $tool) { selection in
-            WorkspaceSheet(title: LocalizedStringKey(selection.rawValue)) { toolView(selection) }
+            switch selection {
+            case .settings(let category):
+                SettingsView(model: model, initialCategory: category)
+            case .memory:
+                WorkspaceSheet(title: selection.title) { PersonalContextView(model: model) }
+            case .archive:
+                WorkspaceSheet(title: selection.title) { ArchiveView(model: model) }
+            case .capture:
+                WorkspaceSheet(title: selection.title) {
+                    CaptureWorkspaceControls(model: model, capture: model.capture)
+                }
+            }
         }
     }
 
     private var header: some View {
         HStack {
             Menu {
-                ForEach([WorkspaceTool.capture, .memory, .archive, .settings]) { item in
-                    Button(item.rawValue, systemImage: item.symbol) { tool = item }
+                ForEach([WorkspaceTool.capture, .memory, .archive, .settings()]) { item in
+                    Button(item.title, systemImage: item.symbol) { tool = item }
                 }
             } label: {
                 Image(systemName: "line.3.horizontal")
@@ -59,24 +70,24 @@ struct PhoneWorkspaceView<Content: View>: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
     }
-
-    @ViewBuilder private func toolView(_ selection: WorkspaceTool) -> some View {
-        switch selection {
-        case .memory: PersonalContextView(model: model)
-        case .archive: ArchiveView(model: model)
-        case .settings: SettingsView(model: model)
-        case .capture: CaptureWorkspaceControls(model: model, capture: model.capture)
-        }
-    }
 }
 
-enum WorkspaceTool: String, Identifiable {
-    case memory = "Memory"
-    case archive = "Archive"
-    case settings = "Settings"
-    case capture = "Voice & recording"
+enum WorkspaceTool: Hashable, Identifiable {
+    case memory
+    case archive
+    case settings(SettingsCategory? = nil)
+    case capture
 
     var id: Self { self }
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .memory: "Memory"
+        case .archive: "Archive"
+        case .settings: "Settings"
+        case .capture: "Voice & recording"
+        }
+    }
 
     var symbol: String {
         switch self {

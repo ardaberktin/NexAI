@@ -38,10 +38,16 @@
 		7CAF9471BA17177A3379A2CC /* RecordingSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC261451793AF0FFCC2D242F /* RecordingSegments.swift */; };
 		7EEB9A8221EC0496905EDB19 /* Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB17DEE0831E942DC796E9B /* Types.swift */; };
 		8A915428EA83E6D42343296F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7527C652D86FA8745E8B9B4 /* SettingsView.swift */; };
+		7EFA00000000000000000102 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000101 /* SettingsPage.swift */; };
+		7EFA00000000000000000202 /* ExcaliburPairingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */; };
+		7EFA00000000000000000302 /* SpeechRecordingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000301 /* SpeechRecordingSettings.swift */; };
 		F1B9748DA1B64E27AD3FA432 /* WorkspaceFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B9748DA1B64E27AD3FA431; };
 		8FCCA97E6C0E657C23367244 /* NexApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E3958FC59DCFF13933D07F /* NexApp.swift */; };
 		8FCCD7CEC1E24968EF3209AF /* MicrophoneStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE51C5927CC5C22F59BC7EE3 /* MicrophoneStream.swift */; };
 		916493B868C0F01A5C47A79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7527C652D86FA8745E8B9B4 /* SettingsView.swift */; };
+		7EFA00000000000000000103 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000101 /* SettingsPage.swift */; };
+		7EFA00000000000000000203 /* ExcaliburPairingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */; };
+		7EFA00000000000000000303 /* SpeechRecordingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000301 /* SpeechRecordingSettings.swift */; };
 		F1B9748DA1B64E27AD3FA433 /* WorkspaceFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B9748DA1B64E27AD3FA431; };
 		9D3328FD4B1A467311319F34 /* AACSegmentEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC18423FC5643A48CDD94D6 /* AACSegmentEncoder.swift */; };
 		9E212347A4290D5AC4FC1846 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1BCBAFCB8B0863DF86DE52AD /* Foundation.framework */; };
@@ -344,6 +350,9 @@
 		982BCD2037969E03414666D7 /* Assets-macOS.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = "Assets-macOS.xcassets"; sourceTree = "<group>"; };
 		A393EF8B647B2D45F55A0B36 /* Capture.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
 		A7527C652D86FA8745E8B9B4 /* SettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		7EFA00000000000000000101 /* SettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPage.swift; sourceTree = "<group>"; };
+		7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcaliburPairingSettings.swift; sourceTree = "<group>"; };
+		7EFA00000000000000000301 /* SpeechRecordingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecordingSettings.swift; sourceTree = "<group>"; };
 		F1B9748DA1B64E27AD3FA431 /* WorkspaceFeatureSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceFeatureSettings.swift; sourceTree = "<group>"; };
 		AC261451793AF0FFCC2D242F /* RecordingSegments.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordingSegments.swift; sourceTree = "<group>"; };
 		AD9CE14007C48AB8AF481EDE /* ListenView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListenView.swift; sourceTree = "<group>"; };
@@ -554,6 +563,9 @@
 				AD9CE14007C48AB8AF481EDE /* ListenView.swift */,
 				32E3958FC59DCFF13933D07F /* NexApp.swift */,
 				A7527C652D86FA8745E8B9B4 /* SettingsView.swift */,
+				7EFA00000000000000000101 /* SettingsPage.swift */,
+				7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */,
+				7EFA00000000000000000301 /* SpeechRecordingSettings.swift */,
 				F1B9748DA1B64E27AD3FA431 /* WorkspaceFeatureSettings.swift */,
 				CCD9889CB334F5C4EC02DDBF /* Spool.swift */,
 				7EF000000000000000001201 /* LiveAudio.swift */,
@@ -888,6 +900,9 @@
 				49D9E9CABF27A49CF2D4E703 /* ListenView.swift in Sources */,
 				8FCCA97E6C0E657C23367244 /* NexApp.swift in Sources */,
 				8A915428EA83E6D42343296F /* SettingsView.swift in Sources */,
+				7EFA00000000000000000102 /* SettingsPage.swift in Sources */,
+				7EFA00000000000000000202 /* ExcaliburPairingSettings.swift in Sources */,
+				7EFA00000000000000000302 /* SpeechRecordingSettings.swift in Sources */,
 				F1B9748DA1B64E27AD3FA432 /* WorkspaceFeatureSettings.swift in Sources */,
 				1C2D0109D75382F1BAB01E10 /* Spool.swift in Sources */,
 				08C58772F05F901296AB8F37 /* Types.swift in Sources */,
@@ -998,6 +1013,9 @@
 				A16C881E96386DDF16C25E55 /* ListenView.swift in Sources */,
 				6FD1E0A863E3F10D67610A43 /* NexApp.swift in Sources */,
 				916493B868C0F01A5C47A79A /* SettingsView.swift in Sources */,
+				7EFA00000000000000000103 /* SettingsPage.swift in Sources */,
+				7EFA00000000000000000203 /* ExcaliburPairingSettings.swift in Sources */,
+				7EFA00000000000000000303 /* SpeechRecordingSettings.swift in Sources */,
 				F1B9748DA1B64E27AD3FA433 /* WorkspaceFeatureSettings.swift in Sources */,
 				B1B5E79E41DF196244A0CA25 /* Spool.swift in Sources */,
 				7EEB9A8221EC0496905EDB19 /* Types.swift in Sources */,
