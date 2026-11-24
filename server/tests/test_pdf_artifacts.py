@@ -7,9 +7,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
-from conversation_fixtures import unlock
 from pypdfium2 import PdfDocument
 
+from conversation_fixtures import unlock
 from nex.assistant import Assistant
 from nex.conversation.catalog import CLARITY, INSTRUCTIONS, REVIEW_SCHEDULE
 from nex.conversation.goal_management_prompts import GOAL_INTENT, SELECT_GOAL
