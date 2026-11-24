@@ -1,0 +1,14 @@
+{
+  "llama_server": "llama/llama-server",
+  "language_model": "llama/model.gguf",
+  "ffmpeg": "ffmpeg/ffmpeg",
+  "whisper_cli": "whisper/whisper-cli",
+  "whisper_model": "whisper/ggml-small.bin",
+  "piper": "",
+  "voice_en": "",
+  "voice_tr": "",
+  "threads": 3,
+  "gpu_layers": 0,
+  "context_size": 4096,
+  "use_mac_model": false
+}

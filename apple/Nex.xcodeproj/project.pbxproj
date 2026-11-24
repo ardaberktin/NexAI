@@ -1,0 +1,1473 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		7EFD00000000000000004102 /* QuestionChime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFD00000000000000004101; };
+		7EFD00000000000000004103 /* QuestionChime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFD00000000000000004101; };
+		7EFD00000000000000004202 /* question-chime.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7EFD00000000000000004201; };
+		7EFD00000000000000004203 /* question-chime.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7EFD00000000000000004201; };
+		0493C46B1723470A60B87D6F /* Assets-iOS.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F74B4998DE7D8CC74B1031A /* Assets-iOS.xcassets */; };
+		049AE7542C29392753ECF295 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D47FE3984805D0ACF6E3901 /* Connection.swift */; };
+		F6B52F1BBE7125C8930CBC14 /* InstalledPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561463CA3238DDBB5674D193 /* InstalledPairing.swift */; };
+		768776E2B58A6EC07991CC46 /* OwnerKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CE0DB190A1DBAF0FEDC66B /* OwnerKey.swift */; };
+		4E14FC278E5DC26E2F788225 /* AppPrivacy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AF987A4A1BE25D80B2C15C /* AppPrivacy.swift */; };
+		FD9CD371BA464C3A98DCCC11 /* AppAutoLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9CD371BA464C3A98DCCC01 /* AppAutoLock.swift */; };
+		FD9CD371BA464C3A98DCCC12 /* AuthenticationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9CD371BA464C3A98DCCC02 /* AuthenticationSettings.swift */; };
+		F8979145A3EC565180A30FC4 /* PrivacyGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8445E83E163E491AEEB1E2F2 /* PrivacyGate.swift */; };
+		D7805CAFAF6342731D691FDB /* VoiceEnrollment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4096438F1E123709C280F1A5 /* VoiceEnrollment.swift */; };
+		08C58772F05F901296AB8F37 /* Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB17DEE0831E942DC796E9B /* Types.swift */; };
+		0D562CC3FACD989833E65BCD /* MicrophoneStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE51C5927CC5C22F59BC7EE3 /* MicrophoneStream.swift */; };
+		114EC8CF03725983ADA28E14 /* ArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80D92014BFCE2B289CA1B415 /* ArchiveView.swift */; };
+		1630094A107233B8EDC46836 /* Capture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A393EF8B647B2D45F55A0B36 /* Capture.swift */; };
+		1C2D0109D75382F1BAB01E10 /* Spool.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCD9889CB334F5C4EC02DDBF /* Spool.swift */; };
+		26DBF2FB1C174F38A4481746 /* Controller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1E7F81B7C88D84BB1E5D24 /* Controller.swift */; };
+		2C7FDDC5B40F5AE903DDF58E /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72CD9268C5BFC9EEF5D8C701 /* Cocoa.framework */; };
+		2E3408D8F0A4039DFE62E71F /* Assets-macOS.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 982BCD2037969E03414666D7 /* Assets-macOS.xcassets */; };
+		397E63A6F77019267B50A5A2 /* ArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80D92014BFCE2B289CA1B415 /* ArchiveView.swift */; };
+		3E3D68E892C272F44B6A91B9 /* DeviceSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4EAAD35D71AB2FE0FAB8A0 /* DeviceSpeech.swift */; };
+		46D608514C3797ADFD944785 /* TranscriptEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52710A6F38A5B87D1C0340B4 /* TranscriptEditor.swift */; };
+		49D9E9CABF27A49CF2D4E703 /* ListenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD9CE14007C48AB8AF481EDE /* ListenView.swift */; };
+		6FD1E0A863E3F10D67610A43 /* NexApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E3958FC59DCFF13933D07F /* NexApp.swift */; };
+		752BAC1659C4D8CABD56568E /* DeviceSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4EAAD35D71AB2FE0FAB8A0 /* DeviceSpeech.swift */; };
+		79A83028086DFA3C7D976126 /* Capture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A393EF8B647B2D45F55A0B36 /* Capture.swift */; };
+		7CAF9471BA17177A3379A2CC /* RecordingSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC261451793AF0FFCC2D242F /* RecordingSegments.swift */; };
+		7EEB9A8221EC0496905EDB19 /* Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB17DEE0831E942DC796E9B /* Types.swift */; };
+		8A915428EA83E6D42343296F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7527C652D86FA8745E8B9B4 /* SettingsView.swift */; };
+		F1B9748DA1B64E27AD3FA432 /* WorkspaceFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B9748DA1B64E27AD3FA431; };
+		8FCCA97E6C0E657C23367244 /* NexApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E3958FC59DCFF13933D07F /* NexApp.swift */; };
+		8FCCD7CEC1E24968EF3209AF /* MicrophoneStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE51C5927CC5C22F59BC7EE3 /* MicrophoneStream.swift */; };
+		916493B868C0F01A5C47A79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7527C652D86FA8745E8B9B4 /* SettingsView.swift */; };
+		F1B9748DA1B64E27AD3FA433 /* WorkspaceFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B9748DA1B64E27AD3FA431; };
+		9D3328FD4B1A467311319F34 /* AACSegmentEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC18423FC5643A48CDD94D6 /* AACSegmentEncoder.swift */; };
+		9E212347A4290D5AC4FC1846 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1BCBAFCB8B0863DF86DE52AD /* Foundation.framework */; };
+		A16C881E96386DDF16C25E55 /* ListenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD9CE14007C48AB8AF481EDE /* ListenView.swift */; };
+		A83CD02E6B9F80D1A07E46E5 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D47FE3984805D0ACF6E3901 /* Connection.swift */; };
+		6BDD15D091F9894CC9816A3C /* InstalledPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561463CA3238DDBB5674D193 /* InstalledPairing.swift */; };
+		07B3D4DEA07785642E5BFF1F /* OwnerKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CE0DB190A1DBAF0FEDC66B /* OwnerKey.swift */; };
+		E5B221F5F30FF07873653B86 /* AppPrivacy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AF987A4A1BE25D80B2C15C /* AppPrivacy.swift */; };
+		FD9CD371BA464C3A98DCCC21 /* AppAutoLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9CD371BA464C3A98DCCC01 /* AppAutoLock.swift */; };
+		FD9CD371BA464C3A98DCCC22 /* AuthenticationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9CD371BA464C3A98DCCC02 /* AuthenticationSettings.swift */; };
+		E9F21134F42FBE467EE168C8 /* PrivacyGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8445E83E163E491AEEB1E2F2 /* PrivacyGate.swift */; };
+		EB29694B11850C77F66D2615 /* VoiceEnrollment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4096438F1E123709C280F1A5 /* VoiceEnrollment.swift */; };
+		B1B5E79E41DF196244A0CA25 /* Spool.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCD9889CB334F5C4EC02DDBF /* Spool.swift */; };
+		B36C417664366F7F2EC1440A /* AACSegmentEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC18423FC5643A48CDD94D6 /* AACSegmentEncoder.swift */; };
+		B74E058883D431C8D53ABF58 /* Controller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1E7F81B7C88D84BB1E5D24 /* Controller.swift */; };
+		D0CDF6765AA7CCB108AF2DE7 /* RecordingSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC261451793AF0FFCC2D242F /* RecordingSegments.swift */; };
+		DF1FD1661FD6C400817B8049 /* TranscriptEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52710A6F38A5B87D1C0340B4 /* TranscriptEditor.swift */; };
+		3CA3FD10A31A42EE901BCD01 /* CaptureAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA3FD10A31A42EE901BCD03 /* CaptureAudio.swift */; };
+		3CA3FD10A31A42EE901BCD02 /* CaptureAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA3FD10A31A42EE901BCD03 /* CaptureAudio.swift */; };
+		3CA3FD10A31A42EE901BCD04 /* NexVoiceCapture in Frameworks */ = {isa = PBXBuildFile; productRef = 3CA3FD10A31A42EE901BCD06 /* NexVoiceCapture */; };
+		3CA3FD10A31A42EE901BCD05 /* NexVoiceCapture in Frameworks */ = {isa = PBXBuildFile; productRef = 3CA3FD10A31A42EE901BCD07 /* NexVoiceCapture */; };
+		7EF000000000000000001202 /* LiveAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001201; };
+		7EF000000000000000001203 /* LiveAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001201; };
+		7EF000000000000000001302 /* LiveArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001301; };
+		7EF000000000000000001303 /* LiveArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001301; };
+		7EF000000000000000001402 /* LiveConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001401; };
+		7EF200000000000000000102 /* WeatherLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF200000000000000000101; };
+		7EF200000000000000000103 /* WeatherLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF200000000000000000101; };
+		7EF200000000000000000202 /* WeatherSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF200000000000000000201; };
+		7EF200000000000000000203 /* WeatherSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF200000000000000000201; };
+		7EF000000000000000001403 /* LiveConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001401; };
+		7EF000000000000000001502 /* LiveAudioPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001501; };
+		7EF000000000000000001503 /* LiveAudioPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001501; };
+		7EF000000000000000001602 /* ArchiveAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001601; };
+		7EF000000000000000001603 /* ArchiveAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001601; };
+		7EF000000000000000001702 /* DaybookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001701; };
+		7EF000000000000000001703 /* DaybookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001701; };
+		7EF000000000000000001802 /* DaybookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001801; };
+		7EF400000000000000000102 /* ActivityTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000101; };
+		7EF400000000000000000502 /* ChatActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000501; };
+		7EF400000000000000000602 /* ChatActivityButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000601; };
+		7EF400000000000000000202 /* ActivityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000201; };
+		7EF400000000000000000302 /* ActivitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000301; };
+		7EF400000000000000000402 /* ActivityDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000401; };
+		7EF000000000000000001803 /* DaybookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001801; };
+		7EF400000000000000000103 /* ActivityTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000101; };
+		7EF400000000000000000503 /* ChatActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000501; };
+		7EF400000000000000000603 /* ChatActivityButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000601; };
+		7EF400000000000000000203 /* ActivityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000201; };
+		7EF400000000000000000303 /* ActivitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000301; };
+		7EF400000000000000000403 /* ActivityDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000401; };
+		7EF000000000000000001902 /* DaybookSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001901; };
+		7EF000000000000000001903 /* DaybookSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001901; };
+		7EF000000000000000002002 /* ScreenVision.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002001; };
+		7EF300000000000000000102 /* MacGemmaProcesses.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF300000000000000000101; };
+		7EF300000000000000000202 /* MacGemmaRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF300000000000000000201; };
+		7EF300000000000000000302 /* MacGemmaSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF300000000000000000301; };
+		7EF300000000000000000402 /* ScreenVisionInference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF300000000000000000401; };
+		7EF000000000000000002102 /* ScreenFrames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002101; };
+		7EF000000000000000002202 /* ScreenSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002201; };
+		7EF000000000000000002302 /* ScreenSharingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002301; };
+		7EF000000000000000002402 /* MicrophoneTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002401; };
+		7EF000000000000000002403 /* MicrophoneTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002401; };
+		7EF000000000000000002502 /* LiveAudioMac.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002501; };
+		7EF000000000000000002602 /* ScreenActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002601; };
+		7EF000000000000000002702 /* ScreenReading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002701; };
+		7EF000000000000000002802 /* ScreenVisionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002801; };
+		7EF000000000000000002902 /* ScreenMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002901; };
+		7EF000000000000000003002 /* AmbientSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003001; };
+		7EF000000000000000003003 /* AmbientSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003001; };
+		7EF000000000000000003102 /* AutomaticVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003101; };
+		7EFA00000000000000003102 /* ContinuousVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000003101; };
+		7EFC00000000000000003102 /* MacMicrophoneRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00000000000000003101; };
+		7EFB00000000000000003102 /* ExcaliburModelSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000003101; };
+		7EF000000000000000003103 /* AutomaticVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003101; };
+		7EFA00000000000000003103 /* ContinuousVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000003101; };
+		7EFC00000000000000003103 /* MacMicrophoneRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00000000000000003101; };
+		7EFB00000000000000003103 /* ExcaliburModelSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000003101; };
+		7EF000000000000000003202 /* PersonalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003201; };
+		7EF000000000000000003203 /* PersonalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003201; };
+		7EF000000000000000003302 /* PersonalContextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003301; };
+		7EF000000000000000003303 /* PersonalContextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003301; };
+		7EF000000000000000003402 /* ContextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003401; };
+		7EF000000000000000003403 /* ContextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003401; };
+		7EF000000000000000003502 /* WebLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003501; };
+		7EF000000000000000003602 /* AccountAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003601; };
+		7EF000000000000000003702 /* AccountLoopback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003701; };
+		7EF000000000000000003802 /* AccountConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003801; };
+		7EF000000000000000003902 /* GoogleConnectionSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003901; };
+		7EF000000000000000003503 /* WebLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003501; };
+		7EF000000000000000003603 /* AccountAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003601; };
+		7EF000000000000000003703 /* AccountLoopback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003701; };
+		7EF000000000000000003803 /* AccountConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003801; };
+		7EF000000000000000008E02 /* AccountBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000008E01; };
+		7EF000000000000000008E03 /* AccountBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000008E01; };
+		7EF000000000000000008F02 /* AccountSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000008F01; };
+		7EF000000000000000008F03 /* AccountSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000008F01; };
+		7EF000000000000000003903 /* GoogleConnectionSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003901; };
+		7EF100000000000000000102 /* WorkspaceRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000101; };
+		7EF100000000000000000103 /* WorkspaceRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000101; };
+		7EF100000000000000001102 /* WorkspaceTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001101; };
+		7EF100000000000000001402 /* ChatComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001401; };
+		7EF100000000000000001502 /* ChatMessageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001501; };
+		7EF900000000000000003202 /* PrivateInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003201; };
+		7EF900000000000000003102 /* PrivateChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003101; };
+		7EFB00000000000000005102 /* MessageBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005101; };
+		7EF100000000000000001602 /* WorkspaceCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001601; };
+		7EF100000000000000001702 /* DaybookOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001701; };
+		7EF100000000000000001802 /* ArtifactDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001801; };
+		7EF100000000000000001302 /* PhoneWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001301; };
+		7EF100000000000000001103 /* WorkspaceTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001101; };
+		7EF100000000000000001403 /* ChatComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001401; };
+		7EF100000000000000001503 /* ChatMessageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001501; };
+		7EF900000000000000003203 /* PrivateInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003201; };
+		7EF900000000000000003103 /* PrivateChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003101; };
+		7EFB00000000000000005103 /* MessageBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005101; };
+		7EFB00000000000000005104 /* MessageBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005101; };
+		7EFB00000000000000005202 /* MessageMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005201; };
+		7EFB00000000000000005203 /* MessageMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005201; };
+		7EFB00000000000000005204 /* MessageMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005201; };
+		7EFB00000000000000005302 /* MarkdownMessageBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005301; };
+		7EFB00000000000000005303 /* MarkdownMessageBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005301; };
+		7EFB00000000000000005304 /* MarkdownMessageBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005301; };
+		7EFB00000000000000005402 /* MarkdownTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005401; };
+		7EFB00000000000000005403 /* MarkdownTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005401; };
+		7EFB00000000000000005404 /* MarkdownTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005401; };
+		7EF100000000000000001603 /* WorkspaceCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001601; };
+		7EF100000000000000001703 /* DaybookOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001701; };
+		7EF100000000000000001803 /* ArtifactDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001801; };
+		7EF100000000000000001903 /* MacArtifactBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001901; };
+		7EF100000000000000001203 /* MacWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001201; };
+		7EF500000000000000000102 /* RecordingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF500000000000000000101; };
+		7EF500000000000000000103 /* RecordingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF500000000000000000101; };
+		7EF500000000000000000104 /* RecordingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF500000000000000000101; };
+		7EF100000000000000000202 /* WorkspaceAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000201; };
+		7EF100000000000000000203 /* WorkspaceAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000201; };
+		7EF100000000000000000302 /* WorkspaceAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000301; };
+		7EF100000000000000000303 /* WorkspaceAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000301; };
+		7EF100000000000000000402 /* WorkspaceKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000401; };
+		7EF100000000000000000403 /* WorkspaceKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000401; };
+		7EF100000000000000000502 /* WorkspaceChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000501; };
+		7EF100000000000000000503 /* WorkspaceChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000501; };
+		7EF100000000000000000602 /* WorkspaceChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000601; };
+		7EF100000000000000000603 /* WorkspaceChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000601; };
+		7EFC00000000000000000102 /* ChatThreadScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00000000000000000101; };
+		7EFC00000000000000000103 /* ChatThreadScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00000000000000000101; };
+		7EF100000000000000000702 /* NewsFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000701; };
+		7EF100000000000000000703 /* NewsFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000701; };
+		7EFC00000000000000000202 /* NewsFeedStories.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00000000000000000201; };
+		7EFC00000000000000000203 /* NewsFeedStories.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00000000000000000201; };
+		7EF100000000000000000802 /* FeedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000801; };
+		7EF100000000000000000803 /* FeedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000801; };
+		7EF100000000000000000902 /* IdeasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000901; };
+		7EF100000000000000000903 /* IdeasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000901; };
+		7EF100000000000000000A02 /* GoalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000A01; };
+		7EF100000000000000000A03 /* GoalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000A01; };
+		7EF100000000000000000B02 /* GoalEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000B01; };
+		7EF100000000000000000B03 /* GoalEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000B01; };
+		7EF100000000000000000C02 /* GoalDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000C01; };
+		7EF100000000000000000C03 /* GoalDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000C01; };
+		7EF100000000000000002102 /* GoalFollowUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000002101; };
+		7EF100000000000000002103 /* GoalFollowUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000002101; };
+		7EF100000000000000002104 /* GoalFollowUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000002101; };
+		7EF100000000000000000D02 /* GoalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000D01; };
+		7EF100000000000000000D03 /* GoalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000D01; };
+		0CA9359376F045859D5CA001 /* RecordingNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA9359376F045859D5CA000; };
+		0CA9359376F045859D5CA002 /* RecordingNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA9359376F045859D5CA000; };
+		0CA9359376F045859D5CA003 /* RecordingNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA9359376F045859D5CA000; };
+		0CA9359376F045859D5CA005 /* RecordingNotificationPermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA9359376F045859D5CA004; };
+		0CA9359376F045859D5CA006 /* RecordingNotificationPermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA9359376F045859D5CA004; };
+		0CA9359376F045859D5CA007 /* RecordingNotificationPermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA9359376F045859D5CA004; };
+		7EF100000000000000000E02 /* WorkspaceLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000E01; };
+		7EF100000000000000000E03 /* WorkspaceLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000E01; };
+		7EF100000000000000000F02 /* NewsStoryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000F01; };
+		7EF100000000000000000F03 /* NewsStoryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000F01; };
+		7EF100000000000000001003 /* IPhonePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001001; };
+		7EF500000000000000000202 /* RecordingReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF500000000000000000201; };
+		B7A900000000000000000202 /* WorkspaceRecordingMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A900000000000000000201; };
+		7EF500000000000000000203 /* RecordingReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF500000000000000000201; };
+		B7A900000000000000000203 /* WorkspaceRecordingMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A900000000000000000201; };
+		C63B66C4E764E266E58C3E84 /* NexWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12626069B4561DD099CD7D29 /* NexWatchApp.swift */; };
+		F5B990CE828BC0EBBCE05E2D /* WatchCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF3A19ABE038D3154CE9CFD /* WatchCapture.swift */; };
+		6F02089328C1D156503C8CFA /* WatchMicWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F48C67680063E40DF93C081 /* WatchMicWriter.swift */; };
+		0ECDF8E55459F7D0BAD22288 /* WatchSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4912D3F48E8DBBF92A8753 /* WatchSync.swift */; };
+		FEE9F5F7765A4BB89FBEEE90 /* WatchWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AFFA1FDBDB2FB86110E3B08 /* WatchWorkspace.swift */; };
+		D4C062DC0E9C9270B1EFE314 /* WatchRecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796DA2B9FB2CE577C53CD58B /* WatchRecordingView.swift */; };
+		68B60A8A5F77DF0948483687 /* WatchChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08D9AB5E7892DDABBA3F33B3 /* WatchChatView.swift */; };
+		049953CF6A23368600CC8C5F /* WatchTimelineViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAAA1DE8F1A71361BDC5EA22 /* WatchTimelineViews.swift */; };
+		7AFF07B17B6DAE6369E22499 /* WatchLibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4648FB6978CBAB2C1CC9BA /* WatchLibraryViews.swift */; };
+		DD03E55D0CC674CDB2D5A13E /* WatchCollections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1880AB83503725688D70222F /* WatchCollections.swift */; };
+		05B8C90CC3764BA0E56DE18F /* WatchWorkspaceControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ED287BA7627E4C5D268E227 /* WatchWorkspaceControls.swift */; };
+		935118935CF6ACF2C9799DB1 /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE1FE53C9684021E2A873FA8 /* WatchLink.swift */; };
+		7EFC00300000000000000010 /* WatchWorkspaceRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000010 /* WatchWorkspaceRequest.swift */; };
+		7EFC00300000000000000012 /* WatchReplyAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000012 /* WatchReplyAudio.swift */; };
+		C851686304F54AFBDCA6D881 /* Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB17DEE0831E942DC796E9B /* Types.swift */; };
+		3DAF18A8BAE5DE7097BC7091 /* Spool.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCD9889CB334F5C4EC02DDBF /* Spool.swift */; };
+		46D0EA0415C38F0C46203D69 /* RecordingSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC261451793AF0FFCC2D242F /* RecordingSegments.swift */; };
+		CF39ED2986F8E1E1BA068CC3 /* AACSegmentEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC18423FC5643A48CDD94D6 /* AACSegmentEncoder.swift */; };
+		2B637DE713019BC4A11ABC41 /* MicrophoneTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002401 /* MicrophoneTap.swift */; };
+		17691D090B4E2A0A56CD5247 /* DaybookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001701 /* DaybookTypes.swift */; };
+		2C1EAEC39E2A407ECDB2ED02 /* ActivityTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000101 /* ActivityTypes.swift */; };
+		C5A537CB833E0BC9A9D1B46B /* WorkspaceAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000000201 /* WorkspaceAPI.swift */; };
+		2F0A67FAE4923B061F2D4E44 /* PrivateChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003101 /* PrivateChat.swift */; };
+		65BA03BFD2A240CDD5B79598 /* PersonalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003201 /* PersonalContext.swift */; };
+		647C64403531802AEEC4AD7A /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE1FE53C9684021E2A873FA8 /* WatchLink.swift */; };
+		7EFC00200000000000000010 /* WatchWorkspaceRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000010 /* WatchWorkspaceRequest.swift */; };
+		7EFC00200000000000000012 /* WatchReplyAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000012 /* WatchReplyAudio.swift */; };
+		D2238F5B8D45BA7EC2E804DD /* PhoneWatchInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3695BC8820A3013EEB8AE8C9 /* PhoneWatchInbox.swift */; };
+		1AECE9000000000000000002 /* WatchRecordingUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AECE9000000000000000001 /* WatchRecordingUpdates.swift */; };
+		EFD9095675A726EDB07133D9 /* PhoneWatchRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC73F6F78481F56CFCA8E084 /* PhoneWatchRelay.swift */; };
+		7EFC00200000000000000011 /* PhoneWatchTransfers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000011 /* PhoneWatchTransfers.swift */; };
+		7EFC00200000000000000013 /* PhoneWatchReplyVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000013 /* PhoneWatchReplyVoice.swift */; };
+		E73C376F6771B8A6911666D8 /* PhoneWatchRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9FD9C461B71C8491EDD5A8 /* PhoneWatchRoutes.swift */; };
+		496E1D08C963C4F840EE199C /* PhoneWatchSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27320AC8697249B77CF0D9D3 /* PhoneWatchSettings.swift */; };
+		62DF2674EA9EC41C34FF01E1 /* PhoneWatchWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18166F33818C6AD43B12422D /* PhoneWatchWorkspace.swift */; };
+		8B785FF686AFAC5993208DD9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C469EBDEC004D95A849F5DB8 /* Assets.xcassets */; };
+		BB0FA3B678BBA1DB8671AFFE /* Nex Watch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 199CD8A272DAEF3758527051 /* Nex Watch.app */; };
+		FFF108A69FAFDB6A0BF0B19E /* WatchGoalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951D20BE35802947B2B38A3A /* WatchGoalsView.swift */; };
+		6227093278F4C374690F53F4 /* WatchMemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4593914F2E09F9E8E8D488E9 /* WatchMemoryView.swift */; };
+		7EFC00200000000000000001 /* WatchLiveLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000001; };
+		7EFC00200000000000000009 /* WatchRelayAudioCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000009; };
+		7EFC0020000000000000000A /* WatchLiveExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC0010000000000000000A; };
+		7EFC00200000000000000002 /* PhoneWatchLiveRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000002; };
+		7EFC00200000000000000003 /* PhoneWatchLiveSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000003; };
+		7EFC00300000000000000004 /* WatchLiveAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000004; };
+		7EFC00300000000000000005 /* WatchLiveConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000005; };
+		7EFC0030000000000000000E /* WatchConversationInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC0010000000000000000E; };
+		7EFC0030000000000000000F /* WatchQuestionTicket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC0010000000000000000F; };
+		7EFC00300000000000000014 /* WatchReplyAudioRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC00100000000000000014; };
+		7EFC0030000000000000000B /* WatchQuestionDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC0010000000000000000B; };
+		7EFC0030000000000000000C /* WatchSpokenReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC0010000000000000000C; };
+		7EFC0030000000000000000D /* WatchLiveControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFC0010000000000000000D; };
+		7EFC00300000000000000006 /* LiveAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001201; };
+		7EFC00300000000000000007 /* LiveArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000001301; };
+		7EF900000000000000004102 /* ClockAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004101; };
+		7EF900000000000000004103 /* ClockAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004101; };
+		7EF900000000000000004104 /* ClockAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004101; };
+		7EF900000000000000004202 /* ClockAlertCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004201; };
+		7EF900000000000000004203 /* ClockAlertCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004201; };
+		7EF900000000000000004204 /* ClockAlertCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004201; };
+		7EF900000000000000004302 /* ClockNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004301; };
+		7EF900000000000000004303 /* ClockNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004301; };
+		7EF900000000000000004403 /* IPhoneNativeAlarms.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000004401; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		4A8613D6D2A779318C13767C /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				BB0FA3B678BBA1DB8671AFFE /* Nex Watch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		8C859DF46F630ABFC1C7BE83 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 6BF4AA4D7E2381B18915869F /* Project object */; proxyType = 1; remoteGlobalIDString = EC8530B016726DA74B3C0C82; remoteInfo = "Nex Watch"; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		235796AB50B7B59583F4A18D /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = EC8530B016726DA74B3C0C82 /* Nex Watch */; targetProxy = 8C859DF46F630ABFC1C7BE83 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin PBXFileReference section */
+		7EFD00000000000000004101 /* QuestionChime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionChime.swift; sourceTree = "<group>"; };
+		7EFD00000000000000004201 /* question-chime.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "question-chime.wav"; sourceTree = "<group>"; };
+		0BB17DEE0831E942DC796E9B /* Types.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Types.swift; sourceTree = "<group>"; };
+		0D47FE3984805D0ACF6E3901 /* Connection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Connection.swift; sourceTree = "<group>"; };
+		561463CA3238DDBB5674D193 /* InstalledPairing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InstalledPairing.swift; sourceTree = "<group>"; };
+		82CE0DB190A1DBAF0FEDC66B /* OwnerKey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OwnerKey.swift; sourceTree = "<group>"; };
+		05AF987A4A1BE25D80B2C15C /* AppPrivacy.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppPrivacy.swift; sourceTree = "<group>"; };
+		FD9CD371BA464C3A98DCCC01 /* AppAutoLock.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppAutoLock.swift; sourceTree = "<group>"; };
+		FD9CD371BA464C3A98DCCC02 /* AuthenticationSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthenticationSettings.swift; sourceTree = "<group>"; };
+		8445E83E163E491AEEB1E2F2 /* PrivacyGate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PrivacyGate.swift; sourceTree = "<group>"; };
+		4096438F1E123709C280F1A5 /* VoiceEnrollment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceEnrollment.swift; sourceTree = "<group>"; };
+		194945B1FC7F61A0DEAAD833 /* Nex iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nex iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1BCBAFCB8B0863DF86DE52AD /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		1FCEDD24D94B779543662729 /* Info-iOS.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Info-iOS.plist"; sourceTree = "<group>"; };
+		32E3958FC59DCFF13933D07F /* NexApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NexApp.swift; sourceTree = "<group>"; };
+		3BC18423FC5643A48CDD94D6 /* AACSegmentEncoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AACSegmentEncoder.swift; sourceTree = "<group>"; };
+		4F74B4998DE7D8CC74B1031A /* Assets-iOS.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = "Assets-iOS.xcassets"; sourceTree = "<group>"; };
+		52710A6F38A5B87D1C0340B4 /* TranscriptEditor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TranscriptEditor.swift; sourceTree = "<group>"; };
+		6B1E7F81B7C88D84BB1E5D24 /* Controller.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Controller.swift; sourceTree = "<group>"; };
+		72CD9268C5BFC9EEF5D8C701 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		7A4EAAD35D71AB2FE0FAB8A0 /* DeviceSpeech.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceSpeech.swift; sourceTree = "<group>"; };
+		80D92014BFCE2B289CA1B415 /* ArchiveView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ArchiveView.swift; sourceTree = "<group>"; };
+		8880C94BFF0EDD923DFE38D3 /* Info-macOS.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Info-macOS.plist"; sourceTree = "<group>"; };
+		982BCD2037969E03414666D7 /* Assets-macOS.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = "Assets-macOS.xcassets"; sourceTree = "<group>"; };
+		A393EF8B647B2D45F55A0B36 /* Capture.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
+		A7527C652D86FA8745E8B9B4 /* SettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F1B9748DA1B64E27AD3FA431 /* WorkspaceFeatureSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceFeatureSettings.swift; sourceTree = "<group>"; };
+		AC261451793AF0FFCC2D242F /* RecordingSegments.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordingSegments.swift; sourceTree = "<group>"; };
+		AD9CE14007C48AB8AF481EDE /* ListenView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListenView.swift; sourceTree = "<group>"; };
+		CCD9889CB334F5C4EC02DDBF /* Spool.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Spool.swift; sourceTree = "<group>"; };
+		FAD37A2F0D6A6D45A1A15C48 /* Nex macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nex macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FE51C5927CC5C22F59BC7EE3 /* MicrophoneStream.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MicrophoneStream.swift; sourceTree = "<group>"; };
+		3CA3FD10A31A42EE901BCD03 /* CaptureAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureAudio.swift; sourceTree = "<group>"; };
+		7EF000000000000000001201 /* LiveAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAudio.swift; sourceTree = "<group>"; };
+		7EF000000000000000001301 /* LiveArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveArchive.swift; sourceTree = "<group>"; };
+		7EF000000000000000001401 /* LiveConversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveConversation.swift; sourceTree = "<group>"; };
+		7EF200000000000000000101 /* WeatherLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherLocation.swift; sourceTree = "<group>"; };
+		7EF200000000000000000201 /* WeatherSharing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherSharing.swift; sourceTree = "<group>"; };
+		7EF000000000000000001501 /* LiveAudioPhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAudioPhone.swift; sourceTree = "<group>"; };
+		7EF000000000000000001601 /* ArchiveAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveAccess.swift; sourceTree = "<group>"; };
+		7EF000000000000000001701 /* DaybookTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookTypes.swift; sourceTree = "<group>"; };
+		7EF000000000000000001801 /* DaybookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookView.swift; sourceTree = "<group>"; };
+		7EF400000000000000000101 /* ActivityTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityTypes.swift; sourceTree = "<group>"; };
+		7EF400000000000000000501 /* ChatActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatActivity.swift; sourceTree = "<group>"; };
+		7EF400000000000000000601 /* ChatActivityButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatActivityButton.swift; sourceTree = "<group>"; };
+		7EF400000000000000000201 /* ActivityRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityRow.swift; sourceTree = "<group>"; };
+		7EF400000000000000000301 /* ActivitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitiesView.swift; sourceTree = "<group>"; };
+		7EF400000000000000000401 /* ActivityDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityDetailView.swift; sourceTree = "<group>"; };
+		7EF000000000000000001901 /* DaybookSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookSheets.swift; sourceTree = "<group>"; };
+		7EF000000000000000002001 /* ScreenVision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenVision.swift; sourceTree = "<group>"; };
+		7EF300000000000000000101 /* MacGemmaProcesses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacGemmaProcesses.swift; sourceTree = "<group>"; };
+		7EF300000000000000000201 /* MacGemmaRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacGemmaRelay.swift; sourceTree = "<group>"; };
+		7EF300000000000000000301 /* MacGemmaSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacGemmaSettings.swift; sourceTree = "<group>"; };
+		7EF300000000000000000401 /* ScreenVisionInference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenVisionInference.swift; sourceTree = "<group>"; };
+		7EF000000000000000002101 /* ScreenFrames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenFrames.swift; sourceTree = "<group>"; };
+		7EF000000000000000002201 /* ScreenSharing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSharing.swift; sourceTree = "<group>"; };
+		7EF000000000000000002301 /* ScreenSharingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSharingViews.swift; sourceTree = "<group>"; };
+		7EF000000000000000002401 /* MicrophoneTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneTap.swift; sourceTree = "<group>"; };
+		7EF000000000000000002501 /* LiveAudioMac.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAudioMac.swift; sourceTree = "<group>"; };
+		7EF000000000000000002601 /* ScreenActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenActivity.swift; sourceTree = "<group>"; };
+		7EF000000000000000002701 /* ScreenReading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenReading.swift; sourceTree = "<group>"; };
+		7EF000000000000000002801 /* ScreenVisionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenVisionPrompt.swift; sourceTree = "<group>"; };
+		7EF000000000000000002901 /* ScreenMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMonitor.swift; sourceTree = "<group>"; };
+		7EF000000000000000003001 /* AmbientSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientSpeech.swift; sourceTree = "<group>"; };
+		7EF000000000000000003101 /* AutomaticVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomaticVoice.swift; sourceTree = "<group>"; };
+		7EFA00000000000000003101 /* ContinuousVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousVoice.swift; sourceTree = "<group>"; };
+		7EFC00000000000000003101 /* MacMicrophoneRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacMicrophoneRoute.swift; sourceTree = "<group>"; };
+		7EFB00000000000000003101 /* ExcaliburModelSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcaliburModelSettings.swift; sourceTree = "<group>"; };
+		7EF000000000000000003201 /* PersonalContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalContext.swift; sourceTree = "<group>"; };
+		7EF000000000000000003301 /* PersonalContextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalContextView.swift; sourceTree = "<group>"; };
+		7EF000000000000000003401 /* ContextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextEditor.swift; sourceTree = "<group>"; };
+		7EF000000000000000003501 /* WebLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebLookup.swift; sourceTree = "<group>"; };
+		7EF000000000000000003601 /* AccountAuthorization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountAuthorization.swift; sourceTree = "<group>"; };
+		7EF000000000000000003701 /* AccountLoopback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLoopback.swift; sourceTree = "<group>"; };
+		7EF000000000000000003801 /* AccountConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountConnectionsView.swift; sourceTree = "<group>"; };
+		7EF000000000000000008E01 /* AccountBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountBrowser.swift; sourceTree = "<group>"; };
+		7EF000000000000000008F01 /* AccountSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSignIn.swift; sourceTree = "<group>"; };
+		7EF000000000000000003901 /* GoogleConnectionSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleConnectionSetup.swift; sourceTree = "<group>"; };
+		7EF100000000000000000101 /* WorkspaceRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceRoot.swift; sourceTree = "<group>"; };
+		7EF100000000000000001101 /* WorkspaceTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTabBar.swift; sourceTree = "<group>"; };
+		7EF100000000000000001401 /* ChatComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComposer.swift; sourceTree = "<group>"; };
+		7EF100000000000000001501 /* ChatMessageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageRow.swift; sourceTree = "<group>"; };
+		7EF900000000000000003201 /* PrivateInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateInbox.swift; sourceTree = "<group>"; };
+		7EF900000000000000003101 /* PrivateChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChat.swift; sourceTree = "<group>"; };
+		7EFB00000000000000005101 /* MessageBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBody.swift; sourceTree = "<group>"; };
+		7EFB00000000000000005201 /* MessageMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageMarkdown.swift; sourceTree = "<group>"; };
+		7EFB00000000000000005301 /* MarkdownMessageBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMessageBody.swift; sourceTree = "<group>"; };
+		7EFB00000000000000005401 /* MarkdownTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTable.swift; sourceTree = "<group>"; };
+		7EF100000000000000001601 /* WorkspaceCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceCollection.swift; sourceTree = "<group>"; };
+		7EF100000000000000001701 /* DaybookOverview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookOverview.swift; sourceTree = "<group>"; };
+		7EF100000000000000001801 /* ArtifactDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtifactDocument.swift; sourceTree = "<group>"; };
+		7EF100000000000000001901 /* MacArtifactBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacArtifactBrowser.swift; sourceTree = "<group>"; };
+		7EF100000000000000001201 /* MacWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacWorkspaceView.swift; sourceTree = "<group>"; };
+		7EF500000000000000000101 /* RecordingStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingStatus.swift; sourceTree = "<group>"; };
+		7EF100000000000000001301 /* PhoneWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWorkspaceView.swift; sourceTree = "<group>"; };
+		7EF100000000000000000201 /* WorkspaceAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAPI.swift; sourceTree = "<group>"; };
+		7EF100000000000000000301 /* WorkspaceAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAccess.swift; sourceTree = "<group>"; };
+		7EF100000000000000000401 /* WorkspaceKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceKit.swift; sourceTree = "<group>"; };
+		7EF100000000000000000501 /* WorkspaceChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChat.swift; sourceTree = "<group>"; };
+		7EF100000000000000000601 /* WorkspaceChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChatView.swift; sourceTree = "<group>"; };
+		7EFC00000000000000000101 /* ChatThreadScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatThreadScrollView.swift; sourceTree = "<group>"; };
+		7EF100000000000000000701 /* NewsFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsFeedView.swift; sourceTree = "<group>"; };
+		7EFC00000000000000000201 /* NewsFeedStories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsFeedStories.swift; sourceTree = "<group>"; };
+		7EF100000000000000000801 /* FeedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedSettingsView.swift; sourceTree = "<group>"; };
+		7EF100000000000000000901 /* IdeasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdeasView.swift; sourceTree = "<group>"; };
+		7EF100000000000000000A01 /* GoalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsView.swift; sourceTree = "<group>"; };
+		7EF100000000000000000B01 /* GoalEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalEditor.swift; sourceTree = "<group>"; };
+		7EF100000000000000000C01 /* GoalDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalDetailView.swift; sourceTree = "<group>"; };
+		7EF100000000000000002101 /* GoalFollowUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalFollowUpView.swift; sourceTree = "<group>"; };
+		7EF100000000000000000D01 /* GoalNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalNotifications.swift; sourceTree = "<group>"; };
+		0CA9359376F045859D5CA000 /* RecordingNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingNotifications.swift; sourceTree = "<group>"; };
+		0CA9359376F045859D5CA004 /* RecordingNotificationPermission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingNotificationPermission.swift; sourceTree = "<group>"; };
+		7EF100000000000000000E01 /* WorkspaceLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLibrary.swift; sourceTree = "<group>"; };
+		7EF100000000000000000F01 /* NewsStoryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsStoryRow.swift; sourceTree = "<group>"; };
+		7EF100000000000000001001 /* IPhonePush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPhonePush.swift; sourceTree = "<group>"; };
+		7EF500000000000000000201 /* RecordingReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingReporter.swift; sourceTree = "<group>"; };
+		B7A900000000000000000201 /* WorkspaceRecordingMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceRecordingMonitor.swift; sourceTree = "<group>"; };
+		DE1FE53C9684021E2A873FA8 /* WatchLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLink.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000010 /* WatchWorkspaceRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkspaceRequest.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000012 /* WatchReplyAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchReplyAudio.swift; sourceTree = "<group>"; };
+		3695BC8820A3013EEB8AE8C9 /* PhoneWatchInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchInbox.swift; sourceTree = "<group>"; };
+		1AECE9000000000000000001 /* WatchRecordingUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingUpdates.swift; sourceTree = "<group>"; };
+		AC73F6F78481F56CFCA8E084 /* PhoneWatchRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchRelay.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000011 /* PhoneWatchTransfers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchTransfers.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000013 /* PhoneWatchReplyVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchReplyVoice.swift; sourceTree = "<group>"; };
+		4F9FD9C461B71C8491EDD5A8 /* PhoneWatchRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchRoutes.swift; sourceTree = "<group>"; };
+		27320AC8697249B77CF0D9D3 /* PhoneWatchSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchSettings.swift; sourceTree = "<group>"; };
+		18166F33818C6AD43B12422D /* PhoneWatchWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchWorkspace.swift; sourceTree = "<group>"; };
+		12626069B4561DD099CD7D29 /* NexWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NexWatchApp.swift; sourceTree = "<group>"; };
+		DBF3A19ABE038D3154CE9CFD /* WatchCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCapture.swift; sourceTree = "<group>"; };
+		1F48C67680063E40DF93C081 /* WatchMicWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMicWriter.swift; sourceTree = "<group>"; };
+		FB4912D3F48E8DBBF92A8753 /* WatchSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSync.swift; sourceTree = "<group>"; };
+		3AFFA1FDBDB2FB86110E3B08 /* WatchWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkspace.swift; sourceTree = "<group>"; };
+		796DA2B9FB2CE577C53CD58B /* WatchRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingView.swift; sourceTree = "<group>"; };
+		08D9AB5E7892DDABBA3F33B3 /* WatchChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchChatView.swift; sourceTree = "<group>"; };
+		CAAA1DE8F1A71361BDC5EA22 /* WatchTimelineViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTimelineViews.swift; sourceTree = "<group>"; };
+		2B4648FB6978CBAB2C1CC9BA /* WatchLibraryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLibraryViews.swift; sourceTree = "<group>"; };
+		1880AB83503725688D70222F /* WatchCollections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCollections.swift; sourceTree = "<group>"; };
+		2ED287BA7627E4C5D268E227 /* WatchWorkspaceControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkspaceControls.swift; sourceTree = "<group>"; };
+		C469EBDEC004D95A849F5DB8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7E86E045972B57DD43B5D7B2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		199CD8A272DAEF3758527051 /* Nex Watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nex Watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		951D20BE35802947B2B38A3A /* WatchGoalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGoalsView.swift; sourceTree = "<group>"; };
+		4593914F2E09F9E8E8D488E9 /* WatchMemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMemoryView.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000001 /* WatchLiveLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveLink.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000009 /* WatchRelayAudioCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRelayAudioCodec.swift; sourceTree = "<group>"; };
+		7EFC0010000000000000000A /* WatchLiveExchange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveExchange.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000002 /* PhoneWatchLiveRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchLiveRelay.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000003 /* PhoneWatchLiveSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWatchLiveSession.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000004 /* WatchLiveAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveAudio.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000005 /* WatchLiveConversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveConversation.swift; sourceTree = "<group>"; };
+		7EFC0010000000000000000E /* WatchConversationInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConversationInput.swift; sourceTree = "<group>"; };
+		7EFC0010000000000000000F /* WatchQuestionTicket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchQuestionTicket.swift; sourceTree = "<group>"; };
+		7EFC00100000000000000014 /* WatchReplyAudioRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchReplyAudioRequest.swift; sourceTree = "<group>"; };
+		7EFC0010000000000000000B /* WatchQuestionDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchQuestionDetector.swift; sourceTree = "<group>"; };
+		7EFC0010000000000000000C /* WatchSpokenReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSpokenReply.swift; sourceTree = "<group>"; };
+		7EFC0010000000000000000D /* WatchLiveControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveControls.swift; sourceTree = "<group>"; };
+		7EF900000000000000004101 /* ClockAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockAlert.swift; sourceTree = "<group>"; };
+		7EF900000000000000004201 /* ClockAlertCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockAlertCard.swift; sourceTree = "<group>"; };
+		7EF900000000000000004301 /* ClockNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockNotifications.swift; sourceTree = "<group>"; };
+		7EF900000000000000004401 /* IPhoneNativeAlarms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPhoneNativeAlarms.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1ACB9DD66A88DE97CA434FCF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9E212347A4290D5AC4FC1846 /* Foundation.framework in Frameworks */,
+				3CA3FD10A31A42EE901BCD04 /* NexVoiceCapture in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6B59C276B1F96C4E3A7C58FF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C7FDDC5B40F5AE903DDF58E /* Cocoa.framework in Frameworks */,
+				3CA3FD10A31A42EE901BCD05 /* NexVoiceCapture in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		00465C598661C82EDC43EFDB /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				72CD9268C5BFC9EEF5D8C701 /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		0755613511DF82C43FB3D125 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C8821A8EA8B250C8A2EB96D8 /* iOS */,
+				00465C598661C82EDC43EFDB /* OS X */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		32940C18D91FED81A1158C84 = {
+			isa = PBXGroup;
+			children = (
+				C8851F09E464284ECD6F618E /* Products */,
+				0755613511DF82C43FB3D125 /* Frameworks */,
+				33C1FB8D35E0AADAF81EDB14 /* Nex */,
+				ED13414FFAEF80EFAC24D3D8 /* NexWatch */,
+				58276F376A68BB52262E0880 /* WatchSupport */,
+			);
+			sourceTree = "<group>";
+		};
+		33C1FB8D35E0AADAF81EDB14 /* Nex */ = {
+			isa = PBXGroup;
+			children = (
+				80D92014BFCE2B289CA1B415 /* ArchiveView.swift */,
+				A393EF8B647B2D45F55A0B36 /* Capture.swift */,
+				3CA3FD10A31A42EE901BCD03 /* CaptureAudio.swift */,
+				0D47FE3984805D0ACF6E3901 /* Connection.swift */,
+				561463CA3238DDBB5674D193 /* InstalledPairing.swift */,
+				82CE0DB190A1DBAF0FEDC66B /* OwnerKey.swift */,
+				05AF987A4A1BE25D80B2C15C /* AppPrivacy.swift */,
+				FD9CD371BA464C3A98DCCC01 /* AppAutoLock.swift */,
+				FD9CD371BA464C3A98DCCC02 /* AuthenticationSettings.swift */,
+				8445E83E163E491AEEB1E2F2 /* PrivacyGate.swift */,
+				4096438F1E123709C280F1A5 /* VoiceEnrollment.swift */,
+				6B1E7F81B7C88D84BB1E5D24 /* Controller.swift */,
+				7A4EAAD35D71AB2FE0FAB8A0 /* DeviceSpeech.swift */,
+				AD9CE14007C48AB8AF481EDE /* ListenView.swift */,
+				32E3958FC59DCFF13933D07F /* NexApp.swift */,
+				A7527C652D86FA8745E8B9B4 /* SettingsView.swift */,
+				F1B9748DA1B64E27AD3FA431 /* WorkspaceFeatureSettings.swift */,
+				CCD9889CB334F5C4EC02DDBF /* Spool.swift */,
+				7EF000000000000000001201 /* LiveAudio.swift */,
+				7EFD00000000000000004101 /* QuestionChime.swift */,
+				7EFD00000000000000004201 /* question-chime.wav */,
+				7EF000000000000000002501 /* LiveAudioMac.swift */,
+				7EF000000000000000001301 /* LiveArchive.swift */,
+				7EF000000000000000001401 /* LiveConversation.swift */,
+				7EF200000000000000000101 /* WeatherLocation.swift */,
+				7EF200000000000000000201 /* WeatherSharing.swift */,
+				7EF000000000000000001501 /* LiveAudioPhone.swift */,
+				7EF100000000000000000101 /* WorkspaceRoot.swift */,
+				7EF100000000000000001101 /* WorkspaceTabBar.swift */,
+				7EF100000000000000001401 /* ChatComposer.swift */,
+				7EF100000000000000001501 /* ChatMessageRow.swift */,
+				7EF900000000000000003201 /* PrivateInbox.swift */,
+				7EF900000000000000003101 /* PrivateChat.swift */,
+				7EF900000000000000004301 /* ClockNotifications.swift */,
+				7EF900000000000000004401 /* IPhoneNativeAlarms.swift */,
+				7EF900000000000000004201 /* ClockAlertCard.swift */,
+				7EF900000000000000004101 /* ClockAlert.swift */,
+				7EFB00000000000000005101 /* MessageBody.swift */,
+				7EFB00000000000000005201 /* MessageMarkdown.swift */,
+				7EFB00000000000000005301 /* MarkdownMessageBody.swift */,
+				7EFB00000000000000005401 /* MarkdownTable.swift */,
+				7EF100000000000000001601 /* WorkspaceCollection.swift */,
+				7EF100000000000000001701 /* DaybookOverview.swift */,
+				7EF100000000000000001801 /* ArtifactDocument.swift */,
+				7EF100000000000000001901 /* MacArtifactBrowser.swift */,
+				7EF100000000000000001201 /* MacWorkspaceView.swift */,
+				7EF500000000000000000101 /* RecordingStatus.swift */,
+				7EF100000000000000001301 /* PhoneWorkspaceView.swift */,
+				7EF100000000000000000201 /* WorkspaceAPI.swift */,
+				7EF100000000000000000301 /* WorkspaceAccess.swift */,
+				7EF100000000000000000401 /* WorkspaceKit.swift */,
+				7EF100000000000000000501 /* WorkspaceChat.swift */,
+				7EF100000000000000000601 /* WorkspaceChatView.swift */,
+				7EFC00000000000000000101 /* ChatThreadScrollView.swift */,
+				7EF100000000000000000701 /* NewsFeedView.swift */,
+				7EFC00000000000000000201 /* NewsFeedStories.swift */,
+				7EF100000000000000000F01 /* NewsStoryRow.swift */,
+				7EF100000000000000001001 /* IPhonePush.swift */,
+				7EF500000000000000000201 /* RecordingReporter.swift */,
+				B7A900000000000000000201 /* WorkspaceRecordingMonitor.swift */,
+				7EF100000000000000000801 /* FeedSettingsView.swift */,
+				7EF100000000000000000901 /* IdeasView.swift */,
+				7EF100000000000000000A01 /* GoalsView.swift */,
+				7EF100000000000000000B01 /* GoalEditor.swift */,
+				7EF100000000000000000C01 /* GoalDetailView.swift */,
+				7EF100000000000000002101 /* GoalFollowUpView.swift */,
+				7EF100000000000000000D01 /* GoalNotifications.swift */,
+				0CA9359376F045859D5CA000 /* RecordingNotifications.swift */,
+				0CA9359376F045859D5CA004 /* RecordingNotificationPermission.swift */,
+				7EF100000000000000000E01 /* WorkspaceLibrary.swift */,
+				7EF000000000000000001901 /* DaybookSheets.swift */,
+				7EF000000000000000002301 /* ScreenSharingViews.swift */,
+				7EF000000000000000002201 /* ScreenSharing.swift */,
+				7EF000000000000000002101 /* ScreenFrames.swift */,
+				7EF000000000000000002001 /* ScreenVision.swift */,
+				7EF300000000000000000101 /* MacGemmaProcesses.swift */,
+				7EF300000000000000000201 /* MacGemmaRelay.swift */,
+				7EF300000000000000000301 /* MacGemmaSettings.swift */,
+				7EF300000000000000000401 /* ScreenVisionInference.swift */,
+				7EF000000000000000002901 /* ScreenMonitor.swift */,
+				7EF000000000000000002801 /* ScreenVisionPrompt.swift */,
+				7EF000000000000000002701 /* ScreenReading.swift */,
+				7EF000000000000000002601 /* ScreenActivity.swift */,
+				7EF000000000000000001801 /* DaybookView.swift */,
+				7EF400000000000000000101 /* ActivityTypes.swift */,
+				7EF400000000000000000501 /* ChatActivity.swift */,
+				7EF400000000000000000601 /* ChatActivityButton.swift */,
+				7EF400000000000000000201 /* ActivityRow.swift */,
+				7EF400000000000000000301 /* ActivitiesView.swift */,
+				7EF400000000000000000401 /* ActivityDetailView.swift */,
+				7EF000000000000000001701 /* DaybookTypes.swift */,
+				7EF000000000000000001601 /* ArchiveAccess.swift */,
+				0BB17DEE0831E942DC796E9B /* Types.swift */,
+				1FCEDD24D94B779543662729 /* Info-iOS.plist */,
+				4F74B4998DE7D8CC74B1031A /* Assets-iOS.xcassets */,
+				8880C94BFF0EDD923DFE38D3 /* Info-macOS.plist */,
+				982BCD2037969E03414666D7 /* Assets-macOS.xcassets */,
+				52710A6F38A5B87D1C0340B4 /* TranscriptEditor.swift */,
+				AC261451793AF0FFCC2D242F /* RecordingSegments.swift */,
+				FE51C5927CC5C22F59BC7EE3 /* MicrophoneStream.swift */,
+				7EF000000000000000002401 /* MicrophoneTap.swift */,
+				7EF000000000000000003101 /* AutomaticVoice.swift */,
+				7EFA00000000000000003101 /* ContinuousVoice.swift */,
+				7EFC00000000000000003101 /* MacMicrophoneRoute.swift */,
+				7EFB00000000000000003101 /* ExcaliburModelSettings.swift */,
+				7EF000000000000000003501 /* WebLookup.swift */,
+				7EF000000000000000003601 /* AccountAuthorization.swift */,
+				7EF000000000000000003701 /* AccountLoopback.swift */,
+				7EF000000000000000003801 /* AccountConnectionsView.swift */,
+				7EF000000000000000008E01 /* AccountBrowser.swift */,
+				7EF000000000000000008F01 /* AccountSignIn.swift */,
+				7EF000000000000000003901 /* GoogleConnectionSetup.swift */,
+				7EF000000000000000003401 /* ContextEditor.swift */,
+				7EF000000000000000003301 /* PersonalContextView.swift */,
+				7EF000000000000000003201 /* PersonalContext.swift */,
+				7EF000000000000000003001 /* AmbientSpeech.swift */,
+				3BC18423FC5643A48CDD94D6 /* AACSegmentEncoder.swift */,
+			);
+			name = Nex;
+			path = Nex;
+			sourceTree = "<group>";
+		};
+		C8821A8EA8B250C8A2EB96D8 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				1BCBAFCB8B0863DF86DE52AD /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		C8851F09E464284ECD6F618E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				194945B1FC7F61A0DEAAD833 /* Nex iOS.app */,
+				FAD37A2F0D6A6D45A1A15C48 /* Nex macOS.app */,
+				199CD8A272DAEF3758527051 /* Nex Watch.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ED13414FFAEF80EFAC24D3D8 /* NexWatch */ = {
+			isa = PBXGroup;
+			children = (
+				12626069B4561DD099CD7D29 /* NexWatchApp.swift */,
+				DBF3A19ABE038D3154CE9CFD /* WatchCapture.swift */,
+				7EFC00100000000000000005 /* WatchLiveConversation.swift */,
+				7EFC0010000000000000000E /* WatchConversationInput.swift */,
+				7EFC0010000000000000000F /* WatchQuestionTicket.swift */,
+				7EFC00100000000000000014 /* WatchReplyAudioRequest.swift */,
+				7EFC0010000000000000000B /* WatchQuestionDetector.swift */,
+				7EFC0010000000000000000C /* WatchSpokenReply.swift */,
+				7EFC0010000000000000000D /* WatchLiveControls.swift */,
+				7EFC00100000000000000004 /* WatchLiveAudio.swift */,
+				1F48C67680063E40DF93C081 /* WatchMicWriter.swift */,
+				FB4912D3F48E8DBBF92A8753 /* WatchSync.swift */,
+				3AFFA1FDBDB2FB86110E3B08 /* WatchWorkspace.swift */,
+				796DA2B9FB2CE577C53CD58B /* WatchRecordingView.swift */,
+				08D9AB5E7892DDABBA3F33B3 /* WatchChatView.swift */,
+				CAAA1DE8F1A71361BDC5EA22 /* WatchTimelineViews.swift */,
+				2B4648FB6978CBAB2C1CC9BA /* WatchLibraryViews.swift */,
+				4593914F2E09F9E8E8D488E9 /* WatchMemoryView.swift */,
+				1880AB83503725688D70222F /* WatchCollections.swift */,
+				951D20BE35802947B2B38A3A /* WatchGoalsView.swift */,
+				2ED287BA7627E4C5D268E227 /* WatchWorkspaceControls.swift */,
+				C469EBDEC004D95A849F5DB8 /* Assets.xcassets */,
+				7E86E045972B57DD43B5D7B2 /* Info.plist */,
+			);
+			path = NexWatch;
+			sourceTree = "<group>";
+		};
+		58276F376A68BB52262E0880 /* WatchSupport */ = {
+			isa = PBXGroup;
+			children = (
+				DE1FE53C9684021E2A873FA8 /* WatchLink.swift */,
+				7EFC00100000000000000010 /* WatchWorkspaceRequest.swift */,
+				7EFC00100000000000000012 /* WatchReplyAudio.swift */,
+				7EFC00100000000000000001 /* WatchLiveLink.swift */,
+				7EFC00100000000000000009 /* WatchRelayAudioCodec.swift */,
+				7EFC0010000000000000000A /* WatchLiveExchange.swift */,
+				3695BC8820A3013EEB8AE8C9 /* PhoneWatchInbox.swift */,
+				1AECE9000000000000000001 /* WatchRecordingUpdates.swift */,
+				AC73F6F78481F56CFCA8E084 /* PhoneWatchRelay.swift */,
+				7EFC00100000000000000011 /* PhoneWatchTransfers.swift */,
+				7EFC00100000000000000013 /* PhoneWatchReplyVoice.swift */,
+				7EFC00100000000000000003 /* PhoneWatchLiveSession.swift */,
+				7EFC00100000000000000002 /* PhoneWatchLiveRelay.swift */,
+				4F9FD9C461B71C8491EDD5A8 /* PhoneWatchRoutes.swift */,
+				27320AC8697249B77CF0D9D3 /* PhoneWatchSettings.swift */,
+				18166F33818C6AD43B12422D /* PhoneWatchWorkspace.swift */,
+			);
+			path = WatchSupport;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1F74B43270710AB79B9D93E3 /* Nex iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F6928871CDD6301837C6A4DC /* Build configuration list for PBXNativeTarget "Nex iOS" */;
+			buildPhases = (
+				6B020379A33C4400C69D604E /* Sources */,
+				1ACB9DD66A88DE97CA434FCF /* Frameworks */,
+				DEBF8ACB1175E63CDCA6BECA /* Resources */,
+				4A8613D6D2A779318C13767C /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				235796AB50B7B59583F4A18D /* PBXTargetDependency */,
+			);
+			name = "Nex iOS";
+			packageProductDependencies = (3CA3FD10A31A42EE901BCD06 /* NexVoiceCapture */,);
+			productName = "Nex iOS";
+			productReference = 194945B1FC7F61A0DEAAD833 /* Nex iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		2E9F9D4AE87984EC8ECDC8D7 /* Nex macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 58E9F117300D83DC8C83D302 /* Build configuration list for PBXNativeTarget "Nex macOS" */;
+			buildPhases = (
+				E6A31466C20194E75A8D0307 /* Sources */,
+				6B59C276B1F96C4E3A7C58FF /* Frameworks */,
+				67831706D323398DB3E22F72 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Nex macOS";
+			packageProductDependencies = (3CA3FD10A31A42EE901BCD07 /* NexVoiceCapture */,);
+			productName = "Nex macOS";
+			productReference = FAD37A2F0D6A6D45A1A15C48 /* Nex macOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EC8530B016726DA74B3C0C82 /* Nex Watch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B31263C173AF69E60437529E /* Build configuration list for PBXNativeTarget "Nex Watch" */;
+			buildPhases = (
+				B40E7F44D9BB1FD0C4700BEC /* Sources */,
+				AAAA5D1029E17DEEFC449506 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = "Nex Watch";
+			productName = "Nex Watch";
+			productReference = 199CD8A272DAEF3758527051 /* Nex Watch.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6BF4AA4D7E2381B18915869F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 3F30950F06FD456174471B9E /* Build configuration list for PBXProject "Nex" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 32940C18D91FED81A1158C84;
+			minimizedProjectReferenceProxies = 0;
+			packageReferences = (3CA3FD10A31A42EE901BCD08 /* NexVoiceCapture */,);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C8851F09E464284ECD6F618E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1F74B43270710AB79B9D93E3 /* Nex iOS */,
+				2E9F9D4AE87984EC8ECDC8D7 /* Nex macOS */,
+				EC8530B016726DA74B3C0C82 /* Nex Watch */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		67831706D323398DB3E22F72 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E3408D8F0A4039DFE62E71F /* Assets-macOS.xcassets in Resources */,
+				7EFD00000000000000004202 /* question-chime.wav in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DEBF8ACB1175E63CDCA6BECA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0493C46B1723470A60B87D6F /* Assets-iOS.xcassets in Resources */,
+				7EFD00000000000000004203 /* question-chime.wav in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AAAA5D1029E17DEEFC449506 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B785FF686AFAC5993208DD9 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6B020379A33C4400C69D604E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				647C64403531802AEEC4AD7A /* WatchLink.swift in Sources */,
+				7EFC00200000000000000010 /* WatchWorkspaceRequest.swift in Sources */,
+				7EFC00200000000000000012 /* WatchReplyAudio.swift in Sources */,
+				D2238F5B8D45BA7EC2E804DD /* PhoneWatchInbox.swift in Sources */,
+				1AECE9000000000000000002 /* WatchRecordingUpdates.swift in Sources */,
+				EFD9095675A726EDB07133D9 /* PhoneWatchRelay.swift in Sources */,
+				7EFC00200000000000000011 /* PhoneWatchTransfers.swift in Sources */,
+				7EFC00200000000000000013 /* PhoneWatchReplyVoice.swift in Sources */,
+				7EFC00200000000000000003 /* PhoneWatchLiveSession.swift in Sources */,
+				7EFC00200000000000000002 /* PhoneWatchLiveRelay.swift in Sources */,
+				7EFC00200000000000000001 /* WatchLiveLink.swift in Sources */,
+				7EFC00200000000000000009 /* WatchRelayAudioCodec.swift in Sources */,
+				7EFC0020000000000000000A /* WatchLiveExchange.swift in Sources */,
+				E73C376F6771B8A6911666D8 /* PhoneWatchRoutes.swift in Sources */,
+				496E1D08C963C4F840EE199C /* PhoneWatchSettings.swift in Sources */,
+				62DF2674EA9EC41C34FF01E1 /* PhoneWatchWorkspace.swift in Sources */,
+				397E63A6F77019267B50A5A2 /* ArchiveView.swift in Sources */,
+				1630094A107233B8EDC46836 /* Capture.swift in Sources */,
+				3CA3FD10A31A42EE901BCD01 /* CaptureAudio.swift in Sources */,
+				049AE7542C29392753ECF295 /* Connection.swift in Sources */,
+				F6B52F1BBE7125C8930CBC14 /* InstalledPairing.swift in Sources */,
+				768776E2B58A6EC07991CC46 /* OwnerKey.swift in Sources */,
+				4E14FC278E5DC26E2F788225 /* AppPrivacy.swift in Sources */,
+				FD9CD371BA464C3A98DCCC11 /* AppAutoLock.swift in Sources */,
+				FD9CD371BA464C3A98DCCC12 /* AuthenticationSettings.swift in Sources */,
+				F8979145A3EC565180A30FC4 /* PrivacyGate.swift in Sources */,
+				D7805CAFAF6342731D691FDB /* VoiceEnrollment.swift in Sources */,
+				B74E058883D431C8D53ABF58 /* Controller.swift in Sources */,
+				3E3D68E892C272F44B6A91B9 /* DeviceSpeech.swift in Sources */,
+				49D9E9CABF27A49CF2D4E703 /* ListenView.swift in Sources */,
+				8FCCA97E6C0E657C23367244 /* NexApp.swift in Sources */,
+				8A915428EA83E6D42343296F /* SettingsView.swift in Sources */,
+				F1B9748DA1B64E27AD3FA432 /* WorkspaceFeatureSettings.swift in Sources */,
+				1C2D0109D75382F1BAB01E10 /* Spool.swift in Sources */,
+				08C58772F05F901296AB8F37 /* Types.swift in Sources */,
+				DF1FD1661FD6C400817B8049 /* TranscriptEditor.swift in Sources */,
+				7CAF9471BA17177A3379A2CC /* RecordingSegments.swift in Sources */,
+				0D562CC3FACD989833E65BCD /* MicrophoneStream.swift in Sources */,
+				7EF000000000000000002402 /* MicrophoneTap.swift in Sources */,
+				7EF000000000000000003102 /* AutomaticVoice.swift in Sources */,
+				7EFA00000000000000003102 /* ContinuousVoice.swift in Sources */,
+				7EFC00000000000000003102 /* MacMicrophoneRoute.swift in Sources */,
+				7EFB00000000000000003102 /* ExcaliburModelSettings.swift in Sources */,
+				7EF000000000000000003502 /* WebLookup.swift in Sources */,
+				7EF000000000000000003602 /* AccountAuthorization.swift in Sources */,
+				7EF000000000000000003702 /* AccountLoopback.swift in Sources */,
+				7EF000000000000000003802 /* AccountConnectionsView.swift in Sources */,
+				7EF000000000000000008E02 /* AccountBrowser.swift in Sources */,
+				7EF000000000000000008F02 /* AccountSignIn.swift in Sources */,
+				7EF000000000000000003902 /* GoogleConnectionSetup.swift in Sources */,
+				7EF000000000000000003402 /* ContextEditor.swift in Sources */,
+				7EF000000000000000003302 /* PersonalContextView.swift in Sources */,
+				7EF000000000000000003202 /* PersonalContext.swift in Sources */,
+				7EF000000000000000003002 /* AmbientSpeech.swift in Sources */,
+				7EF000000000000000001202 /* LiveAudio.swift in Sources */,
+				7EFD00000000000000004102 /* QuestionChime.swift in Sources */,
+				7EF000000000000000001302 /* LiveArchive.swift in Sources */,
+				7EF000000000000000001402 /* LiveConversation.swift in Sources */,
+				7EF200000000000000000102 /* WeatherLocation.swift in Sources */,
+				7EF200000000000000000202 /* WeatherSharing.swift in Sources */,
+				7EF000000000000000001502 /* LiveAudioPhone.swift in Sources */,
+				7EF100000000000000000102 /* WorkspaceRoot.swift */,
+				7EF100000000000000001102 /* WorkspaceTabBar.swift in Sources */,
+				7EF100000000000000001402 /* ChatComposer.swift in Sources */,
+				7EF100000000000000001502 /* ChatMessageRow.swift in Sources */,
+				7EF900000000000000003202 /* PrivateInbox.swift in Sources */,
+				7EF900000000000000003102 /* PrivateChat.swift in Sources */,
+				7EF900000000000000004302 /* ClockNotifications.swift in Sources */,
+				7EF900000000000000004403 /* IPhoneNativeAlarms.swift in Sources */,
+				7EF900000000000000004202 /* ClockAlertCard.swift in Sources */,
+				7EF900000000000000004102 /* ClockAlert.swift in Sources */,
+				7EFB00000000000000005102 /* MessageBody.swift in Sources */,
+				7EFB00000000000000005202 /* MessageMarkdown.swift in Sources */,
+				7EFB00000000000000005302 /* MarkdownMessageBody.swift in Sources */,
+				7EFB00000000000000005402 /* MarkdownTable.swift in Sources */,
+				7EF100000000000000001602 /* WorkspaceCollection.swift in Sources */,
+				7EF100000000000000001702 /* DaybookOverview.swift in Sources */,
+				7EF100000000000000001802 /* ArtifactDocument.swift in Sources */,
+				7EF100000000000000001302 /* PhoneWorkspaceView.swift in Sources */,
+				7EF100000000000000000202 /* WorkspaceAPI.swift */,
+				7EF100000000000000000302 /* WorkspaceAccess.swift */,
+				7EF100000000000000000402 /* WorkspaceKit.swift */,
+				7EF100000000000000000502 /* WorkspaceChat.swift */,
+				7EF100000000000000000602 /* WorkspaceChatView.swift */,
+				7EFC00000000000000000102 /* ChatThreadScrollView.swift in Sources */,
+				7EF100000000000000000702 /* NewsFeedView.swift */,
+				7EFC00000000000000000202 /* NewsFeedStories.swift in Sources */,
+				7EF100000000000000000F02 /* NewsStoryRow.swift */,
+				7EF100000000000000001003 /* IPhonePush.swift */,
+				7EF500000000000000000202 /* RecordingReporter.swift in Sources */,
+				B7A900000000000000000202 /* WorkspaceRecordingMonitor.swift in Sources */,
+				7EF500000000000000000103 /* RecordingStatus.swift in Sources */,
+				7EF100000000000000000802 /* FeedSettingsView.swift */,
+				7EF100000000000000000902 /* IdeasView.swift */,
+				7EF100000000000000000A02 /* GoalsView.swift */,
+				7EF100000000000000000B02 /* GoalEditor.swift */,
+				7EF100000000000000000C02 /* GoalDetailView.swift */,
+				7EF100000000000000002102 /* GoalFollowUpView.swift in Sources */,
+				7EF100000000000000000D02 /* GoalNotifications.swift */,
+				0CA9359376F045859D5CA001 /* RecordingNotifications.swift in Sources */,
+				0CA9359376F045859D5CA005 /* RecordingNotificationPermission.swift in Sources */,
+				7EF100000000000000000E02 /* WorkspaceLibrary.swift */,
+				7EF000000000000000001902 /* DaybookSheets.swift */,
+				7EF000000000000000001802 /* DaybookView.swift */,
+				7EF400000000000000000102 /* ActivityTypes.swift */,
+				7EF400000000000000000502 /* ChatActivity.swift */,
+				7EF400000000000000000602 /* ChatActivityButton.swift */,
+				7EF400000000000000000202 /* ActivityRow.swift */,
+				7EF400000000000000000302 /* ActivitiesView.swift */,
+				7EF400000000000000000402 /* ActivityDetailView.swift */,
+				7EF000000000000000001702 /* DaybookTypes.swift */,
+				7EF000000000000000001602 /* ArchiveAccess.swift */,
+				B36C417664366F7F2EC1440A /* AACSegmentEncoder.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E6A31466C20194E75A8D0307 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				114EC8CF03725983ADA28E14 /* ArchiveView.swift in Sources */,
+				79A83028086DFA3C7D976126 /* Capture.swift in Sources */,
+				3CA3FD10A31A42EE901BCD02 /* CaptureAudio.swift in Sources */,
+				A83CD02E6B9F80D1A07E46E5 /* Connection.swift in Sources */,
+				6BDD15D091F9894CC9816A3C /* InstalledPairing.swift in Sources */,
+				07B3D4DEA07785642E5BFF1F /* OwnerKey.swift in Sources */,
+				E5B221F5F30FF07873653B86 /* AppPrivacy.swift in Sources */,
+				FD9CD371BA464C3A98DCCC21 /* AppAutoLock.swift in Sources */,
+				FD9CD371BA464C3A98DCCC22 /* AuthenticationSettings.swift in Sources */,
+				7EF200000000000000000103 /* WeatherLocation.swift in Sources */,
+				7EF200000000000000000203 /* WeatherSharing.swift in Sources */,
+				E9F21134F42FBE467EE168C8 /* PrivacyGate.swift in Sources */,
+				EB29694B11850C77F66D2615 /* VoiceEnrollment.swift in Sources */,
+				26DBF2FB1C174F38A4481746 /* Controller.swift in Sources */,
+				752BAC1659C4D8CABD56568E /* DeviceSpeech.swift in Sources */,
+				A16C881E96386DDF16C25E55 /* ListenView.swift in Sources */,
+				6FD1E0A863E3F10D67610A43 /* NexApp.swift in Sources */,
+				916493B868C0F01A5C47A79A /* SettingsView.swift in Sources */,
+				F1B9748DA1B64E27AD3FA433 /* WorkspaceFeatureSettings.swift in Sources */,
+				B1B5E79E41DF196244A0CA25 /* Spool.swift in Sources */,
+				7EEB9A8221EC0496905EDB19 /* Types.swift in Sources */,
+				46D608514C3797ADFD944785 /* TranscriptEditor.swift in Sources */,
+				D0CDF6765AA7CCB108AF2DE7 /* RecordingSegments.swift in Sources */,
+				8FCCD7CEC1E24968EF3209AF /* MicrophoneStream.swift in Sources */,
+				7EF000000000000000002403 /* MicrophoneTap.swift in Sources */,
+				7EF000000000000000003103 /* AutomaticVoice.swift in Sources */,
+				7EFA00000000000000003103 /* ContinuousVoice.swift in Sources */,
+				7EFC00000000000000003103 /* MacMicrophoneRoute.swift in Sources */,
+				7EFB00000000000000003103 /* ExcaliburModelSettings.swift in Sources */,
+				7EF000000000000000003503 /* WebLookup.swift in Sources */,
+				7EF000000000000000003603 /* AccountAuthorization.swift in Sources */,
+				7EF000000000000000003703 /* AccountLoopback.swift in Sources */,
+				7EF000000000000000003803 /* AccountConnectionsView.swift in Sources */,
+				7EF000000000000000008E03 /* AccountBrowser.swift in Sources */,
+				7EF000000000000000008F03 /* AccountSignIn.swift in Sources */,
+				7EF000000000000000003903 /* GoogleConnectionSetup.swift in Sources */,
+				7EF000000000000000003403 /* ContextEditor.swift in Sources */,
+				7EF000000000000000003303 /* PersonalContextView.swift in Sources */,
+				7EF000000000000000003203 /* PersonalContext.swift in Sources */,
+				7EF000000000000000003003 /* AmbientSpeech.swift in Sources */,
+				7EF000000000000000001203 /* LiveAudio.swift in Sources */,
+				7EFD00000000000000004103 /* QuestionChime.swift in Sources */,
+				7EF000000000000000002502 /* LiveAudioMac.swift in Sources */,
+				7EF000000000000000001303 /* LiveArchive.swift in Sources */,
+				7EF000000000000000001403 /* LiveConversation.swift in Sources */,
+				7EF000000000000000001503 /* LiveAudioPhone.swift in Sources */,
+				7EF100000000000000000103 /* WorkspaceRoot.swift */,
+				7EF100000000000000001103 /* WorkspaceTabBar.swift in Sources */,
+				7EF100000000000000001403 /* ChatComposer.swift in Sources */,
+				7EF100000000000000001503 /* ChatMessageRow.swift in Sources */,
+				7EF900000000000000003203 /* PrivateInbox.swift in Sources */,
+				7EF900000000000000003103 /* PrivateChat.swift in Sources */,
+				7EF900000000000000004303 /* ClockNotifications.swift in Sources */,
+				7EF900000000000000004203 /* ClockAlertCard.swift in Sources */,
+				7EF900000000000000004103 /* ClockAlert.swift in Sources */,
+				7EFB00000000000000005103 /* MessageBody.swift in Sources */,
+				7EFB00000000000000005203 /* MessageMarkdown.swift in Sources */,
+				7EFB00000000000000005303 /* MarkdownMessageBody.swift in Sources */,
+				7EFB00000000000000005403 /* MarkdownTable.swift in Sources */,
+				7EF100000000000000001603 /* WorkspaceCollection.swift in Sources */,
+				7EF100000000000000001703 /* DaybookOverview.swift in Sources */,
+				7EF100000000000000001803 /* ArtifactDocument.swift in Sources */,
+				7EF100000000000000001903 /* MacArtifactBrowser.swift in Sources */,
+				7EF100000000000000001203 /* MacWorkspaceView.swift in Sources */,
+				7EF500000000000000000102 /* RecordingStatus.swift in Sources */,
+				7EF500000000000000000203 /* RecordingReporter.swift in Sources */,
+				B7A900000000000000000203 /* WorkspaceRecordingMonitor.swift in Sources */,
+				7EF100000000000000000203 /* WorkspaceAPI.swift */,
+				7EF100000000000000000303 /* WorkspaceAccess.swift */,
+				7EF100000000000000000403 /* WorkspaceKit.swift */,
+				7EF100000000000000000503 /* WorkspaceChat.swift */,
+				7EF100000000000000000603 /* WorkspaceChatView.swift */,
+				7EFC00000000000000000103 /* ChatThreadScrollView.swift in Sources */,
+				7EF100000000000000000703 /* NewsFeedView.swift */,
+				7EFC00000000000000000203 /* NewsFeedStories.swift in Sources */,
+				7EF100000000000000000F03 /* NewsStoryRow.swift */,
+				7EF100000000000000000803 /* FeedSettingsView.swift */,
+				7EF100000000000000000903 /* IdeasView.swift */,
+				7EF100000000000000000A03 /* GoalsView.swift */,
+				7EF100000000000000000B03 /* GoalEditor.swift */,
+				7EF100000000000000000C03 /* GoalDetailView.swift */,
+				7EF100000000000000002103 /* GoalFollowUpView.swift in Sources */,
+				7EF100000000000000000D03 /* GoalNotifications.swift */,
+				0CA9359376F045859D5CA002 /* RecordingNotifications.swift in Sources */,
+				0CA9359376F045859D5CA006 /* RecordingNotificationPermission.swift in Sources */,
+				7EF100000000000000000E03 /* WorkspaceLibrary.swift */,
+				7EF000000000000000001903 /* DaybookSheets.swift */,
+				7EF000000000000000002302 /* ScreenSharingViews.swift in Sources */,
+				7EF000000000000000002202 /* ScreenSharing.swift in Sources */,
+				7EF000000000000000002102 /* ScreenFrames.swift in Sources */,
+				7EF000000000000000002002 /* ScreenVision.swift in Sources */,
+				7EF300000000000000000102 /* MacGemmaProcesses.swift in Sources */,
+				7EF300000000000000000202 /* MacGemmaRelay.swift in Sources */,
+				7EF300000000000000000302 /* MacGemmaSettings.swift in Sources */,
+				7EF300000000000000000402 /* ScreenVisionInference.swift in Sources */,
+				7EF000000000000000002902 /* ScreenMonitor.swift in Sources */,
+				7EF000000000000000002802 /* ScreenVisionPrompt.swift in Sources */,
+				7EF000000000000000002702 /* ScreenReading.swift in Sources */,
+				7EF000000000000000002602 /* ScreenActivity.swift in Sources */,
+				7EF000000000000000001803 /* DaybookView.swift */,
+				7EF400000000000000000103 /* ActivityTypes.swift */,
+				7EF400000000000000000503 /* ChatActivity.swift */,
+				7EF400000000000000000603 /* ChatActivityButton.swift */,
+				7EF400000000000000000203 /* ActivityRow.swift */,
+				7EF400000000000000000303 /* ActivitiesView.swift */,
+				7EF400000000000000000403 /* ActivityDetailView.swift */,
+				7EF000000000000000001703 /* DaybookTypes.swift */,
+				7EF000000000000000001603 /* ArchiveAccess.swift */,
+				9D3328FD4B1A467311319F34 /* AACSegmentEncoder.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B40E7F44D9BB1FD0C4700BEC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C63B66C4E764E266E58C3E84 /* NexWatchApp.swift in Sources */,
+				7EF500000000000000000104 /* RecordingStatus.swift in Sources */,
+				F5B990CE828BC0EBBCE05E2D /* WatchCapture.swift in Sources */,
+				7EFC00300000000000000007 /* LiveArchive.swift in Sources */,
+				7EFC00300000000000000006 /* LiveAudio.swift in Sources */,
+				7EFC00300000000000000005 /* WatchLiveConversation.swift in Sources */,
+				7EFC0030000000000000000E /* WatchConversationInput.swift in Sources */,
+				7EFC0030000000000000000F /* WatchQuestionTicket.swift in Sources */,
+				7EFC00300000000000000014 /* WatchReplyAudioRequest.swift in Sources */,
+				7EFC0030000000000000000B /* WatchQuestionDetector.swift in Sources */,
+				7EFC0030000000000000000C /* WatchSpokenReply.swift in Sources */,
+				7EFC0030000000000000000D /* WatchLiveControls.swift in Sources */,
+				7EFC00300000000000000004 /* WatchLiveAudio.swift in Sources */,
+				6F02089328C1D156503C8CFA /* WatchMicWriter.swift in Sources */,
+				0ECDF8E55459F7D0BAD22288 /* WatchSync.swift in Sources */,
+				FEE9F5F7765A4BB89FBEEE90 /* WatchWorkspace.swift in Sources */,
+				D4C062DC0E9C9270B1EFE314 /* WatchRecordingView.swift in Sources */,
+				68B60A8A5F77DF0948483687 /* WatchChatView.swift in Sources */,
+				7EFB00000000000000005104 /* MessageBody.swift in Sources */,
+				7EFB00000000000000005204 /* MessageMarkdown.swift in Sources */,
+				7EFB00000000000000005304 /* MarkdownMessageBody.swift in Sources */,
+				7EFB00000000000000005404 /* MarkdownTable.swift in Sources */,
+				049953CF6A23368600CC8C5F /* WatchTimelineViews.swift in Sources */,
+				7AFF07B17B6DAE6369E22499 /* WatchLibraryViews.swift in Sources */,
+				6227093278F4C374690F53F4 /* WatchMemoryView.swift in Sources */,
+				DD03E55D0CC674CDB2D5A13E /* WatchCollections.swift in Sources */,
+				FFF108A69FAFDB6A0BF0B19E /* WatchGoalsView.swift in Sources */,
+				7EF100000000000000002104 /* GoalFollowUpView.swift in Sources */,
+				05B8C90CC3764BA0E56DE18F /* WatchWorkspaceControls.swift in Sources */,
+				935118935CF6ACF2C9799DB1 /* WatchLink.swift in Sources */,
+				7EFC00300000000000000010 /* WatchWorkspaceRequest.swift in Sources */,
+				7EFC00300000000000000012 /* WatchReplyAudio.swift in Sources */,
+				C851686304F54AFBDCA6D881 /* Types.swift in Sources */,
+				3DAF18A8BAE5DE7097BC7091 /* Spool.swift in Sources */,
+				46D0EA0415C38F0C46203D69 /* RecordingSegments.swift in Sources */,
+				0CA9359376F045859D5CA003 /* RecordingNotifications.swift in Sources */,
+				0CA9359376F045859D5CA007 /* RecordingNotificationPermission.swift in Sources */,
+				CF39ED2986F8E1E1BA068CC3 /* AACSegmentEncoder.swift in Sources */,
+				2B637DE713019BC4A11ABC41 /* MicrophoneTap.swift in Sources */,
+				17691D090B4E2A0A56CD5247 /* DaybookTypes.swift in Sources */,
+				2C1EAEC39E2A407ECDB2ED02 /* ActivityTypes.swift in Sources */,
+				C5A537CB833E0BC9A9D1B46B /* WorkspaceAPI.swift in Sources */,
+				2F0A67FAE4923B061F2D4E44 /* PrivateChat.swift in Sources */,
+				7EF900000000000000004204 /* ClockAlertCard.swift in Sources */,
+				7EF900000000000000004104 /* ClockAlert.swift in Sources */,
+				65BA03BFD2A240CDD5B79598 /* PersonalContext.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		3CA3FD10A31A42EE901BCD08 /* NexVoiceCapture */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = NexVoiceCapture;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3CA3FD10A31A42EE901BCD06 /* NexVoiceCapture */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3CA3FD10A31A42EE901BCD08 /* NexVoiceCapture */;
+			productName = NexVoiceCapture;
+		};
+		3CA3FD10A31A42EE901BCD07 /* NexVoiceCapture */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3CA3FD10A31A42EE901BCD08 /* NexVoiceCapture */;
+			productName = NexVoiceCapture;
+		};
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1CE81D4F4C6957A3B59CC84A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 31;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				CODE_SIGN_ENTITLEMENTS = "$(NEX_IOS_ENTITLEMENTS)";
+				NEX_IOS_ENTITLEMENTS = Nex/Push.entitlements;
+				NEX_APNS_ENVIRONMENT = development;
+				INFOPLIST_FILE = "Nex/Info-iOS.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(NEX_BUNDLE_ID)";
+				PRODUCT_NAME = Nex;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		2CC9F14AFB2747E03321C903 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LM_SKIP_METADATA_EXTRACTION = YES; /* Nex declares no App Intents. */
+				NEX_BUNDLE_ID = com.ardaberktin.nex;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		586FEA966E6B7C8682BF99A2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 31;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Nex/Info-macOS.plist";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(NEX_BUNDLE_ID)";
+				PRODUCT_NAME = Nex;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		8A949505BB9D4E57897FFAA5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 31;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Nex/Info-macOS.plist";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(NEX_BUNDLE_ID)";
+				PRODUCT_NAME = Nex;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		960EEFC5D1EB6042399275E6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LM_SKIP_METADATA_EXTRACTION = YES; /* Nex declares no App Intents. */
+				NEX_BUNDLE_ID = com.ardaberktin.nex;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AA16E16A26AF06EF008F2B12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 31;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				CODE_SIGN_ENTITLEMENTS = "$(NEX_IOS_ENTITLEMENTS)";
+				NEX_IOS_ENTITLEMENTS = Nex/Push.entitlements;
+				NEX_APNS_ENVIRONMENT = development;
+				INFOPLIST_FILE = "Nex/Info-iOS.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(NEX_BUNDLE_ID)";
+				PRODUCT_NAME = Nex;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B377D06198E304CAA667967B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 31;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NexWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(NEX_BUNDLE_ID).watchkitapp";
+				PRODUCT_NAME = "Nex Watch";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		3441D2732E691755F13CEA86 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 31;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NexWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(NEX_BUNDLE_ID).watchkitapp";
+				PRODUCT_NAME = "Nex Watch";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3F30950F06FD456174471B9E /* Build configuration list for PBXProject "Nex" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				960EEFC5D1EB6042399275E6 /* Debug */,
+				2CC9F14AFB2747E03321C903 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		58E9F117300D83DC8C83D302 /* Build configuration list for PBXNativeTarget "Nex macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				586FEA966E6B7C8682BF99A2 /* Release */,
+				8A949505BB9D4E57897FFAA5 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F6928871CDD6301837C6A4DC /* Build configuration list for PBXNativeTarget "Nex iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1CE81D4F4C6957A3B59CC84A /* Release */,
+				AA16E16A26AF06EF008F2B12 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B31263C173AF69E60437529E /* Build configuration list for PBXNativeTarget "Nex Watch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B377D06198E304CAA667967B /* Debug */,
+				3441D2732E691755F13CEA86 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 6BF4AA4D7E2381B18915869F /* Project object */;
+}

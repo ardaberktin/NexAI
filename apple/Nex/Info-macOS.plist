@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Nex</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Nex</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>100.64.0.0/10</key>
+			<dict>
+				<!-- Nex validates the tailnet server certificate against the pairing fingerprint. -->
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Nex connects to your Nex server through Tailscale.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Nex uses your approximate location for local weather and scheduled reports when location sharing is enabled.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nex uses your approximate location when you ask for local weather.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Nex uses the window or display you share to answer questions about what is on your screen.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Nex uses the microphone when you enable ambient capture or ask a voice question.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>When enabled, Nex asks Apple’s on-device recognizer to transcribe your recordings.</string>
+</dict>
+</plist>

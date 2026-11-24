@@ -1,0 +1,17 @@
+[Unit]
+Description=Nex archive service
+After=network-online.target
+
+[Service]
+Type=notify
+WorkingDirectory=%h/.local/share/nex-server/server
+ExecStart=/usr/bin/python3 -B -m nex --data %h/.local/share/nex-data serve --runtime %t/nex
+RuntimeDirectory=nex
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=restart
+UMask=0077
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

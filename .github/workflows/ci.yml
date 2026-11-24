@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-test.txt
+      - run: ruff check --isolated --target-version py312 .
+      - run: python -m unittest discover -s tests -v
+      - run: python -m compileall -q nex
+      - run: bash -n deploy/stage-live-assets.sh && bash -n deploy/stage-room-context.sh && bash -n deploy/stage-gemma.sh
+  apple:
+    runs-on: xcode-27
+    strategy:
+      matrix:
+        include:
+          - scheme: Nex macOS
+            destination: generic/platform=macOS
+          - scheme: Nex iOS
+            destination: generic/platform=iOS
+          - scheme: Nex Watch
+            destination: generic/platform=watchOS
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build without signing
+        run: >
+          xcodebuild -project apple/Nex.xcodeproj
+          -scheme "${{ matrix.scheme }}" -destination "${{ matrix.destination }}"
+          -derivedDataPath .build/ci CODE_SIGNING_ALLOWED=NO build
+  source-archives:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - run: bash -n scripts/package-source.sh && bash -n apple/fetch-wake-model.sh
+      - run: scripts/package-source.sh
+      - run: unzip -t dist/nex-apple-source.zip && tar -tzf dist/nex-server-source.tar.gz >/dev/null

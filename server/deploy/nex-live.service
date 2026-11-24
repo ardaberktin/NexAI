@@ -1,0 +1,24 @@
+[Unit]
+Description=Nex live conversation
+Requires=nex.service
+PartOf=nex.service
+After=nex.service
+
+[Service]
+WorkingDirectory=%h/.local/share/nex-server/server
+ExecStart=%h/.local/share/nex-live/venv/bin/python -B -m nex.live.service
+Environment=NEX_DATA=%h/.local/share/nex-data
+Environment=NEX_LIVE_RUNTIME=%t/nex-live
+Environment=NEX_LIVE_MANAGED_MODEL=1
+Environment=HF_HOME=%h/.local/share/nex-data/assets/live/hf
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=TOKENIZERS_PARALLELISM=false
+RuntimeDirectory=nex-live
+RuntimeDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

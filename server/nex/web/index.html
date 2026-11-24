@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nex on Excalibur</title>
+  <link href="/nex.css" rel="stylesheet">
+  <script src="/nex.js" defer></script>
+</head>
+<body>
+  <header>
+    <p>Neural Execution</p>
+    <h1>Nex <span>on Excalibur</span></h1>
+  </header>
+  <main>
+    <section id="login">
+      <h2>Unlock the console</h2>
+      <form id="access">
+        <label for="key">Console access key</label>
+        <input type="password" id="key" required autocomplete="off">
+        <button>Unlock</button>
+      </form>
+    </section>
+    <p id="notice" role="status" aria-live="polite" hidden></p>
+    <div id="workspace" hidden>
+      <nav aria-label="Console sections">
+        <button data-view="journal" aria-pressed="true">Archive</button>
+        <button data-view="chat" aria-pressed="false">Ask Nex</button>
+        <button data-view="models" aria-pressed="false">Models</button>
+        <button data-view="storage" aria-pressed="false">Storage</button>
+        <button id="lock">Lock</button>
+      </nav>
+      <section id="journal">
+        <h2>Archive</h2>
+        <p id="status"></p>
+        <form id="search">
+          <label for="query">Search transcripts, notes and chats</label>
+          <input id="query" type="search" maxlength="600" placeholder="Search your archive">
+          <input id="day" type="date" aria-label="UTC date">
+          <button>Search</button>
+        </form>
+        <div id="detail" hidden></div>
+        <div id="results"></div>
+        <button id="recordings">Browse recordings</button>
+        <div id="clips"></div>
+        <button id="older" hidden>Load older recordings</button>
+      </section>
+      <section id="chat" hidden>
+        <h2>Ask Nex</h2>
+        <form id="question">
+          <label for="message">Question</label>
+          <textarea id="message" required maxlength="12256" rows="3" placeholder="What did we decide about backups?"></textarea>
+          <button>Ask</button>
+        </form>
+        <div id="answer" aria-live="polite"></div>
+      </section>
+      <section id="models" hidden>
+        <h2>Model settings</h2>
+        <p id="model-status"></p>
+        <p>Copy offline assets to Excalibur, then enter paths relative to its Nex <code>assets</code> directory. Leave a model group empty to disable it.</p>
+        <datalist id="assets"></datalist>
+        <form id="configuration">
+          <div class="fields">
+            <fieldset>
+              <legend>Language model</legend>
+              <label>llama-server <input name="llama_server" list="assets"></label>
+              <label>GGUF weights <input name="language_model" list="assets"></label>
+              <label>Context size <input name="context_size" type="number" min="2048" max="8192" required></label>
+              <label>GPU layers <input name="gpu_layers" type="number" min="0" max="99" required></label>
+              <label>Use the Mac model when Excalibur has no language model
+                <input name="use_mac_model" type="checkbox">
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>Transcription</legend>
+              <label>FFmpeg <input name="ffmpeg" list="assets"></label>
+              <label>whisper-cli <input name="whisper_cli" list="assets"></label>
+              <label>Whisper weights <input name="whisper_model" list="assets"></label>
+              <label>CPU threads <input name="threads" type="number" min="1" max="6" required></label>
+            </fieldset>
+            <fieldset>
+              <legend>Spoken replies</legend>
+              <label>Piper <input name="piper" list="assets"></label>
+              <label>English voice <input name="voice_en" list="assets"></label>
+              <label>Turkish voice <input name="voice_tr" list="assets"></label>
+            </fieldset>
+          </div>
+          <button>Save models</button>
+          <button type="button" id="reload">Refresh assets</button>
+        </form>
+      </section>
+      <section id="storage" hidden>
+        <h2>Storage</h2>
+        <p id="storage-status" role="status"></p>
+        <form id="storage-settings" hidden>
+          <fieldset>
+            <legend>Audio policy</legend>
+            <label>Audio limit (GiB)
+              <input name="audio_limit_gib" type="number" min="1" step="1" aria-describedby="audio-limit-help">
+            </label>
+            <p id="audio-limit-help">Leave blank to use the space above the disk reserve.</p>
+            <label>Keep processed audio for (days)
+              <input name="retention_days" type="number" min="0" max="36500" step="1" required
+                     aria-describedby="retention-help">
+            </label>
+            <p id="retention-help">Use 0 to keep all audio. Expiration keeps searchable transcripts, notes, and timestamps.</p>
+            <button>Save storage settings</button>
+          </fieldset>
+        </form>
+      </section>
+    </div>
+  </main>
+  <dialog id="transcript-dialog" aria-labelledby="transcript-title">
+    <h2 id="transcript-title">Edit transcript</h2>
+    <form id="transcript-form">
+      <label for="transcript-draft">Transcript</label>
+      <textarea id="transcript-draft" required maxlength="12000" rows="7"></textarea>
+      <button id="save-transcript">Save correction</button>
+      <button type="button" id="reload-transcript">Reload</button>
+      <button type="button" id="close-transcript">Done</button>
+    </form>
+    <p id="transcript-status" role="status" aria-live="polite"></p>
+    <div id="transcript-history"></div>
+  </dialog>
+</body>
+</html>

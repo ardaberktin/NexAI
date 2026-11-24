@@ -1,0 +1,9 @@
+pipecat-ai[local-smart-turn,websocket]==1.16.0
+sherpa-onnx==2.0.1
+ema-lightning==1.1.2
+uvicorn[standard]==0.54.0
+httpx==0.28.1
+num2words==0.5.14
+piper-tts==1.8.0
+cryptography>=44
+soundfile>=0.13,<0.14
