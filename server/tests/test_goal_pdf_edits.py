@@ -13,7 +13,6 @@ from nex.conversation.goal_management_prompts import (
     SELECT_PDF_GOAL,
     VERIFY_PDF_CLARIFICATION,
     VERIFY_PDF_FORMAT_SOURCE,
-    VERIFY_PDF_TARGET,
 )
 from nex.conversation.reply import (
     VERIFY_GOAL_FORMAT,
@@ -91,11 +90,6 @@ class GoalPDFEditTests(unittest.TestCase):
                 choice, = [row for row in data["goals"] if row["title"] == chosen_title]
                 attempted_targets.append(choice["target"])
                 return json.dumps({key: choice[key] for key in ("target", "title")})
-            if prompt == VERIFY_PDF_TARGET:
-                self.assertEqual(data["latest_message"], follow_up)
-                self.assertEqual(data["selected_goal"]["title"], first["title"])
-                self.assertEqual(data["other_candidates"][0]["title"], second["title"])
-                return "YES"
             if prompt == VERIFY_PDF_FORMAT_SOURCE:
                 self.assertEqual(data, {"latest_message": follow_up})
                 return "NO"
@@ -113,7 +107,7 @@ class GoalPDFEditTests(unittest.TestCase):
                 return "YES"
             self.assertEqual(prompt, WRITE_GOAL_CLARIFICATION)
             self.assertCountEqual(data["candidate_titles"], [first["title"], second["title"]])
-            self.assertEqual(data["request"], initial)
+            self.assertNotIn("request", data)
             return json.dumps({"question": clarification})
 
         def ask(identifier, session=None):

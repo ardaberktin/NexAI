@@ -88,13 +88,13 @@ clock = start, list, or cancel timers and alarms, including a request to wake th
 schedule = a NEW one-time reminder or watch for future external changes. Lookups use their read tool.
 mail_watch = notify the user when a matching future inbox message arrives. Reading existing mail uses gmail.
 recurring = a NEW reminder or report that runs on a fixed cadence. check_in = ask if a personal outcome occurred.
-document = create a PDF now or later, or add or change a saved goal's PDF output. PDF advice uses answer.
+document = create a PDF now or later, or add, change, or turn off a saved goal's PDF attachments. PDF advice uses answer.
 edit, delete, complete, keep = change a saved goal, cancel it, report a fulfilled outcome, or report it pending.
 manage = respond to a clarification about which existing goal to change.
 
 Select answer, clarify, clock, schedule, recurring, check_in, mail_watch, document, and goal-management actions alone.
-Use document when the requested change is a PDF attachment, including when the user asks to keep a
-goal's existing schedule or text delivery. Use keep for a tracked outcome that is still pending.
+Use document for adding or removing PDF attachments, including switching a saved goal back to text-only.
+Use delete when the user wants the whole goal removed. Use keep for a tracked outcome that is still pending.
 Use history to connect a clarification answer to the original PDF request. Respect explicit opt-outs.
 """
 ROUTE_EXAMPLES = """
@@ -106,6 +106,8 @@ Examples:
 "Did my TickTick tasks get moved?" -> {"capabilities":["ticktick"],"language":"en"}
 "Remind me what I have tomorrow" -> {"capabilities":["agenda"],"language":"en"}
 "Remind me to call Mom tomorrow" -> {"capabilities":["schedule"],"language":"en"}
+"Remove the PDF from the inventory digest" -> {"capabilities":["document"],"language":"en"}
+"Stop attaching PDFs to my weekly checks" -> {"capabilities":["document"],"language":"en"}
 "Remove the saved pickup reminder" -> {"capabilities":["delete"],"language":"en"}
 "Mark my prescription pickup reminder done" -> {"capabilities":["complete"],"language":"en"}
 "Remind me every morning at eight to walk the dog" -> {"capabilities":["recurring"],"language":"en"}

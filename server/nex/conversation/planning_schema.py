@@ -1,6 +1,7 @@
 """Shape a model plan before validating the proposed operation in application code."""
 
 from .catalog import OPTIONS
+from .goal_management_prompts import OPERATIONS
 
 BOOLEAN = {"unread", "priority", "exact", "lists", "access_check", "check_in", "format_only"}
 INTEGER = {"count", "duration_seconds", "frequency", "target"}
@@ -18,7 +19,7 @@ VALUES = {
     ("past_questions", "before"): ["last_result"],
     ("clock", "kind"): ["timer", "alarm"],
     ("clock", "operation"): ["create", "list", "cancel"],
-    ("manage_goal", "operation"): ["complete", "delete", "edit", "keep"],
+    ("manage_goal", "operation"): sorted(OPERATIONS),
     ("goal", "frequency"): [0, 15, 60, 1440, 10080],
 }
 
