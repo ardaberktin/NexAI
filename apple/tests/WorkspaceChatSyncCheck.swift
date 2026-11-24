@@ -131,10 +131,21 @@ enum WorkspaceChatSyncCheck {
 
         var ready = item("Private answer.")
         ready.goalId = "goal-from-chat"
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let update = try! decoder.decode(WorkspaceMessage.self, from: Data("""
+            {"id":"update","role":"update","text":"Saved.","date":"2026-11-21T12:02:00.000+00:00","sources":[],
+             "pdf_attachment":{"id":"fixture-pdf","title":"Morning Edition","subtitle":"PDF",
+                               "date":"2026-11-21T12:02:00.000+00:00","kind":"pdf","text":"","page_count":1}}
+            """.utf8))
+        precondition(update.pdfAttachment?.id == "fixture-pdf" && update.pdfAttachment?.pageCount == 1)
+        ready.pdfAttachment = update.pdfAttachment
         let history = WorkspaceMessage.timeline(chat.messages, privateItems: [ready])
         precondition(history.map(\.id) == pending.map(\.id))
         precondition(history.last?.text == ready.answer && history.last?.sources == ready.sources)
         precondition(history.last?.goalId == "goal-from-chat")
+        precondition(history.last?.pdfAttachment == ready.pdfAttachment)
+        precondition(history.dropLast().allSatisfy { $0.pdfAttachment == nil })
         precondition(history.last?.offersReadAloud == false)
         // A late device echo must not bring an expired or dismissed exchange back into Chat.
         chat.reconcilePrivate([])
@@ -142,5 +153,6 @@ enum WorkspaceChatSyncCheck {
         precondition(WorkspaceMessage.timeline(chat.messages, privateItems: []).map(\.id) == publicRows.map(\.id))
         let reopened = WorkspaceMessage.timeline([], privateItems: [ready])
         precondition(reopened.map(\.text) == [ready.question, "Private answer."])
+        precondition(reopened.last?.pdfAttachment?.pageCount == 1)
     }
 }

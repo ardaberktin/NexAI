@@ -25,6 +25,7 @@ from nex.pdf.render import render
 from nex.privacy import public, requests
 from nex.privacy.state import AccessDenied
 from nex.store import Store
+from nex.workspace_chat_pages import chat_page
 from nex.workspace_content import artifacts, chat_history
 from nex.workspace_schema import WorkspaceMissing
 
@@ -118,10 +119,20 @@ class PDFWorkflowTests(unittest.TestCase):
             identifier = str(uuid4())
             pending = public.chat(assistant, identifier, "mac", question, "en", "UTC")
             self.assertEqual(pending["engine"], "private_request")
+            queued = next(item for item in requests.inbox(self.store.privacy, self.store)["items"]
+                          if item["id"] == identifier)
+            self.assertNotIn("pdf_attachment", queued)
             before = len(artifacts(self.store))
             public.chat(assistant, identifier, "mac", question, "en", "UTC", session=self.session)
             public.chat(assistant, identifier, "mac", question, "en", "UTC", session=self.session)
-            self.assertEqual(len(artifacts(self.store)), before + 1)
+            files = artifacts(self.store)
+            self.assertEqual(len(files), before + 1)
+            ready = next(item for item in requests.inbox(self.store.privacy, self.store)["items"]
+                         if item["id"] == identifier)
+            self.assertEqual(ready["state"], "ready")
+            self.assertIn(ready["pdf_attachment"], files)
+            self.assertEqual(ready["pdf_attachment"]["page_count"], 1)
+        self.assertEqual(chat_page(self.store)["items"], [])
         question = "What makes a good newspaper layout?"
         public.chat(assistant, str(uuid4()), "mac", question, "en", "UTC")
         self.assertEqual(seen[-1], question)
@@ -220,6 +231,9 @@ class PDFWorkflowTests(unittest.TestCase):
         update, = chat_history(self.store)
         self.assertEqual(update["id"], file["id"])
         self.assertIn("Artifacts", update["text"])
+        self.assertEqual(update["pdf_attachment"]["id"], file["id"])
+        self.assertEqual(update["pdf_attachment"]["text"], "")
+        self.assertEqual(chat_page(self.store)["items"], [update])
         self.assertEqual(self.goals.detail(self.goal)["artifact_count"], 1)
         self.assertTrue(content(self.store, file["id"]).startswith(b"%PDF"))
         self.goals.delete(self.goal, self.goals.detail(self.goal)["revision"])

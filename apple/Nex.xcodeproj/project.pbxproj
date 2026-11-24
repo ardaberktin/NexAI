@@ -145,6 +145,7 @@
 		7EF100000000000000001102 /* WorkspaceTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001101; };
 		7EF100000000000000001402 /* ChatComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001401; };
 		7EF100000000000000001502 /* ChatMessageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001501; };
+		7EF100000000000000002A02 /* ChatPDFCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000002A01; };
 		7EF900000000000000003202 /* PrivateInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003201; };
 		7EF900000000000000003102 /* PrivateChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003101; };
 		7EFB00000000000000005102 /* MessageBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005101; };
@@ -156,6 +157,7 @@
 		7EF100000000000000001103 /* WorkspaceTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001101; };
 		7EF100000000000000001403 /* ChatComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001401; };
 		7EF100000000000000001503 /* ChatMessageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000001501; };
+		7EF100000000000000002A03 /* ChatPDFCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF100000000000000002A01; };
 		7EF900000000000000003203 /* PrivateInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003201; };
 		7EF900000000000000003103 /* PrivateChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF900000000000000003101; };
 		7EFB00000000000000005103 /* MessageBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFB00000000000000005101; };
@@ -394,6 +396,7 @@
 		7EF100000000000000001101 /* WorkspaceTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTabBar.swift; sourceTree = "<group>"; };
 		7EF100000000000000001401 /* ChatComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComposer.swift; sourceTree = "<group>"; };
 		7EF100000000000000001501 /* ChatMessageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageRow.swift; sourceTree = "<group>"; };
+		7EF100000000000000002A01 /* ChatPDFCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPDFCard.swift; sourceTree = "<group>"; };
 		7EF900000000000000003201 /* PrivateInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateInbox.swift; sourceTree = "<group>"; };
 		7EF900000000000000003101 /* PrivateChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChat.swift; sourceTree = "<group>"; };
 		7EFB00000000000000005101 /* MessageBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBody.swift; sourceTree = "<group>"; };
@@ -560,6 +563,7 @@
 				7EF100000000000000001101 /* WorkspaceTabBar.swift */,
 				7EF100000000000000001401 /* ChatComposer.swift */,
 				7EF100000000000000001501 /* ChatMessageRow.swift */,
+				7EF100000000000000002A01 /* ChatPDFCard.swift */,
 				7EF900000000000000003201 /* PrivateInbox.swift */,
 				7EF900000000000000003101 /* PrivateChat.swift */,
 				7EF900000000000000004301 /* ClockNotifications.swift */,
@@ -909,6 +913,7 @@
 				7EF100000000000000001102 /* WorkspaceTabBar.swift in Sources */,
 				7EF100000000000000001402 /* ChatComposer.swift in Sources */,
 				7EF100000000000000001502 /* ChatMessageRow.swift in Sources */,
+				7EF100000000000000002A02 /* ChatPDFCard.swift in Sources */,
 				7EF900000000000000003202 /* PrivateInbox.swift in Sources */,
 				7EF900000000000000003102 /* PrivateChat.swift in Sources */,
 				7EF900000000000000004302 /* ClockNotifications.swift in Sources */,
@@ -1015,6 +1020,7 @@
 				7EF100000000000000001103 /* WorkspaceTabBar.swift in Sources */,
 				7EF100000000000000001403 /* ChatComposer.swift in Sources */,
 				7EF100000000000000001503 /* ChatMessageRow.swift in Sources */,
+				7EF100000000000000002A03 /* ChatPDFCard.swift in Sources */,
 				7EF900000000000000003203 /* PrivateInbox.swift in Sources */,
 				7EF900000000000000003103 /* PrivateChat.swift in Sources */,
 				7EF900000000000000004303 /* ClockNotifications.swift in Sources */,

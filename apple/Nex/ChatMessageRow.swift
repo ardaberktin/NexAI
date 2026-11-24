@@ -4,6 +4,7 @@ struct ChatMessageRow: View {
     let message: WorkspaceMessage
     let model: Controller
     let openGoal: (String) -> Void
+    let openPDF: (NexArtifact) -> Void
     let openSource: (String) async -> Void
     let readAloud: () -> Void
     let canRead: Bool
@@ -65,6 +66,10 @@ struct ChatMessageRow: View {
                     #if os(macOS)
                     .lineSpacing(2)
                     #endif
+            }
+            if let pdf = message.pdfAttachment {
+                ChatPDFCard(artifact: pdf, loadPDF: { try await model.artifactPDF(pdf.id) }, open: { openPDF(pdf) })
+                    .id(pdf.id)
             }
             if let clock = message.privateRequest?.clockAlert, model.workspaceFeatureEnabled(.goals) {
                 ClockAlertCard(alert: clock) { try await model.cancelClock(clock.id) }

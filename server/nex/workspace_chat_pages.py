@@ -5,6 +5,7 @@ import json
 
 from .conversation_history import SHARED_QUESTION, TURN_ID
 from .goal_follow_ups import for_messages
+from .pdf import artifacts as pdf_artifacts
 from .store import CURRENT_EVIDENCE
 
 PAGE_SIZE = 40
@@ -84,17 +85,19 @@ def chat_page(store, before=None):
     with store.connect() as db:
         db.execute("BEGIN")
         rows = db.execute(PAGE_QUERY, {"date": date, "rank": rank, "id": identifier, "limit": PAGE_SIZE + 1}).fetchall()
-        follow_ups = for_messages(db, [row["id"] for row in rows[:PAGE_SIZE] if row["goal_id"] is not None])
+        update_ids = [row["id"] for row in rows[:PAGE_SIZE] if row["goal_id"] is not None]
+        follow_ups = for_messages(db, update_ids)
+        attachments = pdf_artifacts.by_ids(db, update_ids)
     page = rows[:PAGE_SIZE]
     next_before = None
     if len(rows) > PAGE_SIZE:
         last = page[-1]
         next_before = f"{last['date']},{last['rank']},{last['id']}"
-    return {"items": [chat_message(row, follow_ups.get(row["id"])) for row in reversed(page)],
+    return {"items": [chat_message(row, follow_ups.get(row["id"]), attachments.get(row["id"])) for row in reversed(page)],
             "next_before": next_before}
 
 
-def chat_message(row, follow_up=None):
+def chat_message(row, follow_up=None, attachment=None):
     identifier, goal = row["id"], row["goal_id"]
     role = "update" if goal is not None else "user" if row["rank"] == 0 else "assistant"
     message = {"id": identifier, "role": role, "text": row["text"], "date": row["date"],
@@ -103,6 +106,8 @@ def chat_message(row, follow_up=None):
         message.update(title=row["title"], goal_id=goal)
     if follow_up:
         message["follow_up"] = follow_up
+    if attachment:
+        message["pdf_attachment"] = attachment
     return message
 
 

@@ -28,7 +28,9 @@ def chat_history(store):
             f"SELECT * FROM ({GOAL_UPDATES} UNION ALL {GOAL_NOTICES}) ORDER BY date DESC,id DESC LIMIT 30",
             {"date": "9999"},
         ).fetchall()
-        follow_ups = for_messages(db, [row["id"] for row in updates])
+        update_ids = [row["id"] for row in updates]
+        follow_ups = for_messages(db, update_ids)
+        attachments = pdf_artifacts.by_ids(db, update_ids)
     messages = []
     for row in exchanges:
         identifier = row["id"]
@@ -38,7 +40,7 @@ def chat_history(store):
             messages.append({"id": "a-" + identifier, "role": "assistant", "text": row["answer"],
                              "date": max(row["asked"], row["answered"]),
                              "sources": [source for source in json.loads(row["sources"]) if source != identifier]})
-    messages.extend(chat_message(row, follow_ups.get(row["id"])) for row in updates)
+    messages.extend(chat_message(row, follow_ups.get(row["id"]), attachments.get(row["id"])) for row in updates)
     return sorted(messages, key=lambda item: (item["date"], item["role"] != "user", item["id"]))
 
 

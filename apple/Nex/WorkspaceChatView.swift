@@ -10,6 +10,7 @@ struct WorkspaceChatView: View {
     let pair: () -> Void
     @State private var source: MemoryItem?
     @State private var sourceError: String?
+    @State private var pdf: NexArtifact?
 
     var body: some View {
         let items = privacy.unlocked && privacy.connected ? privacy.items : []
@@ -48,6 +49,11 @@ struct WorkspaceChatView: View {
         .frame(maxWidth: .infinity)
         #endif
         .sheet(item: $source) { item in SourceSheet(item: item, model: model) }
+        .sheet(item: $pdf) { artifact in
+            WorkspaceSheet(title: "File") { PDFArtifactDocument(model: model, artifact: artifact) }
+                .privacySensitive()
+        }
+        .onChange(of: privacy.generation) { _, _ in pdf = nil }
     }
 
     private func thread(_ messages: [WorkspaceMessage]) -> some View {
@@ -67,7 +73,7 @@ struct WorkspaceChatView: View {
                             .frame(maxWidth: .infinity)
                     }
                     ChatMessageRow(
-                        message: message, model: model, openGoal: openGoal, openSource: openSource,
+                        message: message, model: model, openGoal: openGoal, openPDF: openPDF, openSource: openSource,
                         readAloud: { readAloud(message) },
                         canRead: !model.playing && !model.capture.voice && model.liveState == nil)
                 }
@@ -133,6 +139,10 @@ struct WorkspaceChatView: View {
         } catch {
             if opening == privacy.generation, privacy.unlocked { sourceError = error.localizedDescription }
         }
+    }
+
+    private func openPDF(_ artifact: NexArtifact) {
+        if privacy.unlocked && privacy.connected { pdf = artifact }
     }
 
     private func readAloud(_ message: WorkspaceMessage) {

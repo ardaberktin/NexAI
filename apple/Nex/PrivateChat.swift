@@ -14,6 +14,7 @@ struct PrivateAnswer: Decodable, Identifiable, Equatable {
     let updatedAt: String?
     var goalId: String? = nil
     var clockAlert: ClockAlert? = nil
+    var pdfAttachment: NexArtifact? = nil
 
     var chatMessages: [WorkspaceMessage] {
         // Servers predating Chat timestamps still present these items in the private inbox.
@@ -24,7 +25,7 @@ struct PrivateAnswer: Decodable, Identifiable, Equatable {
         let answerRow = WorkspaceMessage(id: "a-" + id, role: .assistant, text: complete ? answer ?? "" : "",
                                         date: complete ? max(askedAt, updatedAt ?? askedAt) : askedAt,
                                         sources: complete ? sources : [], goalId: goalId,
-                                        privateRequest: self)
+                                        pdfAttachment: pdfAttachment, privateRequest: self)
         return [questionRow, answerRow]
     }
 }

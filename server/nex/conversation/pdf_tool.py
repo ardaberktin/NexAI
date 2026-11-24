@@ -1,7 +1,6 @@
 """Create private PDFs from the turn, authorized tool results, and saved goal context."""
 
 import asyncio
-from uuid import NAMESPACE_URL, uuid5
 
 from ..goal_writing import json_object, model_messages
 from ..goals import Goals
@@ -53,7 +52,7 @@ async def find_goal(store, turn, query, generate):
 
 
 async def create_pdf(store, turn, tool, evidence, generate):
-    identifier = str(uuid5(NAMESPACE_URL, f"nex:pdf:{turn.device}:{turn.id}"))
+    identifier = artifacts.request_id(turn.device, turn.id)
     if receipt := await asyncio.to_thread(load_receipt, store, identifier):
         return receipt
     web = evidence.get("web")

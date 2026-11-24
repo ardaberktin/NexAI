@@ -184,7 +184,7 @@ struct GoalDraft: Encodable, Identifiable {
     }
 }
 
-struct NexArtifact: Decodable, Identifiable {
+struct NexArtifact: Decodable, Equatable, Identifiable {
     let id: String
     let title: String
     let subtitle: String
@@ -192,6 +192,7 @@ struct NexArtifact: Decodable, Identifiable {
     let kind: String
     let text: String
     let goalId: String?
+    var pageCount: Int? = nil
 }
 
 struct WorkspaceHistory: Decodable {
@@ -208,7 +209,7 @@ struct WorkspaceHistoryPage: Decodable {
 
 struct WorkspaceMessage: Decodable, Identifiable {
     enum Role: String, Decodable { case user, assistant, update }
-    enum CodingKeys: String, CodingKey { case id, role, text, date, sources, title, goalId, language, followUp }
+    enum CodingKeys: String, CodingKey { case id, role, text, date, sources, title, goalId, language, followUp, pdfAttachment }
     let id: String
     let role: Role
     let text: String
@@ -218,6 +219,7 @@ struct WorkspaceMessage: Decodable, Identifiable {
     var goalId: String?
     var language: String?
     var followUp: GoalFollowUp?
+    var pdfAttachment: NexArtifact?
     var privateRequest: PrivateAnswer?
     var privateNotice = false
 }

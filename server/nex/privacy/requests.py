@@ -8,6 +8,7 @@ from time import time
 from ..clock_alerts import ClockAlerts
 from ..goal_chat_receipts import resolve_receipts
 from ..live.weather_location import Coordinates
+from ..pdf import artifacts as pdf_artifacts
 from .keys import consume, validate_session
 from .planned import approved_reply
 from .state import AccessDenied, approval_subject
@@ -78,11 +79,22 @@ def inbox(state, store=None):
         items = [inbox_item(row) for row in rows]
         resolve_receipts(db, state.root, items)
     if store is not None:
+        attach_pdfs(store, items)
         alerts = ClockAlerts(store).for_requests([item["id"] for item in items if item["state"] != "pending"])
         for item in items:
             if alert := alerts.get(item["id"]):
                 item["clock_alert"] = alert
     return {"items": items}
+
+
+def attach_pdfs(store, items):
+    candidates = {pdf_artifacts.request_id(item["device"], item["id"]): item for item in items
+                  if item["state"] in {"ready", "failed"}}
+    if candidates:
+        with store.connect() as db:
+            attachments = pdf_artifacts.by_ids(db, candidates)
+        for identifier, attachment in attachments.items():
+            candidates[identifier]["pdf_attachment"] = attachment
 
 
 def question_time(data, created):

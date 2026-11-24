@@ -98,6 +98,10 @@ extension Controller {
     }
 
     func artifactPDF(_ id: String) async throws -> Data {
-        try await connection().bytes("/v1/workspace/artifacts/" + id + "/pdf")
+        guard privacy.unlocked else { throw CancellationError() }
+        let opening = privacy.generation
+        let data = try await connection().bytes("/v1/workspace/artifacts/" + id + "/pdf")
+        guard !Task.isCancelled, privacy.unlocked, privacy.generation == opening else { throw CancellationError() }
+        return data
     }
 }
