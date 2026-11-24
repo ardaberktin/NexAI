@@ -43,11 +43,12 @@ class UnixHTTP(http.client.HTTPConnection):
 
 
 class Engines:
-    def __init__(self, settings, runtime):
+    def __init__(self, settings, runtime, *, allow_mac=True, live_socket=None):
         self.settings = settings
         self.runtime = Path(runtime)
         self.runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
-        self.live_socket = self.runtime.parent / "nex-live" / "daybook.sock"
+        self.live_socket = live_socket or self.runtime.parent / "nex-live" / "daybook.sock"
+        self.allow_mac = allow_mac
         self.lock = threading.Lock()
         self.process = self.profile = None
         self.model_dir = self.runtime / "llama"
@@ -219,7 +220,12 @@ class Engines:
         self.stop()
         raise ModelError("The offline language model did not become ready. Check its files and runtime.")
 
+    def route(self, config):
+        return chat_route(config if self.allow_mac else config | {"use_mac_model": False})
+
     def mac_socket(self):
+        if not self.allow_mac:
+            return None
         path = self.runtime / "mac-model.sock"
         try:
             info = path.lstat()
@@ -231,7 +237,7 @@ class Engines:
         result = self.settings.status()
         if self.managed_live():
             result["chat"] = "excalibur_live" if self.live_socket.is_socket() else "excalibur_unavailable"
-        elif chat_route(self.settings.read()) == "mac":
+        elif self.route(self.settings.read()) == "mac":
             reachable = False
             try:
                 path = self.mac_socket()
@@ -254,7 +260,7 @@ class Engines:
 
     def generate_background(self, messages, tokens):
         config = self.settings.read()
-        if self.managed_live() or not chat_route(config):
+        if self.managed_live() or not self.route(config):
             return self.generate_warm(messages, tokens, temperature=0)
         try:
             return self.generate(messages, tokens, config, wait=False, temperature=0, thinking=False)
@@ -263,7 +269,7 @@ class Engines:
 
     def classify(self, messages):
         config = self.settings.read()
-        if not chat_route(config):
+        if not self.route(config):
             return self.generate_warm(messages, 4, decision=True)
         try:
             return self.generate(messages, 4, config, wait=False, decision=True)
@@ -304,7 +310,7 @@ class Engines:
 
     def generate(self, messages, tokens, config, *, on_text=None, wait=True, decision=False, temperature=None,
                  thinking=True):
-        route = "live" if self.managed_live() else chat_route(config)
+        route = "live" if self.managed_live() else self.route(config)
         if route is None:
             return None
         options = {"messages": messages, "max_tokens": tokens, "temperature": 0.25 if temperature is None else temperature,

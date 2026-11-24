@@ -21,7 +21,7 @@ struct NexApp: App {
         WindowGroup {
             if let model = setup.model {
                 PrivacyGate(model: model) {
-                    NexRoot(model: model)
+                    NexRoot(model: model).id(model.pairing?.workspaceScope)
                 }
                     .modifier(ClockNotificationMonitor(model: model))
                     .task { await model.loop() }
@@ -92,7 +92,7 @@ private struct AppSetup {
 
     init() {
         do {
-            let controller = Controller(spool: try Spool())
+            let controller = try Controller(spool: Spool(), profile: PairingKeychain.load())
             model = controller
             #if os(iOS)
             PhoneWatchRelay.shared.attach(controller)

@@ -8,6 +8,15 @@ struct Pairing: Codable {
     let token: String
     let device: String
     var setup: String? = nil
+    var account: HostedAccount? = nil
+
+    var workspaceScope: String {
+        guard let account else { return pin }
+        return SHA256.hash(data: Data((pin + ":" + account.accountId).utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    var biometricSlot: String { account.map { "account-device-" + $0.deviceId } ?? "owner" }
+    var signingDevice: String { account.map { device + ":" + $0.deviceId } ?? device }
 
     static var platform: String {
         #if os(iOS)
@@ -26,13 +35,13 @@ struct Pairing: Codable {
               token.count >= 40, token.count <= 120,
               token.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0)
                   || (97...122).contains($0) || $0 == 45 || $0 == 95 }),
-              device == Self.platform else {
+              device == Self.platform, account == nil || (account?.valid == true && setup == nil) else {
             throw NexError.pairing("Use the updated Excalibur Tailscale pairing profile for this device.")
         }
         return result
     }
 
-    private static func isTailscaleV4(_ host: String) -> Bool {
+    static func isTailscaleV4(_ host: String) -> Bool {
         let segments = host.split(separator: ".", omittingEmptySubsequences: false)
         let numbers = segments.compactMap { UInt8($0) }
         guard segments.count == 4, numbers.count == 4, numbers.map(String.init).joined(separator: ".") == host else {
@@ -77,7 +86,12 @@ enum PairingKeychain {
         }
     }
 
-    static func clear() { SecItemDelete(query as CFDictionary) }
+    static func clear() throws {
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw NexError.pairing("Could not remove the Nex credential from Keychain (\(status)).")
+        }
+    }
 }
 
 final class CertificatePin: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
@@ -137,6 +151,7 @@ final class NexAPI {
         guard !accessLock.withLock({ live ? liveCompatible : compatible }) else { return }
         let request = try makeRequest("/v1/privacy/version", method: "GET", query: [], timeout: 5, port: live ? 8767 : nil)
         let (data, response) = try await session.data(for: request)
+        try Self.validate(response, data: data)
         guard (response as? HTTPURLResponse)?.statusCode == 200,
               (try? JSONDecoder().decode([String: Int].self, from: data))?["version"] == 1 else {
             throw NexError.pairing("Update the Excalibur privacy service before connecting Nex.")
@@ -147,13 +162,23 @@ final class NexAPI {
     }
     private let base: URL
     private let token: String
+    let signingDevice: String
+    let biometricSlot: String
     private let session: URLSession
     private let decoder: JSONDecoder
 
     init(_ pairing: Pairing) throws {
         base = try pairing.address()
         token = pairing.token
-        guard let host = base.host, let pin = Data(base64Encoded: pairing.pin) else {
+        signingDevice = pairing.signingDevice
+        biometricSlot = pairing.biometricSlot
+        session = try Self.pinnedSession(base: base, pin: pairing.pin)
+        decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+    }
+
+    static func pinnedSession(base: URL, pin: String) throws -> URLSession {
+        guard let host = base.host, let fingerprint = Data(base64Encoded: pin) else {
             throw NexError.pairing("The Excalibur profile is invalid.")
         }
         let configuration = URLSessionConfiguration.ephemeral
@@ -162,11 +187,8 @@ final class NexAPI {
         configuration.httpShouldSetCookies = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.connectionProxyDictionary = [:]
-        session = URLSession(configuration: configuration,
-                             delegate: CertificatePin(digest: pin, host: host),
-                             delegateQueue: nil)
-        decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return URLSession(configuration: configuration,
+                          delegate: CertificatePin(digest: fingerprint, host: host), delegateQueue: nil)
     }
 
     deinit { session.invalidateAndCancel() }
@@ -181,12 +203,22 @@ final class NexAPI {
         let request = try makeRequest(path, method: method, query: query, body: body, headers: headers,
                                       timeout: timeout, port: port)
         let (data, response) = try await session.data(for: request)
+        try Self.validate(response, data: data)
+        return data
+    }
+
+    func signOut() async throws {
+        let request = try makeRequest("/v1/auth/logout", method: "POST", timeout: 5)
+        let (data, response) = try await session.data(for: request)
+        try Self.validate(response, data: data)
+    }
+
+    static func validate(_ response: URLResponse, data: Data) throws {
         guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(response.statusCode) else {
-            let failure = try? decoder.decode([String: String].self, from: data)
+            let failure = try? JSONDecoder().decode([String: String].self, from: data)
             throw NexError.api(response.statusCode, failure?["error"] ?? failure?["detail"] ?? "Excalibur rejected the request.")
         }
-        return data
     }
 
     private func makeRequest(

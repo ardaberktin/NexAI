@@ -5,7 +5,7 @@ Nex Server is the Linux component for model-backed Chat, the shared audio archiv
 ## Requirements
 
 - A Linux host, a non-root service account, Python 3.12 with SQLite FTS5, OpenSSL, and Bubblewrap. The production listeners use Linux interface binding and the model and Python sandboxes use Linux namespaces. A Linux VM can run the server on a Mac.
-- Tailscale installed at `/usr/bin/tailscale`, joined to the same tailnet as your Apple devices, using the Linux `tailscale0` interface. If you use tailnet grants or ACLs, allow only your paired devices to access TCP 8765 and, for live voice, 8767.
+- Tailscale installed at `/usr/bin/tailscale`, joined to the same tailnet as your Apple devices, using the Linux `tailscale0` interface. If you use tailnet grants or ACLs, allow only users’ trusted devices to access TCP 8765 and, for live voice, 8767.
 - Disk space for the archive and the models you choose. The base API runs with Python’s standard library. Staging local speech and language models requires additional runtimes.
 
 For example, on Ubuntu 24.04 install `python3 python3-venv bubblewrap openssl ca-certificates curl` with apt, then install and connect [Tailscale](https://tailscale.com/kb/1031/install-linux). Verify that `tailscale ip -4` returns the server’s tailnet address.
@@ -64,7 +64,34 @@ goal also appears in that goal's **Artifacts**. The renderer provides single-col
 newspapers with embedded fonts for English and Turkish. It checks page geometry, text, and rasterized output
 before publishing a file.
 
-## Pair the Apple clients
+## Create accounts and connect the Apple clients
+
+Run account management on the host as the Nex service user. Passwords are entered at an interactive prompt.
+
+```bash
+python3 -m nex --data "$NEX_DATA" account create alice --owner
+python3 -m nex --data "$NEX_DATA" account create bob
+python3 -m nex --data "$NEX_DATA" account server-link
+```
+
+Give each user the server link and their username and password over a trusted channel. The same link works for every account and contains the Tailscale address and TLS certificate fingerprint. On Mac or iPhone, connect Tailscale, open Nex, enter the link and credentials, and register with Touch ID or Face ID.
+
+`--owner` attaches the existing archive to exactly one account. Other accounts get separate archives under `$NEX_DATA/users/` and their own audio allowance, recording history, Chat, private requests, scheduled goals, and integrations. The host console continues to manage the original archive and shared model configuration. Additional accounts use server-side models and have no access to the owner’s Mac model relay.
+
+**Upgrading a paired server.** Finish syncing the Mac, iPhone, and Watch queues before creating the owner account. Update both server services and all clients. Creating the owner account disables legacy Mac and iPhone credentials. Sign in again on both clients, then enable Apple Watch access again in iPhone settings. Any unsynced legacy recordings stay in their original local queues. The new account won't upload them automatically.
+
+An account can have one active Mac session and one active iPhone session. Signing in on a replacement of the same type revokes the previous session. Device sessions expire after 90 days. The Watch uses its iPhone’s account. Sign-out revokes that device when the server can be reached. Administrators can revoke all devices with a password reset or disable an account while keeping its data.
+
+```bash
+python3 -m nex --data "$NEX_DATA" account list
+python3 -m nex --data "$NEX_DATA" account reset-password bob
+python3 -m nex --data "$NEX_DATA" account disable bob
+python3 -m nex --data "$NEX_DATA" account enable bob
+```
+
+### Legacy pairing
+
+Legacy profiles remain available to installations that have yet to assign the original archive to an account.
 
 ```bash
 umask 077
@@ -72,7 +99,7 @@ python3 -m nex --data "$NEX_DATA" pair mac > "$HOME/Nex-Pairing-mac.json"
 python3 -m nex --data "$NEX_DATA" pair iphone > "$HOME/Nex-Pairing-iphone.json"
 ```
 
-Transfer each file privately to its intended device. Import it from **Settings → Excalibur → Open pairing file** and finish biometric registration. Export a fresh file when pairing another installation or replacing a device. Apple Watch pairs through the connected iPhone. The current device identities are intended for one owner.
+Transfer each file privately to its intended device. Import it from **Legacy pairing → Open pairing file** and finish biometric registration. Export a fresh file when pairing another installation or replacing a device. Apple Watch connects through the paired iPhone.
 
 ## Run as user services
 
@@ -90,7 +117,7 @@ See [Live voice and optional integrations](deploy/README.md) for the second serv
 
 ## Maintain and verify
 
-- Back up the entire private archive with Nex stopped or take a consistent filesystem snapshot. Include any externally configured SSD audio directory. Keep backups and pairing files outside the source checkout.
-- The paired endpoint uses a pinned self-signed certificate for the current tailnet IP. If the certificate expires or the IP changes, provision the current identity, restart the services, and export fresh profiles. For same-IP renewal, stop both services and move the old identity directory under `tailnet-tls/` to a private backup before running `provision-tailnet`.
-- Check that the console opens through SSH, pair a client, test Chat, and upload a short recording. Enable Live Conversation separately and try it on a physical device.
+- Back up the entire private archive with Nex stopped or take a consistent filesystem snapshot. Include any externally configured SSD audio directory. Include `accounts.sqlite` and the account archives under `users/`. Keep backups and pairing files outside the source checkout.
+- The paired endpoint uses a pinned self-signed certificate for the current tailnet IP. If the certificate expires or the IP changes, provision the current identity, restart both services, and give users a new server link. Drain device queues before a planned certificate change. For same-IP renewal, stop both services and move the old identity directory under `tailnet-tls/` to a private backup before running `provision-tailnet`.
+- Check that the console opens through SSH, sign in on a client, test Chat, and upload a short recording. Enable Live Conversation separately and try it on a physical device.
 - Run `python3.12 -m pip install -r requirements-test.txt` in a development virtual environment and `python3.12 -m unittest discover -s tests -v` from this directory. Tests that require Bubblewrap or other Linux-specific facilities can skip on macOS.

@@ -53,9 +53,9 @@ def workspace_request(api, method, path, query, device, problem):
         workspace_features.require_enabled(store, feature)
     if path == "/v1/workspace/iphone-recording":
         if method == "PUT" and device == "iphone":
-            return api.server.recording_status.report(device, api.object(256).get("recording"))
+            return api.recording_status.report(device, api.object(256).get("recording"))
         if method == "GET" and device == "mac":
-            return api.server.recording_status.read("iphone", query.get("previous"))
+            return api.recording_status.read("iphone", query.get("previous"))
         raise problem(403, "The paired iPhone reports recording status to the paired Mac.")
     if path == "/v1/workspace/recording-status":
         return recording_status_request(api, method, query, device, problem)
@@ -89,8 +89,10 @@ def workspace_request(api, method, path, query, device, problem):
         if device != "iphone" or method != "PUT":
             raise problem(403, "Use Nex on the paired iPhone to register for push.")
         data = api.object(1_000)
+        client = getattr(api, "client_identity", None)
         return PushQueue(store).register(data.get("installation"), data.get("token"),
-                                         data.get("environment"), data.get("enabled"))
+                                         data.get("environment"), data.get("enabled"),
+                                         device_id=client.id if client else None)
     if path == "/v1/workspace/feed":
         if method == "GET":
             day = date.fromisoformat(query["day"]).isoformat() if query.get("day") else None
@@ -140,7 +142,7 @@ def workspace_request(api, method, path, query, device, problem):
 
 
 def recording_status_request(api, method, query, device, problem):
-    presence = api.server.recording_status
+    presence = api.recording_status
     if method == "GET" and device in ("mac", "iphone"):
         return presence.read(previous=query.get("previous"))
     if method == "PUT" and device in ("mac", "iphone"):

@@ -14,6 +14,7 @@ WAKE_PREFIX = re.compile(
     r"^(?:(?:hey|selam|merhaba)[\s,]+(?:nex|neks|next|necks)\b|hey[\s,]+nax\b|(?:nex|neks)[\s,.:!?-])",
     re.IGNORECASE,
 )
+from .access import workspace_for
 
 
 class Standby:
@@ -93,13 +94,15 @@ def install_standby(app, authenticate):
     async def listen(ws: WebSocket):
         device = authenticate(ws)
         language = ws.query_params.get("language", "auto")
-        if not device or device in devices or language not in {"auto", "en", "tr"}:
+        state = workspace_for(ws)
+        slot = (id(state), device)
+        if not device or slot in devices or language not in {"auto", "en", "tr"}:
             await ws.close(code=1008)
             return
-        devices.add(device)
+        devices.add(slot)
         try:
             await ws.accept()
-            await Standby(app.state, ws, device, language, wake_chime=ws.query_params.get("wake_chime") == "1").run()
+            await Standby(state, ws, device, language, wake_chime=ws.query_params.get("wake_chime") == "1").run()
             await ws.close(code=1000)
         except WebSocketDisconnect:
             pass

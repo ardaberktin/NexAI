@@ -143,7 +143,7 @@ struct ClockNotificationMonitor: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.task(id: Context(pairing: model.pairing?.pin, observing: observing,
+        content.task(id: Context(pairing: model.pairing?.workspaceScope, observing: observing,
                                  enabled: model.workspaceFeatureEnabled(.goals))) {
             guard observing else { return }
             await ClockNotifications.observe(using: model)

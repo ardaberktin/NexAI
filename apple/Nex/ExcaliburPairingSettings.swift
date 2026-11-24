@@ -3,19 +3,14 @@ import UniformTypeIdentifiers
 
 struct ExcaliburPairingSettings: View {
     @ObservedObject var model: Controller
-    @State private var profile = ""
-    @State private var showProfilePicker = false
-    @State private var pending = false
-    @State private var error: String?
 
     var body: some View {
-        Section("Pairing") {
-            if InstalledPairing.available {
-                Button("Use installed pairing profile") { Task { await pair(installed: true) } }
-                    .disabled(pending)
-            }
-            if let pairing = model.pairing {
+        if let pairing = model.pairing {
+            Section("Nex server") {
                 LabeledContent("Tailscale address", value: pairing.url)
+                if let account = pairing.account {
+                    LabeledContent("Signed in as", value: account.username)
+                }
                 if let status = model.status {
                     LabeledContent("Chat", value: chatStatus(status.models.chat))
                     LabeledContent("Transcription", value: status.models.transcription == "configured" ? "Local Whisper configured" : "Waiting for model")
@@ -23,22 +18,55 @@ struct ExcaliburPairingSettings: View {
                                    value: ByteCountFormatter.string(fromByteCount: Int64(status.remainingBytes),
                                                                     countStyle: .file))
                 }
-                Button("Update pairing profile") { showProfilePicker = true }
-                Button("Forget pairing", role: .destructive) { model.unpair() }
-            } else {
-                Text("Connect Tailscale, then import the pairing profile for this device.")
-                    .foregroundStyle(.secondary)
-                SecureField("Paste this device’s pairing profile", text: $profile)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    #endif
-                Button(pending ? "Pairing…" : "Pair") { Task { await pair() } }
-                    .disabled(pending || profile.isEmpty)
-                Button("Open pairing file") { showProfilePicker = true }.disabled(pending)
+                Button(pairing.account == nil ? "Forget Pairing" : "Sign Out", role: .destructive) {
+                    Task { await model.signOut() }
+                }
+                .disabled(model.signingOut)
+                if let error = model.signOutError { Text(error).foregroundStyle(.red) }
             }
+        }
+        if model.pairing?.account == nil {
+            NexServerSignInFields(model: model)
+            Section("Legacy pairing") {
+                LegacyPairingFields(model: model)
+            }
+        }
+    }
+
+    private func chatStatus(_ state: String) -> String {
+        switch state {
+        case "excalibur_live": "Selected Excalibur model"
+        case "configured": "Excalibur model configured"
+        case "mac_connected": "Mac model connected"
+        case "mac_waiting": "Waiting for Mac relay"
+        default: "Archive search"
+        }
+    }
+}
+
+struct LegacyPairingFields: View {
+    @ObservedObject var model: Controller
+    @State private var profile = ""
+    @State private var showProfilePicker = false
+    @State private var pending = false
+    @State private var error: String?
+
+    var body: some View {
+        Group {
+            if InstalledPairing.available {
+                Button("Use installed pairing profile") { Task { await pair(installed: true) } }
+            }
+            SecureField("Paste this device’s pairing profile", text: $profile)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+            Button(pending ? "Pairing…" : "Pair") { Task { await pair() } }
+                .disabled(profile.isEmpty)
+            Button("Open pairing file") { showProfilePicker = true }
             if let error { Text(error).foregroundStyle(.red) }
         }
+        .disabled(pending || model.signingOut)
         .fileImporter(isPresented: $showProfilePicker, allowedContentTypes: [.json]) { result in
             do {
                 let url = try result.get()
@@ -55,6 +83,7 @@ struct ExcaliburPairingSettings: View {
     }
 
     private func pair(installed: Bool = false) async {
+        guard !pending else { return }
         pending = true
         error = nil
         defer { pending = false }
@@ -64,16 +93,6 @@ struct ExcaliburPairingSettings: View {
             profile = ""
         } catch {
             self.error = error is DecodingError ? "Paste the complete pairing profile for this device." : error.localizedDescription
-        }
-    }
-
-    private func chatStatus(_ state: String) -> String {
-        switch state {
-        case "excalibur_live": "Selected Excalibur model"
-        case "configured": "Excalibur model configured"
-        case "mac_connected": "Mac model connected"
-        case "mac_waiting": "Waiting for Mac relay"
-        default: "Archive search"
         }
     }
 }

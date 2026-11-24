@@ -64,6 +64,8 @@ final class AppPrivacy: ObservableObject {
                     if let installed { InstalledPairing.finish(installed) }
                 }
             }
+        } catch NexError.api(401, _) {
+            if opening == generation { await model.signOut(revoke: false) }
         } catch {
             if opening == generation, !autoLock.isAway, !Task.isCancelled {
                 self.error = error.localizedDescription
@@ -75,12 +77,13 @@ final class AppPrivacy: ObservableObject {
         disconnect()
         try await withBiometrics("Register this device for your Nex workspace") { context in
             try await self.startSession(api, profile: profile, context: context, replace: profile.setup != nil)
+            self.unlocked = true
         }
     }
 
     private func startSession(_ api: NexAPI, profile: Pairing, context: LAContext, replace: Bool) async throws {
         let opening = generation
-        let slot = replace ? "registration-" + (profile.setup ?? "") : "owner"
+        let slot = replace ? "registration-" + (profile.setup ?? "") : profile.biometricSlot
         let key = try OwnerKey.load(using: context, slot: slot)
         if replace { try OwnerKey.save(key, slot: slot) }
         var proof = try await OwnerKey.proof(api, key: key, purpose: "unlock")
@@ -89,13 +92,37 @@ final class AppPrivacy: ObservableObject {
         guard opening == generation else { throw CancellationError() }
         let reply: [String: String] = try await api.send("/v1/privacy/unlock", body: proof)
         guard opening == generation, let token = reply["token"] else { throw CancellationError() }
-        try OwnerKey.save(key)
+        if replace { try OwnerKey.save(key, slot: profile.biometricSlot) }
         api.workspaceToken = token
         activeAPI = api
         connected = true
     }
 
-    func withBiometrics(_ reason: String, perform: (LAContext) async throws -> Void) async throws {
+    func signIn(_ link: NexServerLink, username: String, password: String,
+                install: (Pairing, NexAPI) throws -> Void) async throws {
+        disconnect()
+        try await withBiometrics("Register this device for your Nex workspace") { context in
+            let key = try OwnerKey.load(using: context, slot: UUID().uuidString)
+            let profile = try await link.signIn(username: username, password: password,
+                                                publicKey: key.publicKey.x963Representation)
+            let api = try NexAPI(profile)
+            do {
+                guard self.context === context, !Task.isCancelled else { throw CancellationError() }
+                try OwnerKey.save(key, slot: profile.biometricSlot)
+                try await self.startSession(api, profile: profile, context: context, replace: false)
+                guard self.context === context, !Task.isCancelled else { throw CancellationError() }
+                try install(profile, api)
+                self.unlocked = true
+            } catch {
+                self.lock()
+                OwnerKey.discard(profile.biometricSlot)
+                try? await api.signOut()
+                throw error
+            }
+        }
+    }
+
+    func withBiometrics<Value>(_ reason: String, perform: (LAContext) async throws -> Value) async throws -> Value {
         guard !authenticating else { throw NexError.pairing("Finish the current biometric request first.") }
         let current = LAContext()
         current.localizedFallbackTitle = ""
@@ -115,7 +142,7 @@ final class AppPrivacy: ObservableObject {
         guard try await current.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason),
               context === current else { throw CancellationError() }
         presentingBiometrics = false
-        try await perform(current)
+        return try await perform(current)
     }
 
     func resolve(_ item: PrivateAnswer, model: Controller) async {

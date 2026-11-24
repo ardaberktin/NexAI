@@ -1,0 +1,61 @@
+import Foundation
+
+@main
+struct HostedAccountCheck {
+    static func main() throws {
+        let fingerprint = Data(repeating: 0, count: 32).base64EncodedString()
+        let pin = String(fingerprint.dropLast())
+        let address = "100.64.10.20"
+        let link = try NexServerLink(" nex://\(address):8765/\(pin)\n")
+        precondition(link.address.absoluteString == "https://\(address):8765")
+        precondition(link.pin == fingerprint)
+        for invalid in [
+            "https://\(address):8765/\(pin)", "nex://example.test:8765/\(pin)",
+            "nex://100.63.10.20:8765/\(pin)", "nex://someone@\(address):8765/\(pin)",
+            "nex://\(address):8765/\(pin)?token=secret", "nex://\(address):8765/extra/\(pin)",
+            "nex://\(address):8765/\(pin)#fragment", "nex://\(address):8767/\(pin)",
+            "nex://\(address):8765/\(pin.dropLast())B",
+        ] {
+            precondition((try? NexServerLink(invalid)) == nil, invalid)
+        }
+
+        let legacy = Pairing(url: link.address.absoluteString, pin: link.pin,
+                             token: String(repeating: "z", count: 48), device: Pairing.platform)
+        let encoded = try JSONEncoder().encode(legacy)
+        let decoded = try JSONDecoder().decode(Pairing.self, from: encoded)
+        precondition(decoded.account == nil && decoded.workspaceScope == fingerprint)
+        var alice = legacy
+        let aliceID = String(repeating: "a", count: 32)
+        let bobID = String(repeating: "b", count: 32)
+        alice.account = HostedAccount(accountId: aliceID, username: "alice", deviceId: bobID, owner: true)
+        var rotated = alice
+        rotated.account = HostedAccount(accountId: aliceID, username: "alice", deviceId: aliceID, owner: true)
+        var bob = legacy
+        bob.account = HostedAccount(accountId: bobID, username: "bob", deviceId: aliceID, owner: false)
+        let scope = alice.workspaceScope
+        precondition(alice.signingDevice == Pairing.platform + ":" + bobID)
+        precondition(scope == rotated.workspaceScope && alice.biometricSlot != rotated.biometricSlot)
+        precondition(scope != bob.workspaceScope && scope != legacy.workspaceScope)
+
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let base = try Spool(directory: directory)
+        let first = try base.scoped(to: scope)
+        let same = try base.scoped(to: rotated.workspaceScope)
+        let second = try base.scoped(to: bob.workspaceScope)
+        try first.save(Gap(id: UUID().uuidString, started: "2026-01-01T00:00:00Z", text: "Alice only"))
+        let restored = try same.gaps()
+        let unrelated = try second.gaps()
+        let unscoped = try base.gaps()
+        precondition(restored.count == 1 && unrelated.isEmpty && unscoped.isEmpty)
+        precondition((try? base.scoped(to: "../../other")) == nil)
+
+        let payload = Data("private workspace request".utf8)
+        let envelope = WatchLink.envelope(payload, scope: scope)
+        precondition(WatchLink.payload(envelope, scope: scope) == payload)
+        precondition(WatchLink.payload(envelope, scope: bob.workspaceScope) == nil)
+        precondition(WatchLink.payload(payload, scope: scope) == nil)
+        precondition(WatchLink.envelope(payload, scope: nil) == payload)
+        print("Hosted account client checks passed")
+    }
+}

@@ -41,7 +41,11 @@ def verify(public, message, signature):
         return False
 
 
-def challenge(state, device, purpose, subject):
+def signing_device(device, client):
+    return f"{device}:{client.id}" if client else device
+
+
+def challenge(state, device, purpose, subject, *, client=None):
     if purpose not in {"unlock", "approve", "voice"} or not isinstance(subject, str) or len(subject) > 128:
         raise ValueError("Invalid biometric request.")
     if purpose == "approve" and device != "iphone":
@@ -49,6 +53,7 @@ def challenge(state, device, purpose, subject):
     if ((purpose == "unlock" and subject)
             or (purpose == "voice" and not re.fullmatch(r"delete|enroll-[a-f0-9]{64}", subject))):
         raise ValueError("Invalid biometric operation.")
+    device = signing_device(device, client)
     nonce = secrets.token_urlsafe(32)
     now = time()
     with state.transaction(write=True) as db:
@@ -69,12 +74,20 @@ def signing_message(nonce, device, purpose, subject):
     return f"Nex biometric approval v1\n{device}\n{purpose}\n{subject}\n{nonce}"
 
 
-def consume(db, device, purpose, subject, proof):
+def consume(db, device, purpose, subject, proof, *, client=None):
+    device = signing_device(device, client)
     nonce = proof.get("nonce")
     if not isinstance(nonce, str) or len(nonce) > 64:
         raise AccessDenied("A fresh biometric challenge is required.")
     row = db.execute("SELECT expires FROM challenges WHERE id=? AND device=? AND purpose=? AND subject=?",
                      (nonce, device, purpose, subject)).fetchone()
+    if client:
+        if not row or row[0] <= time() or not verify(
+            client.public, signing_message(nonce, device, purpose, subject), proof.get("signature")
+        ):
+            raise AccessDenied("Biometric approval could not be verified.")
+        db.execute("DELETE FROM challenges WHERE id=?", (nonce,))
+        return
     key = db.execute("SELECT public,bootstrap FROM keys WHERE device=?", (device,)).fetchone()
     if not row or row[0] <= time() or not key:
         raise AccessDenied("Import a current Nex pairing profile or request a fresh biometric approval.")
@@ -95,18 +108,23 @@ def consume(db, device, purpose, subject, proof):
         db.execute("DELETE FROM challenges WHERE device=?", (device,))
 
 
-def unlock(state, device, proof):
+def unlock(state, device, proof, *, client=None):
     token = secrets.token_urlsafe(32)
     with state.transaction(write=True) as db:
-        consume(db, device, "unlock", "", proof)
+        consume(db, device, "unlock", "", proof, client=client)
         db.execute("DELETE FROM sessions WHERE device=? OR expires<=?", (device, time()))
         db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest(token), device, time() + SESSION_SECONDS))
+        if client:
+            db.execute("INSERT INTO session_devices VALUES(?,?)", (digest(token), client.id))
     return {"token": token}
 
 
-def require_session(state, device, token):
+def require_session(state, device, token, *, client=None):
     with state.transaction() as db:
         validate_session(db, device, token)
+        binding = db.execute("SELECT device_id FROM session_devices WHERE token=?", (digest(token),)).fetchone()
+        if (binding[0] if binding else None) != (client.id if client else None):
+            raise AccessDenied("Unlock the Nex workspace with biometrics.")
 
 
 def validate_session(db, device, token):

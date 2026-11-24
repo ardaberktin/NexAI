@@ -55,6 +55,13 @@ final class WatchRecordingReporter {
         }
     }
 
+    func reset() {
+        reporting?.cancel()
+        pending = false
+        updates = WatchRecordingUpdates()
+        save()
+    }
+
     func receive(_ report: WatchRecordingReport, using model: Controller?) {
         let previous = updates.persistentUpdate
         guard updates.receive(report, at: .now) else { return }

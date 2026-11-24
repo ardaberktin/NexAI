@@ -55,11 +55,16 @@ extension Controller {
         if answer.engine == "private_request", privacy.connected {
             try? await privacy.refresh(self)
         }
-        if privacy.generation == opening {
-            if let alert = privacy.items.first(where: { $0.id == id })?.clockAlert {
-                Task { await ClockNotifications.enable(for: alert, using: self) }
-            } else if answer.goalId != nil {
-                Task { await GoalNotifications.enable(using: self) }
+        guard privacy.generation == opening else { throw CancellationError() }
+        if let alert = privacy.items.first(where: { $0.id == id })?.clockAlert {
+            Task {
+                guard privacy.generation == opening else { return }
+                await ClockNotifications.enable(for: alert, using: self)
+            }
+        } else if answer.goalId != nil {
+            Task {
+                guard privacy.generation == opening else { return }
+                await GoalNotifications.enable(using: self)
             }
         }
         if context == nil && publishReply { reply = answer }

@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS iphone_push_registration (
     singleton INTEGER PRIMARY KEY CHECK(singleton=1), installation TEXT NOT NULL, token TEXT NOT NULL,
     environment TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS iphone_push_session (
+    singleton INTEGER PRIMARY KEY REFERENCES iphone_push_registration(singleton) ON DELETE CASCADE,
+    device_id TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS goal_push_delivery (
     id TEXT PRIMARY KEY, token TEXT NOT NULL,
     next_try INTEGER NOT NULL, expires INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0

@@ -47,7 +47,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
 
     func paired(_ pairing: Pairing?) {
         self.pairing = pairing
-        enabled = pairing?.pin == preference?.pin && preference?.enabled == true
+        enabled = pairing?.workspaceScope == preference?.pin && preference?.enabled == true
         configureLocation()
         retryClear()
     }
@@ -71,13 +71,13 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
                     return
                 }
                 await clearing?.value
-                if let preference, preference.pin == pairing.pin, !preference.enabled {
+                if let preference, preference.pin == pairing.workspaceScope, !preference.enabled {
                     try await clear(preference.consent, using: api)
                     save(nil)
                 }
                 let result: Consent = try await api.send(base, method: "PUT", body: ConsentRequest())
-                guard model.pairing?.pin == pairing.pin else { return }
-                save(Preference(pin: pairing.pin, consent: result.consent, enabled: true))
+                guard model.pairing?.workspaceScope == pairing.workspaceScope else { return }
+                save(Preference(pin: pairing.workspaceScope, consent: result.consent, enabled: true))
                 requestPermission()
                 configureLocation()
             } else {
@@ -105,7 +105,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard enabled, let pairing, let preference, preference.pin == pairing.pin,
+        guard enabled, let pairing, let preference, preference.pin == pairing.workspaceScope,
               let location = locations.last, CLLocationCoordinate2DIsValid(location.coordinate),
               location.horizontalAccuracy >= 0, abs(location.timestamp.timeIntervalSinceNow) < 900 else { return }
         let rounded = WeatherLocationResult(id: "shared", location: location)
@@ -149,7 +149,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
     }
 
     private func turnOff() {
-        guard var preference, preference.pin == pairing?.pin else { return }
+        guard var preference, preference.pin == pairing?.workspaceScope else { return }
         preference.enabled = false
         save(preference)
         sending?.cancel()
@@ -169,7 +169,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
 
     func retryClear() {
         guard clearing == nil, Date.now >= clearAfter, let pairing, let preference,
-              preference.pin == pairing.pin, !preference.enabled else {
+              preference.pin == pairing.workspaceScope, !preference.enabled else {
             return
         }
         clearing = Task {

@@ -6,10 +6,13 @@ extension WatchSync {
         guard enabled, let session, session.activationState == .activated else {
             throw NexError.capture("Nex voice is unavailable.")
         }
+        let account = scope
         var clip = WatchReplyAudio(id: id)
         repeat {
             try Task.checkCancellation()
-            let request: [String: Any] = [WatchReplyAudio.key: id, "offset": clip.audio.count]
+            guard account == scope else { throw CancellationError() }
+            var request: [String: Any] = [WatchReplyAudio.key: id, "offset": clip.audio.count]
+            request[WatchLink.accountScope] = account
             let packet: [String: Any]
             do { packet = try await voicePacket(request, session: session) }
             catch {
@@ -17,6 +20,7 @@ extension WatchSync {
                 packet = try await voicePacket(request, session: session)
             }
             try Task.checkCancellation()
+            guard account == scope else { throw CancellationError() }
             try clip.append(packet)
         } while !clip.complete
         return clip.audio

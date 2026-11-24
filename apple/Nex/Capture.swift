@@ -39,7 +39,8 @@ final class Capture: ObservableObject {
     var wake = false {
         didSet { stream?.configure(options(for: .ambient)) }
     }
-    private let spool: Spool
+    private var spool: Spool
+    private var spoolGeneration = UUID()
     #if os(iOS)
     private let alerts = RecordingNotifications(device: .iphone)
     #else
@@ -96,6 +97,27 @@ final class Capture: ObservableObject {
         recover()
     }
 
+    func useSpool(_ next: Spool) {
+        guard spool.directory != next.directory else { return }
+        stopForAccountChange()
+        spool = next
+        recover()
+    }
+
+    func stopForAccountChange() {
+        spoolGeneration = UUID()
+        ambient = false
+        voice = false
+        live = false
+        interrupted = false
+        interruptedAt = nil
+        hasRecordedAmbient = false
+        alerts.clear()
+        end()
+        if !playback { deactivate() }
+        status = "Paused"
+    }
+
     private func observe(_ center: NotificationCenter, _ name: Notification.Name,
                          action: @escaping @MainActor (Notification) -> Void) {
         center.publisher(for: name).receive(on: DispatchQueue.main).sink { note in action(note) }
@@ -130,10 +152,12 @@ final class Capture: ObservableObject {
     }
 
     func resumeRecording() async {
+        let opening = spoolGeneration
         guard await permission() else {
             status = "Allow microphone access in system settings."
             return
         }
+        guard opening == spoolGeneration else { return }
         ambient = true
         if interrupted {
             resume()
@@ -166,10 +190,12 @@ final class Capture: ObservableObject {
             return
         }
         guard !playback, !live else { return }
+        let opening = spoolGeneration
         guard await permission() else {
             status = "Allow microphone access in system settings."
             return
         }
+        guard opening == spoolGeneration else { return }
         end()
         interrupted = false
         voice = true

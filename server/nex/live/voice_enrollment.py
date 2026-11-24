@@ -15,6 +15,7 @@ ENCODED_AUDIO_BYTES = 4 * ((ENROLLMENT_BYTES + 2) // 3)
 # representation and keep the decoded audio at exactly three samples.
 MAX_BODY_BYTES = 2 * ENCODED_AUDIO_BYTES + 4_000
 SAMPLE_ERROR = "Record three four-second voice samples."
+from .access import workspace_for
 
 
 def install_voice_enrollment(app, authenticate):
@@ -24,9 +25,10 @@ def install_voice_enrollment(app, authenticate):
         device = authenticate(request)
         if not device:
             raise HTTPException(401)
-        voices = app.state.voices
+        voices = workspace_for(request).voices
+        client = request.scope.get("nex.client")
         try:
-            require_session(voices.state, device, request.headers.get("X-Nex-Workspace", ""))
+            require_session(voices.state, device, request.headers.get("X-Nex-Workspace", ""), client=client)
             if request.method == "GET":
                 with voices.state.transaction() as db:
                     return profile_status(db, device, available=voices.room is not None)
@@ -37,7 +39,7 @@ def install_voice_enrollment(app, authenticate):
             raw = b"" if removing else enrollment_audio(body.get("audio"))
             subject = "delete" if removing else enrollment_subject(raw)
             with voices.state.transaction(write=True) as db:
-                consume(db, device, "voice", subject, body)
+                consume(db, device, "voice", subject, body, client=client)
                 db.execute("INSERT INTO voice_changes VALUES(?,?) ON CONFLICT(device) DO UPDATE SET nonce=excluded.nonce",
                            (device, body["nonce"]))
                 if removing:

@@ -40,6 +40,8 @@
 		8A915428EA83E6D42343296F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7527C652D86FA8745E8B9B4 /* SettingsView.swift */; };
 		7EFA00000000000000000102 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000101 /* SettingsPage.swift */; };
 		7EFA00000000000000000202 /* ExcaliburPairingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */; };
+		7EFA00000000000000000FA2 /* HostedAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA1 /* HostedAccount.swift */; };
+		7EFA00000000000000000FA5 /* NexServerSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA4 /* NexServerSignInView.swift */; };
 		7EFA00000000000000000302 /* SpeechRecordingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000301 /* SpeechRecordingSettings.swift */; };
 		F1B9748DA1B64E27AD3FA432 /* WorkspaceFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B9748DA1B64E27AD3FA431; };
 		8FCCA97E6C0E657C23367244 /* NexApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E3958FC59DCFF13933D07F /* NexApp.swift */; };
@@ -47,6 +49,8 @@
 		916493B868C0F01A5C47A79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7527C652D86FA8745E8B9B4 /* SettingsView.swift */; };
 		7EFA00000000000000000103 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000101 /* SettingsPage.swift */; };
 		7EFA00000000000000000203 /* ExcaliburPairingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */; };
+		7EFA00000000000000000FA3 /* HostedAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA1 /* HostedAccount.swift */; };
+		7EFA00000000000000000FA6 /* NexServerSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA4 /* NexServerSignInView.swift */; };
 		7EFA00000000000000000303 /* SpeechRecordingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000301 /* SpeechRecordingSettings.swift */; };
 		F1B9748DA1B64E27AD3FA433 /* WorkspaceFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B9748DA1B64E27AD3FA431; };
 		9D3328FD4B1A467311319F34 /* AACSegmentEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC18423FC5643A48CDD94D6 /* AACSegmentEncoder.swift */; };
@@ -352,6 +356,8 @@
 		A7527C652D86FA8745E8B9B4 /* SettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000101 /* SettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPage.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcaliburPairingSettings.swift; sourceTree = "<group>"; };
+		7EFA00000000000000000FA1 /* HostedAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccount.swift; sourceTree = "<group>"; };
+		7EFA00000000000000000FA4 /* NexServerSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NexServerSignInView.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000301 /* SpeechRecordingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecordingSettings.swift; sourceTree = "<group>"; };
 		F1B9748DA1B64E27AD3FA431 /* WorkspaceFeatureSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceFeatureSettings.swift; sourceTree = "<group>"; };
 		AC261451793AF0FFCC2D242F /* RecordingSegments.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordingSegments.swift; sourceTree = "<group>"; };
@@ -565,6 +571,8 @@
 				A7527C652D86FA8745E8B9B4 /* SettingsView.swift */,
 				7EFA00000000000000000101 /* SettingsPage.swift */,
 				7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */,
+				7EFA00000000000000000FA1 /* HostedAccount.swift */,
+				7EFA00000000000000000FA4 /* NexServerSignInView.swift */,
 				7EFA00000000000000000301 /* SpeechRecordingSettings.swift */,
 				F1B9748DA1B64E27AD3FA431 /* WorkspaceFeatureSettings.swift */,
 				CCD9889CB334F5C4EC02DDBF /* Spool.swift */,
@@ -902,6 +910,8 @@
 				8A915428EA83E6D42343296F /* SettingsView.swift in Sources */,
 				7EFA00000000000000000102 /* SettingsPage.swift in Sources */,
 				7EFA00000000000000000202 /* ExcaliburPairingSettings.swift in Sources */,
+				7EFA00000000000000000FA2 /* HostedAccount.swift in Sources */,
+				7EFA00000000000000000FA5 /* NexServerSignInView.swift in Sources */,
 				7EFA00000000000000000302 /* SpeechRecordingSettings.swift in Sources */,
 				F1B9748DA1B64E27AD3FA432 /* WorkspaceFeatureSettings.swift in Sources */,
 				1C2D0109D75382F1BAB01E10 /* Spool.swift in Sources */,
@@ -1015,6 +1025,8 @@
 				916493B868C0F01A5C47A79A /* SettingsView.swift in Sources */,
 				7EFA00000000000000000103 /* SettingsPage.swift in Sources */,
 				7EFA00000000000000000203 /* ExcaliburPairingSettings.swift in Sources */,
+				7EFA00000000000000000FA3 /* HostedAccount.swift in Sources */,
+				7EFA00000000000000000FA6 /* NexServerSignInView.swift in Sources */,
 				7EFA00000000000000000303 /* SpeechRecordingSettings.swift in Sources */,
 				F1B9748DA1B64E27AD3FA433 /* WorkspaceFeatureSettings.swift in Sources */,
 				B1B5E79E41DF196244A0CA25 /* Spool.swift in Sources */,

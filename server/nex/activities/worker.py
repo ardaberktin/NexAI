@@ -25,15 +25,15 @@ def retry_time():
 
 
 class ActivityWorker:
-    def __init__(self, store, runtime, room, dialogue):
+    def __init__(self, store, runtime, room, dialogue, *, settings_root=None):
         self.jobs = ActivityJobs(store)
         self.audio = AudioFiles(store.root / "audio")
-        self.root, self.runtime = store.root, runtime
+        self.settings_root, self.runtime = settings_root or store.root, runtime
         self.room, self.dialogue = room, dialogue
 
     def listen(self, job):
         # Read the archive service's current decoder configuration, including changes made since launch.
-        settings = Settings(self.root)
+        settings = Settings(self.settings_root)
         decoder = Engines(settings, self.runtime)
         with TemporaryDirectory(dir=self.runtime) as directory:
             path = decoder.decode(self.audio.path(job["recording_id"]), Path(directory), settings.read())

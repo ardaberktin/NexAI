@@ -25,7 +25,12 @@ struct PrivacyGate<Content: View>: View {
 
     var body: some View {
         Group {
-            if privacy.unlocked {
+            if model.pairing == nil {
+                NexServerSignInView(model: model)
+                    .accessibilityHidden(!isActive)
+                    .allowsHitTesting(isActive)
+                    .overlay { if !isActive { Rectangle().fill(.background).ignoresSafeArea() } }
+            } else if privacy.unlocked {
                 content()
                     .privacySensitive()
                     .accessibilityHidden(!isActive)
@@ -36,14 +41,18 @@ struct PrivacyGate<Content: View>: View {
                     Image(systemName: "lock.fill").font(.largeTitle)
                     Text("Nex is locked").font(.title2.bold())
                     AccountSignInUnlockHint(signIn: model.accountSignIn)
-                    if let error = privacy.error { Text(error).multilineTextAlignment(.center) }
+                    if let error = model.signOutError ?? privacy.error { Text(error).multilineTextAlignment(.center) }
                     Button("Unlock Nex") { Task { await privacy.unlock(model) } }
-                        .buttonStyle(.borderedProminent).disabled(privacy.authenticating)
+                        .buttonStyle(.borderedProminent).disabled(privacy.authenticating || model.signingOut)
+                    if model.pairing?.account != nil {
+                        Button("Sign Out") { Task { await model.signOut() } }
+                            .disabled(privacy.authenticating || model.signingOut)
+                    }
                 }.padding().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .task(id: isActive) {
-            guard isActive, !Task.isCancelled, !privacy.unlocked, !privacy.authenticating,
+            guard model.pairing != nil, isActive, !Task.isCancelled, !privacy.unlocked, !privacy.authenticating,
                   autoLock.takeAutomaticUnlockAttempt() else { return }
             Task { await privacy.unlock(model) }
         }

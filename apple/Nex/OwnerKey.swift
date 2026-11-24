@@ -53,7 +53,7 @@ enum OwnerKey {
     static func proof(_ api: NexAPI, key: SigningKey, purpose: String, subject: String = "") async throws -> [String: String] {
         struct Challenge: Decodable { let nonce: String; let message: String }
         let challenge: Challenge = try await api.send("/v1/privacy/challenge", body: ["purpose": purpose, "subject": subject])
-        let message = ["Nex biometric approval v1", Pairing.platform, purpose, subject, challenge.nonce].joined(separator: "\n")
+        let message = ["Nex biometric approval v1", api.signingDevice, purpose, subject, challenge.nonce].joined(separator: "\n")
         guard message == challenge.message else { throw NexError.pairing("The approval request did not match.") }
         let signature = try key.signature(for: Data(message.utf8))
         return ["nonce": challenge.nonce, "signature": signature.derRepresentation.base64EncodedString()]

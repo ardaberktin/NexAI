@@ -24,7 +24,7 @@ enum InstalledPairing {
         }
         let profile = try JSONDecoder().decode(Pairing.self, from: data)
         _ = try profile.address()
-        guard let setup = profile.setup, setup.utf8.count == 43,
+        guard profile.account == nil, let setup = profile.setup, setup.utf8.count == 43,
               setup.range(of: #"^[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil else {
             throw NexError.pairing("Export a fresh pairing profile from Excalibur.")
         }

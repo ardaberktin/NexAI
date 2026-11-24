@@ -7,7 +7,7 @@ import sqlite3
 from ..conversation_history import SHARED_QUESTION, TURN_ID, time_key
 from ..passages import matching_passage
 from ..store import CURRENT_EVIDENCE, search_prefixes
-from .keys import require_session
+from .keys import validate_session
 
 LOG = logging.getLogger(__name__)
 TOPIC_LIMIT = 4
@@ -36,7 +36,8 @@ BY_TOPIC = f"""
 
 
 def recall_chat(store, turn, session, query):
-    require_session(store.privacy, turn.device, session)
+    with store.privacy.transaction() as db:
+        validate_session(db, turn.device, session)
     excluded = {"q-" + turn.id}
     excluded.update("q-" + item["exchange_id"] for item in turn.history if "exchange_id" in item)
     params = {"before": time_key(turn.started), "exclude": json.dumps(sorted(excluded))}

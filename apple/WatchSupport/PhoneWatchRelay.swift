@@ -12,6 +12,8 @@ final class PhoneWatchRelay: NSObject, ObservableObject {
     private weak var model: Controller?
     private let session = WCSession.isSupported() ? WCSession.default : nil
     nonisolated private let inbox = try? PhoneWatchInbox()
+    nonisolated private let binding = WatchRelayBinding()
+    private var scope: String? { model?.pairing?.account == nil ? nil : model?.pairing?.workspaceScope }
     private let workspace = PhoneWatchWorkspace()
     private let live = PhoneWatchLiveRelay()
     private let voice = PhoneWatchReplyVoice()
@@ -28,6 +30,7 @@ final class PhoneWatchRelay: NSObject, ObservableObject {
     func attach(_ model: Controller) {
         live.stop()
         self.model = model
+        refreshBinding()
         privacyObserver = model.privacy.$connected.sink { [weak self] connected in
             if !connected { self?.workspace.reset() }
         }
@@ -39,6 +42,7 @@ final class PhoneWatchRelay: NSObject, ObservableObject {
         self.enabled = enabled
         relayGeneration = UUID()
         voice.reset()
+        refreshBinding()
         UserDefaults.standard.set(enabled, forKey: WatchLink.enabled)
         nextSync = .distantPast
         if !enabled {
@@ -71,19 +75,24 @@ final class PhoneWatchRelay: NSObject, ObservableObject {
                 if allowance != .invalid { UIApplication.shared.endBackgroundTask(allowance) }
             }
             do {
-                guard let inbox else { throw NexError.capture("The iPhone could not open the Watch recording queue.") }
+                guard let inbox = try inbox?.scoped(to: scope) else {
+                    throw NexError.capture("The iPhone could not open the Watch recording queue.")
+                }
+                let account = scope
                 let connection = try model.connection()
                 var saved: [String] = []
                 defer {
                     if !saved.isEmpty, session.activationState == .activated {
-                        session.transferUserInfo([WatchLink.acknowledgements: saved])
+                        var message: [String: Any] = [WatchLink.acknowledgements: saved]
+                        message[WatchLink.accountScope] = account
+                        session.transferUserInfo(message)
                     }
                 }
                 for clip in try inbox.clips().prefix(8) {
                     try Task.checkCancellation()
                     guard generation == relayGeneration, (try? model.connection()) === connection else { return }
                     let delivered = try await PhoneWatchTransfers.deliver(clip, inbox: inbox, session: session,
-                                                                          connection: connection, voice: voice) {
+                                                                          connection: connection, voice: voice, scope: account) {
                         generation == self.relayGeneration && (try? model.connection()) === connection
                     }
                     guard delivered else {
@@ -108,10 +117,21 @@ final class PhoneWatchRelay: NSObject, ObservableObject {
         }
     }
 
+    func accountChanged() {
+        recording.reset()
+        refreshBinding()
+        publishState()
+    }
+
+    private func refreshBinding() {
+        binding.update(enabled: enabled && model?.pairing != nil, scope: scope)
+    }
+
     private func publishState() {
         guard let session, session.activationState == .activated else { return }
         var context: [String: Any] = [WatchLink.enabled: enabled && model?.pairing != nil]
         context[WatchLink.questionDelivery] = true
+        context[WatchLink.accountScope] = scope
         context[WatchLink.syncError] = syncError
         try? session.updateApplicationContext(context)
     }
@@ -130,13 +150,15 @@ final class PhoneWatchRelay: NSObject, ObservableObject {
 extension PhoneWatchRelay: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState,
                              error: Error?) {
-        let report = WatchRecordingReport(session.receivedApplicationContext)
+        let context = session.receivedApplicationContext
+        let account = context[WatchLink.accountScope] as? String
+        let report = binding.allows(account) ? WatchRecordingReport(context) : nil
         let available = session.isPaired && session.isWatchAppInstalled
         Task { @MainActor in
             publishState()
             if state == .activated, enabled, !available {
                 recording.clear(using: model)
-            } else if let report {
+            } else if let report, scope == account {
                 receiveRecording(report)
             }
             sync()
@@ -167,26 +189,31 @@ extension PhoneWatchRelay: WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        guard let report = WatchRecordingReport(applicationContext) else { return }
-        Task { @MainActor in receiveRecording(report) }
+        let account = applicationContext[WatchLink.accountScope] as? String
+        guard binding.allows(account), let report = WatchRecordingReport(applicationContext) else { return }
+        Task { @MainActor in if scope == account { receiveRecording(report) } }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
-        guard let report = WatchRecordingReport(userInfo) else { return }
-        Task { @MainActor in receiveRecording(report) }
+        let account = userInfo[WatchLink.accountScope] as? String
+        guard binding.allows(account), let report = WatchRecordingReport(userInfo) else { return }
+        Task { @MainActor in if scope == account { receiveRecording(report) } }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        guard let report = WatchRecordingReport(message) else { return }
-        Task { @MainActor in receiveRecording(report) }
+        let account = message[WatchLink.accountScope] as? String
+        guard binding.allows(account), let report = WatchRecordingReport(message) else { return }
+        Task { @MainActor in if scope == account { receiveRecording(report) } }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any],
                              replyHandler: @escaping ([String: Any]) -> Void) {
+        let account = message[WatchLink.accountScope] as? String
+        guard binding.allows(account) else { replyHandler([:]); return }
         if let id = message[WatchReplyAudio.key] as? String, let offset = message["offset"] as? Int {
             Task { @MainActor in
                 let generation = relayGeneration
-                guard enabled, let connection = try? model?.connection() else { replyHandler([:]); return }
+                guard enabled, scope == account, let connection = try? model?.connection() else { replyHandler([:]); return }
                 let packet = await voice.packet(id, offset: offset, connection: connection)
                 let valid = generation == relayGeneration && (try? model?.connection()) === connection
                 replyHandler(valid ? packet : [:])
@@ -198,7 +225,7 @@ extension PhoneWatchRelay: WCSessionDelegate {
                 nextSync = .distantPast
                 sync()
                 let generation = relayGeneration
-                guard enabled, let connection = try? model?.connection(),
+                guard enabled, scope == account, let connection = try? model?.connection(),
                       let row = try? await PhoneWatchTransfers.receipt(id, connection: connection),
                       generation == relayGeneration, (try? model?.connection()) === connection,
                       let result = WatchQuestionResult(row), let data = try? JSONEncoder().encode(result) else {
@@ -206,11 +233,13 @@ extension PhoneWatchRelay: WCSessionDelegate {
                     return
                 }
                 if result.text != nil { voice.prepare(id, connection: connection) }
-                replyHandler([WatchLink.questionResult: data])
+                var response: [String: Any] = [WatchLink.questionResult: data]
+                response[WatchLink.accountScope] = account
+                replyHandler(response)
             }
             return
         }
-        guard UserDefaults.standard.bool(forKey: WatchLink.enabled), let inbox,
+        guard let inbox = try? inbox?.scoped(to: account),
               let metadata = message[WatchLink.clip] as? Data, let audio = message[WatchLink.questionAudio] as? Data,
               (try? inbox.importQuestion(metadata, audio: audio)) != nil else {
             replyHandler([WatchLink.questionDelivery: false])
@@ -224,10 +253,12 @@ extension PhoneWatchRelay: WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
-        guard UserDefaults.standard.bool(forKey: WatchLink.enabled),
-              let metadata = file.metadata?[WatchLink.clip] as? Data else { return }
+        let account = file.metadata?[WatchLink.accountScope] as? String
+        guard binding.allows(account), let metadata = file.metadata?[WatchLink.clip] as? Data else { return }
         do {
-            guard let inbox else { throw NexError.capture("Nex could not open the iPhone's Watch recording queue.") }
+            guard let inbox = try inbox?.scoped(to: account) else {
+                throw NexError.capture("Nex could not open the iPhone's Watch recording queue.")
+            }
             try inbox.importClip(metadata, from: file.fileURL)
         } catch {
             let message = error.localizedDescription
@@ -247,6 +278,11 @@ extension PhoneWatchRelay: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data,
                              replyHandler: @escaping (Data) -> Void) {
         Task { @MainActor in
+            guard let data = WatchLink.payload(data, scope: scope) else {
+                replyHandler((try? JSONEncoder().encode(WatchResponse(
+                    error: "Reconnect Apple Watch for this Nex account.", locked: true))) ?? Data())
+                return
+            }
             if data.starts(with: WatchLiveLink.prefix) {
                 let update = enabled ? model.map { live.respond(to: data, using: $0) } : nil
                 let response = update ?? WatchLiveUpdate(ended: true, error: "Enable Apple Watch access in Nex settings on iPhone.")
@@ -262,5 +298,20 @@ extension PhoneWatchRelay: WCSessionDelegate {
             }
             replyHandler((try? JSONEncoder().encode(response)) ?? Data())
         }
+    }
+}
+
+
+private final class WatchRelayBinding: @unchecked Sendable {
+    private let lock = NSLock()
+    private var enabled = false
+    private var scope: String?
+
+    func update(enabled: Bool, scope: String?) {
+        lock.withLock { (self.enabled, self.scope) = (enabled, scope) }
+    }
+
+    func allows(_ scope: String?) -> Bool {
+        lock.withLock { enabled && self.scope == scope }
     }
 }

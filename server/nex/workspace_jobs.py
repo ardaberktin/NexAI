@@ -16,16 +16,17 @@ from .workspace_ideas import WorkspaceIdeas
 logger = logging.getLogger(__name__)
 
 
-def run_until_stopped(job, label, interval, stop):
+def run_until_stopped(job, label, interval, stop, enabled):
     while not stop.is_set():
         try:
-            job()
+            if enabled():
+                job()
         except Exception as exc:  # noqa: BLE001 - keep scheduled jobs running after an individual failure.
             logger.warning("Nex %s failed (%s)", label, type(exc).__name__)
         stop.wait(interval)
 
 
-def start_workspace_jobs(store, engines, settings, stop):
+def start_workspace_jobs(store, engines, settings, stop, *, enabled=lambda: True):
     feed = Feed(store)
     goals = Goals(store, engines.classify_background, generate=engines.generate_background)
     follow_ups = GoalFollowUpJobs(store, engines.generate_background)
@@ -52,5 +53,5 @@ def start_workspace_jobs(store, engines, settings, stop):
         (PushQueue(store).run, "iPhone push", 2),
     )
     for job, label, interval in jobs:
-        threading.Thread(target=run_until_stopped, args=(job, label, interval, stop),
+        threading.Thread(target=run_until_stopped, args=(job, label, interval, stop, enabled),
                          name=label.replace(" ", "-"), daemon=True).start()

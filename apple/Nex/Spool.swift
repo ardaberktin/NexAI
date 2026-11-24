@@ -24,6 +24,13 @@ struct Spool: Sendable {
         #endif
     }
 
+    func scoped(to scope: String) throws -> Spool {
+        guard scope.utf8.count == 64, scope.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
+            throw NexError.capture("The recording queue account is invalid.")
+        }
+        return try Spool(directory: directory.appending(path: "accounts").appending(path: scope))
+    }
+
     func audio(_ id: String) -> URL { directory.appending(path: id + ".m4a") }
     func pcm(_ id: String) -> URL { file(id, "pcm") }
     func encoding(_ id: String) -> URL { file(id, "encoding.m4a") }

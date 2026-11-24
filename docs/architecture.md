@@ -1,6 +1,6 @@
 # Nex architecture
 
-Nex is designed for a single owner with a paired Mac and iPhone. Apple Watch uses the iPhone as its relay. The Linux server owns the shared archive and executes tools; the Apple apps own capture, presentation, and device-local permissions.
+One Linux Nex host serves multiple accounts. Each account has its own archive and can connect a Mac and an iPhone. Apple Watch uses the iPhone as its relay. The server stores the archives and executes tools. The Apple apps own capture, presentation, and device-local permissions.
 
 ## Runtime topology
 
@@ -11,7 +11,7 @@ Apple Watch ── WatchConnectivity ── iPhone
 Admin browser ── SSH tunnel ── server loopback console :8766
 ```
 
-The production app listeners bind to the Tailscale IPv4 address and Linux interface. A device profile supplies a bearer credential and certificate fingerprint. The owner session is a separate biometric challenge-response. Recorded voice identification supplies a speaker label. Optional integration calls go to their providers when tools run.
+The production app listeners bind to the Tailscale IPv4 address and Linux interface. The server link supplies the certificate fingerprint. Account sign-in issues a revocable device credential, and a separate biometric challenge-response unlocks private workspace routes. Recorded voice identification supplies a speaker label. Optional integration calls go to their providers when tools run.
 
 ## Request flow
 
@@ -27,8 +27,9 @@ The shared conversation code lives in `server/nex/conversation/`. `catalog.py` a
 
 ## Storage and privacy
 
-- The archive root holds SQLite databases, transcripts, audio, notes, model settings, and owner context. Search uses SQLite FTS5 and citations point back to recordings. Access credentials, private requests, and device keys stay in the archive.
-- Clients stage recordings locally until durable upload acknowledgement. Review upload, recording, and sync behavior together when changing IDs or migrations.
+- The account registry stores salted scrypt password verifiers and hashes of random device credentials. Both listeners resolve the credential before choosing an archive. Biometric challenges and workspace sessions are scoped to the authenticated device credential.
+- The host holds shared model settings and assets. The original owner archive stays at the root, and each additional account has a separate archive keyed by an opaque account ID. Each archive owns its SQLite databases, search index, transcripts, recordings, PDFs, integrations, context and scheduled jobs. The local model receives context selected inside that archive. Only the original owner can use the optional host-side Mac relay.
+- Clients stage recordings in account-scoped queues until durable upload acknowledgement. Watch transfers carry the account scope through the iPhone relay. Review upload, recording, and sync behavior together when changing IDs or migrations.
 - The admin console is bound to server loopback. The archive’s private permissions and backup process apply to both the database and the audio store.
 - Speech, screen capture, location sharing, account access, and notifications have independent permissions. Detailed Mac screen observations stay on the Mac. Enabled integrations can transmit their permitted request data to external providers.
 

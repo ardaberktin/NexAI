@@ -22,6 +22,7 @@ from .audio_files import open_audio
 from .coding.intent import pasted_python
 from .coding.sandbox import MAX_SOURCE
 from .daybook import Daybook, DayContext
+from .hosted.auth import BadLogin, LoginBusy, authenticate_client, bearer
 from .models import ModelError
 from .personal_files import PersonalConflict, safe_line
 from .privacy import public, routes
@@ -112,8 +113,11 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 24
 
-    def __init__(self, address, app, tls=None, admin=False, allow_peer=None, interface=None):
+    def __init__(self, address, app, tls=None, admin=False, allow_peer=None, interface=None, hosted=None):
+        if hosted is not None and not admin and tls is None:
+            raise ValueError("Hosted account sign-in requires TLS.")
         self.app, self.tls, self.admin = app, tls, admin
+        self.hosted = hosted
         self.privacy = app.store.privacy
         self.chat_followups = ChatFollowups()
         self.allow_peer, self.interface = allow_peer, interface
@@ -156,13 +160,26 @@ class Server(ThreadingHTTPServer):
 class API(BaseHTTPRequestHandler):
     server_version = "Nex"
     sys_version = ""
+    workspace = client_identity = None
 
     def log_message(self, *_):
         pass
 
     @property
     def app(self):
-        return self.server.app
+        return self.workspace or self.server.app
+
+    @property
+    def privacy(self):
+        return self.workspace.privacy if self.workspace else self.server.privacy
+
+    @property
+    def chat_followups(self):
+        return self.workspace.chat_followups if self.workspace else self.server.chat_followups
+
+    @property
+    def recording_status(self):
+        return self.workspace.recording_status if self.workspace else self.server.recording_status
 
     def do_GET(self):
         self.run("GET")
@@ -190,6 +207,7 @@ class API(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def run(self, method):
+        self.workspace = self.client_identity = None
         try:
             url = urlsplit(self.path)
             if url.scheme or url.netloc or url.fragment:
@@ -202,20 +220,36 @@ class API(BaseHTTPRequestHandler):
                 name, content = WEB[url.path]
                 self.send((WEB_DIR / name).read_bytes(), mime=content)
                 return
-            token = self.headers.get("Authorization", "").removeprefix("Bearer ").encode()
+            token = bearer(self.headers.get("Authorization", ""))
             if self.server.admin:
-                if not hmac.compare_digest(token, self.app.keys["admin"].encode()):
+                if not hmac.compare_digest(token.encode(), self.app.keys["admin"].encode()):
                     raise Problem(401, "Enter the console access key.")
                 device = "console"
             else:
-                device = next((key for key in ("mac", "iphone")
-                               if hmac.compare_digest(token, self.app.keys[key].encode())), None)
+                hosted = self.server.hosted
+                accounts = hosted.accounts if hosted else None
+                if accounts and (method, url.path) == ("POST", "/v2/auth/login"):
+                    self.send(accounts.sign_in(self.object(8_000), self.client_address[0]))
+                    return
+                device, self.client_identity = authenticate_client(accounts, self.app.keys, token)
                 if device is None:
-                    raise Problem(401, "Pair Nex with this Excalibur server.")
+                    raise Problem(401, "Sign in to this Nex server.")
+                if accounts and (method, url.path) == ("POST", "/v2/auth/logout"):
+                    if not self.client_identity:
+                        raise Problem(401, "Sign in to this Nex server.")
+                    accounts.revoke(token)
+                    self.send({"ok": True})
+                    return
+                if self.client_identity:
+                    self.workspace = hosted.workspace(self.client_identity.account)
             query = {key: values[-1] for key, values in parse_qs(
                 url.query, keep_blank_values=True, max_num_fields=12
             ).items()}
             self.dispatch(method, url.path, query, device)
+        except BadLogin:
+            self.send({"error": "The username or password could not be verified."}, 401)
+        except LoginBusy:
+            self.send({"error": "Too many sign-in attempts. Try again shortly."}, 429)
         except Problem as exc:
             self.send({"error": exc.message}, exc.status)
         except AccessDenied as exc:
@@ -273,7 +307,7 @@ class API(BaseHTTPRequestHandler):
             self.send(routes.route(self, method, path.removeprefix("/v1/privacy/"), device, Problem))
             return
         if device != "console" and not recorder_operation(method, path):
-            require_session(self.server.privacy, device, self.headers.get("X-Nex-Workspace", ""))
+            require_session(self.privacy, device, self.headers.get("X-Nex-Workspace", ""), client=self.client_identity)
         if path.startswith("/v1/workspace/"):
             try:
                 result = workspace_request(self, method, path, query, device, Problem)
@@ -308,7 +342,7 @@ class API(BaseHTTPRequestHandler):
                 status = store.status() | {"models": self.app.engines.model_status()}
                 if device == "console" or self.headers.get("X-Nex-Workspace"):
                     if device != "console":
-                        require_session(self.server.privacy, device, self.headers["X-Nex-Workspace"])
+                        require_session(self.privacy, device, self.headers["X-Nex-Workspace"], client=self.client_identity)
                     status["connections"] = Credentials(store.root).status()
                 self.send(status)
                 return
@@ -413,7 +447,7 @@ class API(BaseHTTPRequestHandler):
         try:
             self.send(public.chat(self.app.assistant, identifier, device, message, language, zone,
                                   journal=journal, force=data.get("access") == "private", lookup_only=lookup_only,
-                                  followups=self.server.chat_followups, location=data.get("weather_location"),
+                                  followups=self.chat_followups, location=data.get("weather_location"),
                                   ask_location=data.get("weather_location_supported") is True,
                                   device_clock=data.get("device_clock"),
                                   session=self.headers.get("X-Nex-Workspace") if device != "console" else None))
@@ -613,7 +647,10 @@ class API(BaseHTTPRequestHandler):
     def admin_models(self, method):
         if method == "PUT":
             self.app.settings.update(self.object(16_000))
-            self.app.worker.configure()
+            if self.server.hosted:
+                self.server.hosted.configure()
+            else:
+                self.app.worker.configure()
         elif method != "GET":
             raise Problem(405, "Use GET or PUT to manage models.")
         self.send({"settings": self.app.settings.read(), "files": self.app.settings.files(),

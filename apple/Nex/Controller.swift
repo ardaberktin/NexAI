@@ -4,6 +4,8 @@ import Foundation
 @MainActor
 final class Controller: ObservableObject {
     @Published var pairing: Pairing?
+    @Published private(set) var signingOut = false
+    @Published private(set) var signOutError: String?
     @Published var status: ServerStatus?
     @Published private(set) var workspaceFeatures: WorkspaceFeatures?
     @Published private(set) var savingWorkspaceFeature = false
@@ -70,7 +72,8 @@ final class Controller: ObservableObject {
     let gemma: MacGemmaControl
     let screenSharing: ScreenSharing
     #endif
-    private let spool: Spool
+    private let legacySpool: Spool
+    private var spool: Spool
     private var liveConversation: LiveConversation?
     private let recordingAttention = RecordingAttention()
     private let speech = DeviceSpeech()
@@ -90,14 +93,15 @@ final class Controller: ObservableObject {
     private var lastSpeechIssue = Date.distantPast
     private var lastSpeechLanguage: NexLanguage?
 
-    init(spool: Spool) {
+    init(spool: Spool, profile: Pairing?) throws {
         #if os(macOS)
         let gemma = MacGemmaControl()
         self.gemma = gemma
         screenSharing = ScreenSharing(gemma: gemma)
         #endif
-        self.spool = spool
-        capture = Capture(spool: spool)
+        legacySpool = spool
+        self.spool = if let profile, profile.account != nil { try spool.scoped(to: profile.workspaceScope) } else { spool }
+        capture = Capture(spool: self.spool)
         language = NexLanguage(rawValue: saved.string(forKey: "language") ?? "auto") ?? .auto
         handsFree = saved.bool(forKey: "handsFree")
         automaticVoice = saved.object(forKey: "automaticVoice") as? Bool ?? true
@@ -105,9 +109,9 @@ final class Controller: ObservableObject {
         liveVoice = saved.object(forKey: "liveVoice") as? Bool ?? true
         continuousListening = saved.object(forKey: "continuousListening") as? Bool ?? true
         capture.language = language
-        if let profile = PairingKeychain.load() {
+        if let profile {
             do {
-                setConnection(try NexAPI(profile), featureCachePin: profile.pin)
+                setConnection(try NexAPI(profile), featureCacheScope: profile.workspaceScope)
                 pairing = profile
             } catch { message = error.localizedDescription }
         }
@@ -117,47 +121,108 @@ final class Controller: ObservableObject {
         capture.notify = { [weak self] in
             Task { await self?.sync() }
         }
-        #if os(macOS)
-        screenSharing.contextChanged = { [weak self] summary, date in
-            Task { await self?.reportScreenContext(summary, observed: date) }
-        }
-        #endif
     }
 
     func pair(_ profile: Pairing) async throws {
+        guard !signingOut, pairing?.account == nil, profile.account == nil else { throw CancellationError() }
         let connection = try NexAPI(profile)
         try await privacy.connect(connection, profile: profile)
-        var saved = profile
-        saved.setup = nil
-        try PairingKeychain.save(saved)
+        var savedProfile = profile
+        savedProfile.setup = nil
+        try install(savedProfile, connection: connection)
         InstalledPairing.finish(profile)
-        setConnection(connection, featureCachePin: profile.pin)
-        pairing = saved
-        weatherSharing.paired(saved)
+    }
+
+    func signIn(link: String, username: String, password: String) async throws {
+        guard !signingOut, pairing?.account == nil else { throw CancellationError() }
+        let server = try NexServerLink(link)
+        try await privacy.signIn(server, username: username, password: password) { profile, connection in
+            try install(profile, connection: connection)
+        }
+    }
+
+    private func install(_ profile: Pairing, connection: NexAPI) throws {
+        let accountSpool = profile.account == nil ? legacySpool : try legacySpool.scoped(to: profile.workspaceScope)
+        try PairingKeychain.save(profile)
+        if pairing?.workspaceScope != profile.workspaceScope {
+            stopAccountActivity()
+            capture.useSpool(accountSpool)
+            spool = accountSpool
+            #if os(iOS)
+            if let previous = pairing { IPhonePush.shared.unpair(previous) }
+            PhoneWatchRelay.shared.setEnabled(false)
+            #endif
+        }
+        setConnection(connection, featureCacheScope: profile.workspaceScope)
+        pairing = profile
+        #if os(iOS)
+        PhoneWatchRelay.shared.accountChanged()
+        #endif
+        weatherSharing.paired(profile)
+        resetConnectionStatus()
+        Task { await sync() }
+    }
+
+    func signOut(revoke: Bool = true) async {
+        guard !signingOut, let profile = pairing else { return }
+        signingOut = true
+        signOutError = nil
+        defer { signingOut = false }
+        do { try PairingKeychain.clear() }
+        catch {
+            signOutError = error.localizedDescription
+            privacy.lock()
+            return
+        }
+        weatherSharing.unpair()
+        #if os(iOS)
+        IPhonePush.shared.unpair(profile)
+        PhoneWatchRelay.shared.setEnabled(false)
+        #endif
+        stopAccountActivity()
+        privacy.lock()
+        setConnection(nil)
+        pairing = nil
+        #if os(iOS)
+        PhoneWatchRelay.shared.accountChanged()
+        #endif
+        capture.useSpool(legacySpool)
+        spool = legacySpool
+        resetConnectionStatus()
+        await GoalNotifications.removeAll()
+        await ClockNotifications.clear()
+        if profile.account != nil {
+            OwnerKey.discard(profile.biometricSlot)
+            if revoke, let api = try? NexAPI(profile) {
+                do { try await api.signOut() }
+                catch NexError.api(401, _) {}
+                catch { message = "Signed out on this device. The server could not confirm revocation." }
+            }
+        }
+    }
+
+    private func stopAccountActivity() {
+        saved.set(false, forKey: "resumeRecording")
+        recordingAttention.cancel()
+        capture.stopForAccountChange()
+        stopLive()
+        if playing { stopPlayback() }
+        #if os(macOS)
+        screenSharing.stop()
+        #endif
+    }
+
+    private func resetConnectionStatus() {
         lastStatus = .distantPast
         status = nil
         statusUnavailable = false
         connectSince = .now
         seenReplies.removeAll()
+        waitingForVoice.removeAll()
+        pending = 0
         message = nil
-        await sync()
-    }
-
-    func unpair() {
-        weatherSharing.unpair()
-        #if os(iOS)
-        if let pairing { IPhonePush.shared.unpair(pairing) }
-        PhoneWatchRelay.shared.setEnabled(false)
-        #endif
-        recordingAttention.cancel()
-        stopLive()
-        PairingKeychain.clear()
-        privacy.disconnect()
-        setConnection(nil)
-        pairing = nil
-        status = nil
-        statusUnavailable = false
         reply = nil
+        recognizedSpeaker = false
     }
 
     func lockWorkspace() {
@@ -167,17 +232,25 @@ final class Controller: ObservableObject {
         privacy.lock()
     }
 
-    private func setConnection(_ connection: NexAPI?, featureCachePin: String? = nil) {
+    private func setConnection(_ connection: NexAPI?, featureCacheScope: String? = nil) {
         if chatSpeechID != nil { stopPlayback() }
         accountSignIn.reset()
         api?.cancelPending()
         api = connection
         workspaceFeatureVersion += 1
-        workspaceFeatureCacheKey = featureCachePin.map { "nex.workspaceFeatures." + $0 }
+        workspaceFeatureCacheKey = featureCacheScope.map { "nex.workspaceFeatures." + $0 }
         let cached = workspaceFeatureCacheKey.flatMap(saved.data(forKey:))
         applyWorkspaceFeatures(cached.flatMap { try? JSONDecoder().decode(WorkspaceFeatures.self, from: $0) })
         savingWorkspaceFeature = false
         recordingReporter.start(capture, connection: connection)
+        #if os(macOS)
+        screenSharing.contextChanged = { [weak self, weak connection] summary, date in
+            Task {
+                guard let self, let connection, self.api === connection else { return }
+                await self.reportScreenContext(summary, observed: date)
+            }
+        }
+        #endif
     }
 
     func toggleRecording() async {
@@ -338,10 +411,12 @@ final class Controller: ObservableObject {
                     date: NexDate.wire(), sources: []))
             }
         }
-        conversation.onArchive = { [weak self] error in
+        let connection = api
+        conversation.onArchive = { [weak self, weak connection] error in
             Task { @MainActor in
-                if let error { self?.message = error }
-                else { await self?.sync() }
+                guard let self, let connection, self.api === connection else { return }
+                if let error { self.message = error }
+                else { await self.sync() }
             }
         }
     }
@@ -352,7 +427,14 @@ final class Controller: ObservableObject {
         liveState = nil
         liveContext = nil
         liveTranscript = nil
+        old?.onSpeaker = nil
+        old?.onState = nil
+        old?.onMicrophoneChanged = nil
+        old?.onReply = nil
+        old?.onTurnStarted = nil
+        old?.onTranscript = nil
         old?.stop()
+        capture.liveMicrophoneActive = false
         capture.endLive()
     }
 
@@ -367,7 +449,7 @@ final class Controller: ObservableObject {
     }
 
     func loop() async {
-        if !capture.ambient && saved.bool(forKey: "resumeRecording") {
+        if pairing != nil && !capture.ambient && saved.bool(forKey: "resumeRecording") {
             await capture.resumeRecording()
         }
         while !Task.isCancelled {
@@ -448,20 +530,21 @@ final class Controller: ObservableObject {
     }
 
     private func syncOnce() async {
-        var attempt: NexAPI?
+        let spool = self.spool
+        let attempt = api
         do {
             let clips = try spool.clips().filter { $0.duration != nil }.sorted {
                 if $0.mode != $1.mode { return $0.mode == .voice }
                 return $0.started < $1.started
             }
             pending = clips.count
-            guard let connection = api else { return }
-            attempt = connection
+            guard let connection = attempt else { return }
             if Date.now.timeIntervalSince(lastStatus) > 14 {
                 try await refreshStatus()
                 guard api === connection else { return }
             }
             for gap in try spool.gaps().prefix(6) {
+                guard api === connection else { return }
                 let _: [String: Bool] = try await connection.send("/v1/gaps", body: gap)
                 try spool.remove(gap)
             }
@@ -473,10 +556,12 @@ final class Controller: ObservableObject {
                     continue
                 }
                 let recording = try await connection.upload(clip, data: Data(contentsOf: url))
+                guard api === connection else { return }
                 if useDeviceTranscription && status?.models.transcription != "configured"
                     && recording.transcript == nil && recording.state != "ready" {
                     try await supplyTranscript(clip, url: url, connection: connection)
                 }
+                guard api === connection else { return }
                 try spool.remove(clip)
                 if clip.mode == .voice && clip.liveHandled != true && clip.started >= Date.now.addingTimeInterval(-90)
                     || clip.wake && usesRecordedWake && clip.started >= Date.now.addingTimeInterval(-30) {
@@ -487,8 +572,10 @@ final class Controller: ObservableObject {
             guard api === connection else { return }
             pending = try spool.clips().filter { $0.duration != nil }.count
             message = nil
+        } catch NexError.api(401, _) {
+            if api === attempt, pairing?.account != nil { await signOut(revoke: false) }
         } catch {
-            guard attempt == nil || api === attempt else { return }
+            guard api === attempt else { return }
             message = error.localizedDescription
             lastStatus = .distantPast
         }
@@ -528,8 +615,10 @@ final class Controller: ObservableObject {
         )
         guard api === connection else { return }
         for clip in response.items where !waitingForVoice.contains(clip.id) {
+            guard api === connection else { return }
             if await present(clip, since: fresh) { break }
         }
+        guard api === connection else { return }
         if seenReplies.count > 1200 {
             seenReplies = seenReplies.intersection(response.items.map(\.id))
         }
@@ -539,7 +628,9 @@ final class Controller: ObservableObject {
         guard waitingForVoice.insert(queued.id).inserted else { return }
         Task { [weak self] in
             guard let self else { return }
-            defer { self.waitingForVoice.remove(queued.id) }
+            defer {
+                if self.api === connection { self.waitingForVoice.remove(queued.id) }
+            }
             do {
                 var playStream = true
                 var chimed = openingChimed
@@ -557,10 +648,10 @@ final class Controller: ObservableObject {
                     self.showUnrecognized(queued)
                 }
             } catch {
-                if self.speakingStream == queued.id { self.speech.endAudioStream() }
+                if self.api === connection, self.speakingStream == queued.id { self.speech.endAudioStream() }
                 await self.waitForCompletedVoice(queued, connection: connection)
             }
-            if self.speakingStream == queued.id { self.speech.endAudioStream() }
+            if self.api === connection, self.speakingStream == queued.id { self.speech.endAudioStream() }
         }
     }
 
@@ -651,7 +742,7 @@ final class Controller: ObservableObject {
     func play(_ id: String) async throws {
         guard let api else { throw NexError.pairing("Pair with Excalibur first.") }
         let data = try await api.bytes("/v1/recordings/" + id + "/audio")
-        if playing || capture.voice { return }
+        if self.api !== api || playing || capture.voice { return }
         stopLive()
         beginPlayback()
         do { try speech.play(data) { [weak self] in self?.endPlayback() } }
@@ -661,12 +752,13 @@ final class Controller: ObservableObject {
     func speak(_ answer: Reply) async {
         let text = String(answer.voiceText.prefix(1800))
         guard liveConversation == nil, !text.isEmpty else { return }
+        let source = api
         let serverVoice = status?.models.speech.contains(answer.language) == true
         var audio: Data?
-        if serverVoice, let api {
-            audio = try? await serverSpeech(text, language: answer.language, using: api)
+        if serverVoice, let source {
+            audio = try? await serverSpeech(text, language: answer.language, using: source)
         }
-        guard liveConversation == nil, !playing, !capture.voice, !capture.listeningForQuestion else { return }
+        guard api === source, liveConversation == nil, !playing, !capture.voice, !capture.listeningForQuestion else { return }
         beginPlayback()
         if let audio {
             do {

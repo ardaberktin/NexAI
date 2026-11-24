@@ -91,11 +91,11 @@ enum GoalNotifications {
         let authorization = await center.notificationSettings().authorizationStatus
         guard authorization == .authorized || authorization == .provisional else { return }
         let storage = UserDefaults.standard
-        let key = "nex.goalEmailAlertCursor." + pairing.pin
+        let key = "nex.goalEmailAlertCursor." + pairing.workspaceScope
         let cursor = storage.integer(forKey: key)
         let query = [URLQueryItem(name: "after", value: String(cursor))]
         guard let response: ListResponse<GoalAlert> = try? await api.get("/v1/workspace/goal-alerts", query: query),
-              model.pairing?.pin == pairing.pin, !Task.isCancelled else { return }
+              model.pairing?.workspaceScope == pairing.workspaceScope, !Task.isCancelled else { return }
         for alert in response.items {
             guard model.workspaceFeatureEnabled(.goals), !Task.isCancelled else { return }
             let content = UNMutableNotificationContent()
