@@ -11,7 +11,6 @@ from nex.conversation.document_routing import CHOOSE_DOCUMENT_ACTION
 from nex.conversation.goal_management_prompts import (
     EDIT_GOAL,
     FIND_PDF_GOALS,
-    GOAL_INTENT,
     SELECT_PDF_GOAL,
     VERIFY_PDF_CHANGE,
     VERIFY_PDF_TARGET,
@@ -21,6 +20,7 @@ from nex.conversation.reply import (
     WRITE_GOAL_CLARIFICATION,
     WRITE_GOAL_FORMAT,
 )
+from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.goal_follow_up_jobs import GoalFollowUpJobs
 from nex.goal_follow_up_pdfs import deliver_pdfs
 from nex.goals import Goals
@@ -61,7 +61,7 @@ class GoalPDFEditTests(unittest.TestCase):
         def generate(messages, *_args, **_options):
             prompt = messages[0]["content"]
             data = json.loads(messages[1]["content"])
-            if prompt == GOAL_INTENT:
+            if prompt.startswith(ROUTE_HEADER):
                 self.assertEqual(data["latest_message"], asked)
                 self.assertNotIn("goals", data)
                 return "MANAGE" if asked == follow_up else "DOCUMENT"
