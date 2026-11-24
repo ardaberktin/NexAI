@@ -18,6 +18,7 @@ from nex.weather import Place
 from nex.web_html import Page
 from nex.workspace_content import artifacts
 
+CARD_ARRIVAL = "Ask whether the new Walmart card arrived"
 PUBLIC_PAGE = Page("Observatory eclipse notice", "https://example.org/eclipse",
                    "The observatory announced a solar eclipse viewing session at 10 a.m. on Monday.")
 
@@ -48,6 +49,13 @@ def seed(store, turn, group):
                                         "zone": "UTC", "frequency_minutes": 1440,
                                         "scheduled_at": (turn.started + timedelta(days=1)).isoformat()},
                           anchor=turn.started)
+    if group == "PDF removal by subject":
+        goals = Goals(store)
+        for title in ("Morning report", CARD_ARRIVAL, "Remind me about school assignments"):
+            goal = goals.save(str(uuid4()), {"title": title, "prompt": title, "zone": "UTC",
+                                             "scheduled_at": (turn.started + timedelta(days=1)).isoformat()},
+                              anchor=turn.started)
+            goals.set_pdf_format(goal["id"], goal["revision"], "Attach a PDF to every update.")
     if group == "clock":
         ClockAlerts(store).create(str(uuid4()), "timer", "Kitchen timer", "UTC",
                                   lambda now: now + timedelta(minutes=40))
@@ -83,7 +91,7 @@ async def execute(turn, group, plan, generate):
             item, = inbox(store.privacy)["items"]
             return {"passed": item["state"] == "screen" and item["answer"] is None, "engine": item["state"]}
         goals = Goals(store)
-        before = goals.overview() if group == "PDF format edit" else []
+        before = goals.overview() if group in {"PDF format edit", "PDF removal by subject"} else []
         result = await run(store, turn, plan, generate, private=plan.private)
         names = {tool["name"] for tool in plan.tools}
         saved = ("create_pdf" not in names or bool(artifacts(store))) and ("goal" not in names or bool(result.get("goal_id")))
@@ -92,6 +100,12 @@ async def execute(turn, group, plan, generate):
             current, = goals.overview()
             saved = (result.get("goal_id") == old["id"] and bool(current.get("pdf_instruction"))
                      and all(current[key] == old[key] for key in ("prompt", "next_run", "frequency_minutes")))
+        if group == "PDF removal by subject":
+            target, = [item for item in before if item["title"] == CARD_ARRIVAL]
+            del target["pdf_instruction"]
+            target["revision"] += 1
+            expected = {goal["id"]: goal for goal in before}
+            saved = result.get("goal_id") == target["id"] and {goal["id"]: goal for goal in goals.overview()} == expected
         if group == "recurring PDF" and saved:
             saved = bool(goals.detail(result["goal_id"])["frequency_minutes"])
         return {"passed": bool(result["text"]) and saved, "engine": result["engine"], "text": result["text"]}

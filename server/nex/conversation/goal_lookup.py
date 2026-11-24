@@ -9,8 +9,29 @@ from ..recall_dates import time_zone
 from ..store import excerpt, normalized
 from ..workspace_features import require
 from .goal_management_prompts import FIND_GOALS, FIND_PDF_GOALS
+from .tools import Evidence
 
 PAGE_SIZE = 8
+
+
+def outcome(status, **details):
+    return Evidence({"status": status, "changed": False, **details}, engine="goal_management")
+
+
+def clarify_target(candidates, goals):
+    candidates = candidates[:PAGE_SIZE]
+    return outcome("clarification_needed", candidate_titles=[row["title"] for row in candidates],
+                   goal_choices=[goals[row["target"] - 1]["id"] for row in candidates])
+
+
+def listed_target(result, candidates):
+    target = result.get("target")
+    title = result.get("title")
+    candidate = next((row for row in candidates if row["target"] == target), None)
+    if (type(target) is not int or not candidate or not isinstance(title, str) or
+            candidate["title"].casefold().rstrip(" .!?") != title.casefold().rstrip(" .!?")):
+        raise ValueError("The target number and copied title must identify the same listed goal.")
+    return target
 
 
 def saved_goals(store):
@@ -75,14 +96,6 @@ async def shortlist(descriptions, context, generate, *, verify_match=False):
     return matches
 
 
-def pdf_goal_references(context, candidates):
-    data = {"latest_message": context["question"],
-            "goals": [{key: row[key] for key in ("target", "title", "task")} for row in candidates]}
-    if clarification := context.get("clarification"):
-        data["preceding_clarification"] = clarification
-    return data
-
-
 def pdf_target_schema(candidates):
     options = [
         {"type": "object", "required": ["target", "title"], "additionalProperties": False,
@@ -124,15 +137,3 @@ def named_targets(question, goals):
         if title and f" {title} " in words:
             found.append(goal["target"])
     return found
-
-
-def validate_pdf_reference(reference, question, candidates, target):
-    """Ground a model-supplied reference in the request and one saved goal."""
-    if not isinstance(reference, str) or len(reference.split()) < 2:
-        return False
-    literal = {"target": target, "title": reference}
-    if not named_targets(question, [literal]):
-        return False
-    matches = {row["target"] for row in candidates
-               if named_targets(row["title"], [literal]) or named_targets(row["task"], [literal])}
-    return matches == {target}

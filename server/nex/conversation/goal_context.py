@@ -15,7 +15,8 @@ def clarification_exchange(history):
         return ()
     question, answer = history[-2:]
     if (question["kind"] == "question" and answer.get("private") and not answer.get("goal_id")
-            and "manage_goal" in answer.get("selected_tools", ()) and "?" in answer["text"]):
+            and "manage_goal" in answer.get("selected_tools", ())
+            and (answer.get("goal_choices") or "?" in answer["text"])):
         return question, answer
     return ()
 
@@ -33,6 +34,16 @@ def pending_pdf_action(history):
             if tool.get("format_only") is True:
                 return "FORMAT"
     return None
+
+
+def pdf_removal_history(history):
+    """Retain the original request through consecutive private target clarifications."""
+    start = len(history) - 2
+    if pending_pdf_action(history) != "REMOVE":
+        return history[start:]
+    while start >= 2 and pending_pdf_action(history[start - 2:start]) == "REMOVE":
+        start -= 2
+    return history[start:]
 
 
 def with_goal_state(store, history):

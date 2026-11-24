@@ -7,46 +7,35 @@ from ..goal_writing import json_object, model_messages, yes_no
 from ..goals import Goals
 from ..workspace_features import FeatureDisabled
 from ..workspace_schema import WorkspaceConflict, WorkspaceMissing
-from .goal_context import clarification_exchange
+from .goal_context import clarification_exchange, pdf_removal_history
 from .goal_edit import plan_edit
 from .goal_lookup import (
     PAGE_SIZE,
+    clarify_target,
     describe,
     exact_title_targets,
+    listed_target,
     named_targets,
+    outcome,
     pdf_clarification_targets,
-    pdf_goal_references,
     pdf_target_schema,
     saved_goals,
     shortlist,
-    validate_pdf_reference,
 )
 from .goal_management_prompts import (
-    FIND_PDF_REFERENCE,
     MANAGE_GOALS,
     OPERATIONS,
     SELECT_GOAL,
     SELECT_PDF_GOAL,
-    SELECT_PDF_REMOVAL_GOAL,
     VERIFY_CHANGE,
     VERIFY_NAMED_DELETE,
     VERIFY_PDF_CHANGE,
     VERIFY_PDF_CLARIFICATION,
-    VERIFY_PDF_REMOVAL,
     VERIFY_PDF_TARGET,
 )
+from .goal_pdf_removal import remove_pdf
 from .goal_tools import goal_receipt
 from .tools import Evidence
-
-
-def outcome(status, **details):
-    return Evidence({"status": status, "changed": False, **details}, engine="goal_management")
-
-
-def clarify_target(candidates, goals):
-    candidates = candidates[:PAGE_SIZE]
-    return outcome("clarification_needed", candidate_titles=[row["title"] for row in candidates],
-                   goal_choices=[goals[row["target"] - 1]["id"] for row in candidates])
 
 
 def apply_change(store, turn, goal, action, edit, *, format_instruction=None):
@@ -56,11 +45,6 @@ def apply_change(store, turn, goal, action, edit, *, format_instruction=None):
         goals.delete(identifier, revision)
         return Evidence({"action": "deleted", "title": goal["title"], "schedule_text": None},
                         engine="goal_deleted")
-    if action == "remove_pdf":
-        saved = goals.set_pdf_format(identifier, revision, None)
-        receipt = {"action": "pdf_removed", "title": saved["title"], "changed": bool(goal.get("pdf_instruction")),
-                   "schedule_text": None}
-        return Evidence(receipt, engine="goal_pdf_removed", goal_id=identifier)
     if action == "keep":
         saved = goals.detail(identifier)
         receipt = {"action": "unchanged", "title": saved["title"], "status": saved["status"], "schedule_text": None}
@@ -88,16 +72,27 @@ def parse_decision(result, candidates):
         question = result["question"]
         if isinstance(question, str) and len(question.strip()) <= 480 and "?" in question:
             return outcome("clarification_needed", suggested_question=question.strip())
-    target = result.get("target")
-    title = result.get("title")
-    candidate = next((row for row in candidates if row["target"] == target), None)
-    if (type(target) is not int or not candidate or not isinstance(title, str) or
-            candidate["title"].casefold().rstrip(" .!?") != title.casefold().rstrip(" .!?")):
-        raise ValueError("The target number and copied title must identify the same listed goal.")
     keys = {"action", "target", "title"}
     if not isinstance(action, str) or action not in OPERATIONS or result.keys() != keys:
         raise ValueError("Choose one supported action and only its arguments.")
-    return target
+    return listed_target(result, candidates)
+
+
+def management_context(turn, operation, format_only, exchange):
+    prompt = turn.prompt()
+    context = {key: prompt[key] for key in ("question", "local_time", "language", "history")}
+    if turn.recalled_chat is not None:
+        context["recalled_chat"] = turn.recalled_chat
+    context["history"] = prompt_history(turn.history, include_tools=False)[-4:]
+    context["goal_time_zone"] = turn.zone
+    if exchange:
+        history = pdf_removal_history(turn.history) if operation == "remove_pdf" else exchange
+        context["clarification"] = prompt_history(history, include_tools=False)
+    if operation:
+        context["requested_action"] = operation
+    if format_only:
+        context["format_only"] = True
+    return context
 
 
 async def manage_goal(store, turn, generate, operation=None, *, format_only=False):
@@ -106,27 +101,21 @@ async def manage_goal(store, turn, generate, operation=None, *, format_only=Fals
         goals = await asyncio.to_thread(saved_goals, store)
         if not goals:
             return outcome("no_saved_goals")
-        prompt = turn.prompt()
-        context = {key: prompt[key] for key in ("question", "local_time", "language", "history")}
-        if turn.recalled_chat is not None:
-            context["recalled_chat"] = turn.recalled_chat
-        context["history"] = prompt_history(turn.history, include_tools=False)[-4:]
-        context["goal_time_zone"] = turn.zone
         exchange = clarification_exchange(turn.history)
-        if exchange:
-            context["clarification"] = prompt_history(exchange, include_tools=False)
-        if operation:
-            context["requested_action"] = operation
-        if format_only:
-            context["format_only"] = True
+        context = management_context(turn, operation, format_only, exchange)
         recent = next((item["goal_id"] for item in reversed(turn.history) if item.get("goal_id")), None)
         descriptions = [describe(goal, i, recent) for i, goal in enumerate(goals, 1)]
+        offered = exchange[-1].get("goal_choices") if format_only and exchange else None
+        candidates = descriptions
+        if offered:
+            candidates = [row for row in descriptions if goals[row["target"] - 1]["id"] in offered]
+        if operation == "remove_pdf":
+            return await remove_pdf(store, goals, candidates, context, generate)
         exact_titles = exact_title_targets(turn.text, descriptions) if format_only else set()
         if format_only and not exact_titles:
             exact_titles = set(named_targets(turn.text, descriptions))
-        offered = exchange[-1].get("goal_choices") if format_only and exchange else None
         if offered:
-            descriptions = [row for row in descriptions if goals[row["target"] - 1]["id"] in offered]
+            descriptions = candidates
             if not descriptions or (exact_titles and exact_titles.isdisjoint(row["target"] for row in descriptions)):
                 return clarify_target(descriptions, goals)
         if format_only and not offered and len(exact_titles) == 1:
@@ -164,16 +153,13 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
     guidance = SELECT_PDF_GOAL if format_only else SELECT_GOAL if operation else MANAGE_GOALS
     schema = pdf_target_schema(context["goals"]) if format_only else None
     selection = dict(context)
-    if operation == "remove_pdf":
-        guidance = SELECT_PDF_REMOVAL_GOAL
-        selection = pdf_goal_references(context, context["goals"])
-    elif operation and not (format_only and context.get("clarification")):
+    if operation and not (format_only and context.get("clarification")):
         selection.pop("history")
         selection["goals"] = [{k: v for k, v in row.items() if k != "last_discussed_goal"} for row in context["goals"]]
     instructions = guidance
     for _ in range(3):
         result = json_object(await generate(model_messages(instructions, selection, schema=schema), 280) or "")
-        if (operation != "remove_pdf" and result.get("action") in ("use_history", "clarify")
+        if (result.get("action") in ("use_history", "clarify")
                 and "history" not in selection and context["history"] and not named):
             selection = context
             continue
@@ -191,7 +177,7 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
                 raise ValueError("The selected goal conflicts with the saved title named in the latest message.")
             goal = goals[target - 1]
             action = result["action"]
-            if (operation and operation != action) or (action == "remove_pdf" and not format_only):
+            if (operation and operation != action) or action == "remove_pdf":
                 raise ValueError("Return only the selected target and its copied title, none, or clarify.")
             if action in {"delete", "complete", "keep"} and named and target not in named:
                 raise ValueError("Use the goal named in the latest message or clarify.")
@@ -211,19 +197,12 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
         except ValueError as error:
             instructions = f"{guidance}\nCorrect the previous proposal {result!r}. {error}"
             continue
-        if action == "remove_pdf":
-            if exact_titles != {target} and not await grounded_pdf_reference(context, pdf_candidates, target, generate):
-                return clarify_target(context["goals"], goals)
-            verdict = await verify_pdf_removal(context, goal, generate)
-        else:
-            verdict = await confirmed_change(goal, result, selection, generate, named)
+        verdict = await confirmed_change(goal, result, selection, generate, named)
         if verdict is True:
             fields = result.get("changes", {})
             format_instruction = fields.get("format_instruction") if fields.keys() == {"format_instruction"} else None
             return await asyncio.to_thread(apply_change, store, turn, goal, action, edit,
                                            format_instruction=format_instruction)
-        if action == "remove_pdf":
-            return outcome("unverified_change")
         if verdict is None and "history" not in selection and context["history"] and not named:
             selection = context
             continue
@@ -240,25 +219,6 @@ async def verified_pdf_target(context, candidates, target, generate):
     if clarification := context.get("clarification"):
         data["preceding_clarification"] = clarification
     return yes_no(await generate(model_messages(VERIFY_PDF_TARGET, data), 8)) is True
-
-
-async def grounded_pdf_reference(context, candidates, target, generate):
-    data = pdf_goal_references(context, candidates)
-    data["selected_target"] = target
-    schema = {"type": "object", "required": ["reference"], "additionalProperties": False,
-              "properties": {"reference": {"type": ["string", "null"]}}}
-    raw = await generate(model_messages(FIND_PDF_REFERENCE, data, schema=schema), 48)
-    result = json_object(raw or "")
-    return result.keys() == {"reference"} and validate_pdf_reference(
-        result["reference"], context["question"], candidates, target,
-    )
-
-
-async def verify_pdf_removal(context, goal, generate):
-    data = {"latest_message": context["question"], "selected_goal": goal["title"]}
-    if clarification := context.get("clarification"):
-        data["preceding_clarification"] = clarification
-    return yes_no(await generate(model_messages(VERIFY_PDF_REMOVAL, data), 8)) is True
 
 
 async def confirmed_change(goal, decision, context, generate, named):
