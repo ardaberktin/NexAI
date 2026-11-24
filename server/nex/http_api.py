@@ -276,7 +276,11 @@ class API(BaseHTTPRequestHandler):
             require_session(self.server.privacy, device, self.headers.get("X-Nex-Workspace", ""))
         if path.startswith("/v1/workspace/"):
             try:
-                self.send(workspace_request(self, method, path, query, device, Problem))
+                result = workspace_request(self, method, path, query, device, Problem)
+                if isinstance(result, bytes):
+                    self.send(result, mime="application/pdf")
+                else:
+                    self.send(result)
             except WorkspaceConflict as exc:
                 raise Problem(409, str(exc)) from exc
             except WorkspaceMissing as exc:

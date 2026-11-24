@@ -10,6 +10,14 @@ Nex is an AI assistant. In every assistant workflow, give the model the user's r
 
 When changing assistant behavior, check the normal and fallback paths for hardcoded replies and intent routing. Verify that differently worded requests reach the model and that its responses use the context and tool results available at runtime.
 
+## Manage branches and local work
+
+- Start a change with `git status --short --branch`. Inspect the current branch, its upstream, and any staged or unstaged edits. Use a branch the user has designated for the task. Otherwise, reuse a branch already dedicated to the task or create a `codex/<short-task-name>` branch from the current `main` base. Refresh the upstream ref when the task depends on the latest remote state.
+- Keep `main` ready to release. If unrelated edits or another task are in progress, use a separate worktree for the new task. Preserve the user's files, staged changes, and commit history. Ask before discarding changes, rewriting commits the user may rely on, or removing a branch or worktree that may contain work.
+- Review the diff and run the relevant checks from the same working directory and with the same configuration as CI. After verification, make a focused local commit on the task branch unless the user wants uncommitted changes. Include only changes belonging to the task. Leave the branch available for review and report its name, commit, check results, and any remaining work.
+- Treat pushes, pull requests, and merges into `main` as separate steps. Proceed when the user has authorized the specific step. Prepare releases from a reviewed commit with passing CI and package both source downloads from its version tag. Follow the [release guide](docs/releases.md).
+- Keep development builds and test data isolated from the user's running Nex installation. Create or publish release tags and GitHub Releases, deploy to Excalibur, or install builds on the user's devices only with their authorization. For an approved deployment, record the source commit, release tag when available, Apple build numbers, and the previous working version in the private deployment notes.
+
 ## Work in the monorepo
 
 - Read [Architecture](docs/architecture.md) for entry points and data flow, then read [Assistant contract](docs/assistant-contract.md) before changing any assistant path.

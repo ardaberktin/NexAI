@@ -1,3 +1,4 @@
+-r requirements-pdf.txt
 cryptography>=44
 httpx==0.28.1
 pipecat-ai==1.16.0

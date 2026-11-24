@@ -10,7 +10,8 @@ KEEP: the user reports an outcome is still pending or only an intermediate step 
 MANAGE: the user continues a goal-management clarification and the operation needs more context.
 CLOCK: the user asks Nex to start, list, or cancel a timer or alarm, or to wake them at a specified time.
 SCHEDULE: the user explicitly asks for a new reminder, check-in, recurring goal, or future watch.
-OTHER: information request, hypothetical, social chat or unrelated topic.
+OTHER: information request, immediate document creation (including a PDF for an existing goal), hypothetical,
+social chat or unrelated topic. Changing future output format for a saved goal is EDIT.
 "Wake me at seven tomorrow morning" and "Set a timer for half an hour" are CLOCK.
 An existing goal may be from an earlier conversation. The private tool will check for a match.
 "Move my check-in to next Friday" is EDIT. "Remind me to call next Friday" is SCHEDULE.

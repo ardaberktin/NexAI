@@ -2,6 +2,19 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ArtifactDocument: View {
+    let model: Controller
+    let artifact: NexArtifact
+
+    var body: some View {
+        if artifact.kind == "pdf" {
+            PDFArtifactDocument(model: model, artifact: artifact)
+        } else {
+            TextArtifactDocument(artifact: artifact)
+        }
+    }
+}
+
+private struct TextArtifactDocument: View {
     let artifact: NexArtifact
     @State private var exporting = false
     @State private var failure: String?
@@ -36,7 +49,7 @@ struct ArtifactDocument: View {
         }
         .fileExporter(
             isPresented: $exporting, document: ArtifactText(text: artifact.text),
-            contentType: .plainText, defaultFilename: filename
+            contentType: .plainText, defaultFilename: artifact.filename
         ) { result in
             if case .failure(let error) = result { failure = error.localizedDescription }
         }
@@ -61,9 +74,19 @@ struct ArtifactDocument: View {
         if let failure { WorkspaceIssue(message: failure) }
         Text(artifact.text).textSelection(.enabled)
     }
+}
 
-    private var filename: String {
-        let allowed = artifact.title.map { $0.isLetter || $0.isNumber ? $0 : "-" }
+extension NexArtifact {
+    var symbol: String {
+        switch kind {
+        case "feed": "newspaper"
+        case "pdf": "doc.richtext"
+        default: "doc.text"
+        }
+    }
+
+    var filename: String {
+        let allowed = title.map { $0.isLetter || $0.isNumber ? $0 : "-" }
         let words = allowed.split(separator: "-").map { String($0) }
         let name = words.joined(separator: "-").prefix(85).lowercased()
         return name.isEmpty ? "nex-file" : name

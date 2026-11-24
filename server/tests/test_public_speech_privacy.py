@@ -14,6 +14,7 @@ from nex.store import Store
 class PublicSpeechPrivacyTests(unittest.IsolatedAsyncioTestCase):
     async def test_public_stream_and_private_handoff_have_separate_inputs_and_outputs(self):
         import httpx
+
         from nex.live.dialogue import Dialogue, Turn
         from nex.privacy.requests import inbox
 

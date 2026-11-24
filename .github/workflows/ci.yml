@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r requirements-test.txt
-      - run: ruff check --isolated --target-version py312 .
+      - run: ruff check --config ruff.toml .
       - run: python -m unittest discover -s tests -v
       - run: python -m compileall -q nex
       - run: bash -n deploy/stage-live-assets.sh && bash -n deploy/stage-room-context.sh && bash -n deploy/stage-gemma.sh

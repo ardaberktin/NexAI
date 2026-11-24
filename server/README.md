@@ -45,6 +45,25 @@ Use the console’s **Models** panel. Place the runtimes and weights under `$NEX
 
 Start with zero GPU layers for CPU inference. Keep the archive and search available while staging models. Chat needs a working model to reply, and transcription needs its own assets even if live speech is running.
 
+## Enable PDF generation
+
+Install the PDF dependencies in the Python environment that runs the archive service.
+
+```bash
+python3.12 -m pip install -r requirements-pdf.txt
+```
+
+If you use a virtual environment, point `ExecStart` in `nex.service` at that environment's Python and restart the
+service after updating the server source. On a distribution that protects its system Python, use a virtual
+environment with `--system-site-packages` if the service already uses system-installed packages. The archive
+adds the PDF storage table on startup.
+
+Ask Nex to create a PDF in Chat, or include the PDF format and layout in a goal's instructions. The paired Mac
+and iPhone apps can open, save, and share the result from **Library → Files**. A PDF produced by or attached to a
+goal also appears in that goal's **Artifacts**. The renderer provides single-column reports and two-column
+newspapers with embedded fonts for English and Turkish. It checks page geometry, text, and rasterized output
+before publishing a file.
+
 ## Pair the Apple clients
 
 ```bash

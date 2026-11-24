@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from ..pdf.document import TOOL_DESCRIPTION as PDF_DESCRIPTION
 from .clock_tool import DESCRIPTION as CLOCK_DESCRIPTION
 from .clock_tool import EXAMPLES as CLOCK_EXAMPLES
 from .clock_tool import FIELDS as CLOCK_FIELDS
@@ -9,6 +10,7 @@ from .clock_tool import ROUTING as CLOCK_ROUTING
 
 CATALOG = {
     "clock": CLOCK_DESCRIPTION,
+    "create_pdf": PDF_DESCRIPTION,
     "weather": "Open-Meteo. query = explicit city or empty for local. period = current, past (recap), or forecast. "
                "For past/forecast supply date YYYY-MM-DD.",
     "web": "Search public information. query = standalone public search terms or an explicit public URL.",
@@ -39,6 +41,7 @@ CATALOG = {
 PUBLIC = {"weather", "web", "python"}
 OPTIONS = {
     "clock": CLOCK_FIELDS,
+    "create_pdf": {"goal_query"},
     "weather_city": {"operation"}, "weather": {"period", "date"}, "gmail": {"unread", "priority", "terms", "exact"},
     "agenda": {"start_date", "end_date"}, "calendar": {"start_date", "end_date"},
     "ticktick": {"lists", "access_check", "start_date", "end_date"}, "daybook": {"date"},
@@ -49,7 +52,7 @@ OPTIONS = {
     "manage_goal": {"operation"},
 }
 GOAL_ROUTING = """Decide what the latest question asks Nex to do. Earlier turns can resolve references.
-- Arrange a future reminder, check-in, recurring action, or watch: use goal alone.
+- Arrange a future reminder, check-in, recurring action, or watch: use goal alone. Preserve requested file formats.
 - Read what is already on the user's calendar or task list: use agenda or the named account.
 - Find existing email: use gmail. Arrange a future watch for incoming email: use goal.
 - A concrete report that a personal outcome happened may fulfill a saved goal. Use manage_goal even when
@@ -98,6 +101,7 @@ User: Any mail about the concert? -> {"tools":[{"name":"gmail","query":"concert"
 """ + CLOCK_EXAMPLES + """
 User: Remind me to move the car tomorrow at 2 p.m. -> {"tools":[{"name":"goal","query":"Remind me to move the car","start":"[TOMORROW]T14:00","timing":"tomorrow at 2 p.m."}]}
 User: Remind me what's on my schedule tomorrow -> {"tools":[{"name":"agenda","query":"tomorrow"}]}
+User: Make today's schedule into a newspaper PDF -> {"tools":[{"name":"agenda","query":"today"},{"name":"create_pdf","query":"newspaper"}]}
 User: Can you remind me I'm still waiting for my replacement badge in the mail? -> {"tools":[{"name":"goal","query":"Ask whether my replacement badge arrived","check_in":true}]}
 User: My replacement badge is still in the mail. -> {"tools":[{"name":"manage_goal","operation":"keep"}]}
 User: The replacement badge finally turned up. -> {"tools":[{"name":"manage_goal"}]}
@@ -128,7 +132,9 @@ Examples of complete tool arguments, using the current local date. Choose timing
 
 REVIEW_SCHEDULE = """Plan the requested action in question. Return only JSON {"tools":[...]}.
 Every new goal requires a nonempty query. Requests for future delivery of a report or notification use
-goal, including when the report is about calendar entries or the notification is about email.
+goal, including when the report is about calendar entries or the notification is about email. Keep any
+requested document format and layout in the saved task. For immediate PDF creation choose create_pdf,
+using related read tools when needed. Create PDF tool: """ + PDF_DESCRIPTION + """
 Read proposal as a suggestion. Use prior exchanges for context and goal_references for saved goal facts.
 
 """ + CLOCK_ROUTING + "\nClock tool: " + CLOCK_DESCRIPTION + CLOCK_EXAMPLES + """

@@ -96,4 +96,8 @@ extension Controller {
         let result: ListResponse<NexArtifact> = try await connection().get(path)
         return result.items
     }
+
+    func artifactPDF(_ id: String) async throws -> Data {
+        try await connection().bytes("/v1/workspace/artifacts/" + id + "/pdf")
+    }
 }

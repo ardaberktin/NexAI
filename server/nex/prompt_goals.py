@@ -6,6 +6,7 @@ from .feed import stamp
 from .goal_definition import edited_title, field, summary
 from .goal_follow_ups import RESERVED_RUN
 from .goal_schedule import following_run, parse_schedule
+from .pdf import artifacts as pdf_artifacts
 from .push_queue import enqueue
 from .recall_dates import time_zone
 from .workspace_features import revision as feature_revision
@@ -98,6 +99,8 @@ def finish_prompt(goals, row, result, anchor, epoch):
             if result.text:
                 latest = result.text
                 activity = goals.record(db, identifier, now, GOAL_UPDATE_TITLE, latest, artifact=True)
+                if result.pdf:
+                    pdf_artifacts.insert(db, activity, identifier, now, result.pdf)
                 enqueue(db, activity, anchor)
             if any(watch.pending for watch in result.watches.values()):
                 next_run = stamp(anchor + timedelta(seconds=15))

@@ -20,6 +20,7 @@ class VoiceEnrollmentTests(unittest.IsolatedAsyncioTestCase):
         import httpx
         import numpy as np
         from fastapi import FastAPI
+
         from nex.live.voice_enrollment import install_voice_enrollment
         from nex.live.voice_profiles import SAMPLE_BYTES, VoiceProfiles
 
@@ -122,6 +123,7 @@ class VoiceEnrollmentTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_enrollment_is_bound_to_audio_and_removable_with_fresh_biometrics(self):
         import numpy as np
+
         from nex.live.voice_profiles import enrollment_subject
 
         audio = self.sample * 3

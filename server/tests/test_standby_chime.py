@@ -11,8 +11,9 @@ from nex.live.attention import Attention
                      "requires the live speech virtual environment")
 class StandbyChimeTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        from nex.live.standby import Standby
         from pipecat.audio.vad.vad_analyzer import VADState
+
+        from nex.live.standby import Standby
 
         self.socket = Mock(send_json=AsyncMock())
         speech = Mock()
