@@ -67,7 +67,7 @@ private struct WorkspaceRoot: View {
             }
             #if os(iOS)
             .onAppear {
-                if model.accountSignIn.takeSettingsReturn() { tool = .settings }
+                if model.accountSignIn.takeSettingsReturn() { tool = .settings(.accounts) }
             }
             #endif
     }
@@ -190,7 +190,7 @@ private struct WorkspaceRoot: View {
         #if os(macOS)
         openMacSettings()
         #else
-        tool = .settings
+        tool = .settings(.excalibur)
         #endif
     }
 }
