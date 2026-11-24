@@ -88,11 +88,11 @@ struct WatchQuestionResult: Codable, Sendable {
     init?(_ recording: Recording) {
         if ["queued", "processing"].contains(recording.state) { return nil }
         id = recording.id
-        text = recording.reply.map { String($0.text.prefix(8_000)) }
+        text = recording.reply.map { String($0.voiceText.prefix(8_000)) }
         language = recording.reply?.language
         if let status = recording.reply?.statusMessage { error = status }
-        else if recording.reply?.engine == "private_request" { error = "Open the private inbox to review this question." }
         else if text?.isEmpty == false { error = nil }
+        else if recording.reply?.engine == "private_request" { error = "Open the private inbox to review this question." }
         else if recording.state == "awaiting_transcription" { error = "Speech recognition is unavailable on Excalibur." }
         else { error = recording.error ?? "Nex couldn’t make out that question. Try asking again." }
     }

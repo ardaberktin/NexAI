@@ -74,6 +74,9 @@ struct Reply: Codable, Sendable {
     let engine: String
     var speaker: String? = nil
     var goalId: String? = nil
+    var approvalNotice: String? = nil
+
+    var voiceText: String { engine == "private_request" ? approvalNotice ?? "" : text }
 
     var statusMessage: String? {
         switch engine {

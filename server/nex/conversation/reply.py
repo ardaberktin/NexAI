@@ -9,6 +9,7 @@ from ..coding.intent import PythonRequest, pasted_python
 from ..conversation_recall import QuestionCandidates
 from ..goal_writing import json_object, model_messages, yes_no
 from ..personal_files import owner_preferences
+from ..privacy.voice import voice_reply_text
 from ..store import excerpt
 from ..web_grounding import CITATION, VERIFY_WEB, supported_answer
 from ..web_intent import literal_web_topic, request_text
@@ -106,7 +107,7 @@ def reply(turn, text, engine="local_model", sources=()):
 
 def spoken_text(answer):
     """Verified source code and citation markers stay available in the Chat transcript."""
-    return CITATION.sub("", answer["text"].partition("\n\n```python\n")[0]).strip()
+    return CITATION.sub("", voice_reply_text(answer).partition("\n\n```python\n")[0]).strip()
 
 
 def may_search(turn, plan, tool):

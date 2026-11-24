@@ -123,7 +123,7 @@ class OwnerPrivacyTests(unittest.TestCase):
                 decisions = assistant.choose_python.call_count
                 result = public.answer(assistant, self.state, str(uuid4()), "mac", text, "en", "UTC", spoken=True)
                 self.assertEqual(result["engine"], "private_request")
-                self.assertEqual(before + 2, assistant.generate_conversation.call_count)
+                self.assertEqual(before + 3, assistant.generate_conversation.call_count)
                 self.assertEqual(decisions, assistant.choose_python.call_count)
         self.assertEqual(request_kind("Explain gravity", "UTC", force=True), "private")
 

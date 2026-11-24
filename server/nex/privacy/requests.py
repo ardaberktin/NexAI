@@ -25,7 +25,8 @@ def prune(db, now):
 
 def queue(state, identifier, device, text, language, zone, *, journal=None, screen=False,
           speaker="unverified", asked_at=None, exclude=None, mail=None, session=None, coordinates=None,
-          assistant=None, action=None, plan=None, history=(), defer=False, device_clock=None, recalled_chat=None):
+          assistant=None, action=None, plan=None, history=(), defer=False, device_clock=None,
+          recalled_chat=None, spoken=False):
     data = {"text": text, "language": language, "zone": zone, "screen": screen,
             "needs_location": bool(plan and plan.location and not journal), "exclude": exclude,
             "asked_at": asked_at, "journal": asdict(journal) if journal else None}
@@ -57,14 +58,14 @@ def queue(state, identifier, device, text, language, zone, *, journal=None, scre
                        (identifier, device, payload, speaker, now, now))
         if session and not defer and (not row or row["state"] == "pending"):
             work = begin(db, identifier, device, row["created"] if row else now, data)
-    if session:
-        notice = request_notice(data)
-        if work:
-            goal = complete(state, identifier, work, assistant, coordinates)
-            if goal:
-                notice["goal_id"] = goal
-        return notice
-    return request_notice(data)
+    notice = request_notice(data)
+    if work:
+        goal = complete(state, identifier, work, assistant, coordinates)
+        if goal:
+            notice["goal_id"] = goal
+    if spoken and not session:
+        notice["approval_pending"] = row is None or row["state"] == "pending"
+    return notice
 
 
 def request_notice(data, status="private_request"):

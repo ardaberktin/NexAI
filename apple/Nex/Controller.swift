@@ -654,8 +654,8 @@ final class Controller: ObservableObject {
     }
 
     func speak(_ answer: Reply) async {
-        guard liveConversation == nil else { return }
-        let text = String(answer.text.prefix(1800))
+        let text = String(answer.voiceText.prefix(1800))
+        guard liveConversation == nil, !text.isEmpty else { return }
         let serverVoice = status?.models.speech.contains(answer.language) == true
         var audio: Data?
         if serverVoice, let api {

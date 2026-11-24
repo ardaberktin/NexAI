@@ -82,6 +82,19 @@ enum WatchQuestionDeliveryCheck {
         precondition(!pending.accept(stale) && pending.accept(answer) && !pending.accept(answer))
         try pending.save(to: url)
         precondition(WatchQuestionTicket.restore(from: url)?.result?.text == line.text)
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let notice = "Open the private inbox to approve the pending request."
+        let privateReply = Reply(text: "Earlier reply", language: "en", sources: [], engine: "private_request")
+        let legacy = WatchQuestionResult(receipt(id: id, state: "ready", reply: privateReply))
+        precondition(legacy?.text == "" && legacy?.error != nil)
+        let receiptData = Data("""
+            {"text":"Earlier reply","language":"en","engine":"private_request","sources":[],"approval_notice":"\(notice)"}
+            """.utf8)
+        let announced = try decoder.decode(Reply.self, from: receiptData)
+        let watch = WatchQuestionResult(receipt(id: id, state: "ready", reply: announced))
+        precondition(announced.voiceText == notice && watch?.text == notice && watch?.error == nil)
     }
 
     private static func testTurnLimits() {

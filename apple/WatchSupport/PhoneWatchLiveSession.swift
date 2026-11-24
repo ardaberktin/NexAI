@@ -169,7 +169,7 @@ final class PhoneWatchLiveSession {
             output.discardAudio()
             append(WatchLiveEvent(kind: .stopAudio))
         case "reply", "background":
-            append(WatchLiveEvent(kind: .reply, id: event.id, text: preview(event.reply?.text),
+            append(WatchLiveEvent(kind: .reply, id: event.id, text: preview(event.reply?.voiceText),
                                   language: event.reply?.language))
         case "weather_location_request":
             if let id = event.id, let socket { weatherLocation.respond(to: id, over: socket) }

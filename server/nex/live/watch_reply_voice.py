@@ -11,6 +11,7 @@ import soundfile as sf
 from fastapi import HTTPException, Request, Response
 
 from ..http_api import safe_voice_reply
+from ..privacy.voice import voice_reply_text
 from ..voice_stream import SpeechChunks
 from . import OUTPUT_RATE
 
@@ -50,16 +51,16 @@ def install_watch_reply_voice(app, authenticate):
         if not row or row["device"] != "watch" or row["mode"] != "voice" or row["state"] != "ready":
             raise HTTPException(404)
         reply = row["reply"]
-        if not safe_voice_reply(reply) or not reply.get("text"):
+        if not safe_voice_reply(reply) or not (text := voice_reply_text(reply)):
             raise HTTPException(404)
-        if len(reply["text"]) > MAX_TEXT or reply.get("language") not in {"en", "tr"}:
+        if len(text) > MAX_TEXT or reply.get("language") not in {"en", "tr"}:
             raise HTTPException(422)
         if slot.locked():
             raise HTTPException(429)
         async with slot:
             started = monotonic()
             try:
-                audio = await asyncio.to_thread(render_reply, app.state.speech, reply["text"], reply["language"])
+                audio = await asyncio.to_thread(render_reply, app.state.speech, text, reply["language"])
             except (RuntimeError, ValueError, OSError) as exc:
                 raise HTTPException(503, "Nex voice is unavailable.") from exc
         logging.getLogger("uvicorn.error").info("Watch reply voice rendered: bytes=%d seconds=%.2f",

@@ -1,4 +1,5 @@
 """Model-directed public Chat and recorded voice with private handoff and replay."""
+import asyncio
 import json
 from dataclasses import asdict, replace
 from datetime import datetime
@@ -9,13 +10,14 @@ from ..conversation.clock import DeviceClock
 from ..conversation.goal_context import with_goal_state
 from ..conversation.plan import validated
 from ..conversation.reply import reply, spoken_text
-from ..conversation.sync import execute, make_turn, select
+from ..conversation.sync import execute, generator, make_turn, select
 from ..live.weather_location import Coordinates
 from ..personal_learning import enqueue_context
 from ..store import now
 from .chat_recall import recall_chat
 from .keys import validate_session
 from .requests import queue, request_notice, resolve
+from .voice import with_approval_notice
 
 
 def location_request(turn):
@@ -43,11 +45,14 @@ def answer(assistant, state, identifier, device, text, preference, zone, *, jour
     if lookup_only and (private or not can_preflight(plan)):
         return None
     if private:
-        return handoff(assistant, turn, plan, asked_at=asked_at, speaker=speaker)
-    if ask_location and plan.location and location is None:
+        result = handoff(assistant, turn, plan, asked_at=asked_at, speaker=speaker, spoken=spoken)
+        if spoken:
+            result = asyncio.run(with_approval_notice(result, generator(assistant, turn)))
+    elif ask_location and plan.location and location is None:
         return location_request(turn)
-    coordinates = Coordinates.for_turn(identifier, location) if location is not None and plan.location else None
-    result = execute(assistant, turn, plan, coordinates=coordinates)
+    else:
+        coordinates = Coordinates.for_turn(identifier, location) if location is not None and plan.location else None
+        result = execute(assistant, turn, plan, coordinates=coordinates)
     if emit and (speech := spoken_text(result)):
         emit(speech, result["language"])
     return result | {"public_voice": True} if spoken else result

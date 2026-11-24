@@ -19,6 +19,7 @@ from nex.conversation.question_quotes import SELECT_QUOTES
 from nex.conversation.reply import VERIFY_GOAL, VERIFY_WEB, WRITE, WRITE_GOAL
 from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.privacy.state import digest
+from nex.privacy.voice import WRITE_APPROVAL_NOTICE
 from nex.recorded_intent import INSTRUCTIONS as RECORDED_INTENT
 
 
@@ -27,7 +28,7 @@ def tools(*calls):
 
 
 def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", recorded=None, quotes=None,
-          goal_intent="OTHER"):
+          goal_intent="OTHER", approval_notice=None):
     """Accept a fixed tool list or a callable of the actual turn payload."""
     def generate(messages, *_args, **_kwargs):
         prompt = messages[0]["content"]
@@ -39,6 +40,9 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
             return "USE"
         if prompt == CHOOSE_LANGUAGE:
             return language(json.loads(messages[1]["content"])) if callable(language) else language
+        if prompt == WRITE_APPROVAL_NOTICE:
+            text = approval_notice(json.loads(messages[1]["content"])) if callable(approval_notice) else approval_notice
+            return json.dumps({"notice": text})
         if prompt == VERIFY_WEB:
             return web_verdict
         if prompt in {VERIFY_GOAL, VERIFY_GOAL_PLAN}:
