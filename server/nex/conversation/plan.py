@@ -40,12 +40,14 @@ from .document_routing import (
     CHOOSE_DOCUMENT_ACTION,
     DOCUMENT_ACTION_SCHEMA,
     PDF_READ_TOOLS,
+    PDF_RECOVERY_SCHEMA,
     PLAN_PDF,
     PLAN_PDF_GOAL,
+    REVIEW_PDF_DELIVERY,
     normalize_source_url,
     repair_document_search,
 )
-from .goal_context import goal_references
+from .goal_context import goal_references, pending_pdf_edit
 from .goal_management_prompts import OPERATIONS
 from .goal_plans import (
     GoalPlanError,
@@ -251,6 +253,8 @@ async def select_tools(turn, generate, data):
     label = route.label
     if label in {"answer", "clarify"}:
         return Plan((), clarify=label == "clarify")
+    if label == "manage" and pending_pdf_edit(turn.history):
+        return await select_document(turn, generate, data)
     if not turn.journal and (label == "manage" or label in OPERATIONS):
         tool = {"name": "manage_goal"}
         if label in OPERATIONS:
@@ -305,10 +309,6 @@ async def select_document(turn, generate, data):
     raw = raw if isinstance(raw, str) else ""
     decision = json_object(raw)
     action = decision.get("action", raw.strip().upper().rstrip("."))
-    if action in {"FORMAT", "EDIT"}:
-        return Plan(({"name": "manage_goal", "operation": "edit", "format_only": action == "FORMAT"},))
-    if action in {"CLARIFY", "ADVICE"}:
-        return Plan((), clarify=action == "CLARIFY")
     if action == "NOW":
         sources = decision.get("sources")
         available = ({"create_pdf"} | {name for name in PDF_READ_TOOLS if name in sources}
@@ -321,8 +321,18 @@ async def select_document(turn, generate, data):
     if action in {"REPEAT", "ONCE"}:
         context["document_delivery"] = action
         instructions = PLAN_PDF_GOAL + f"\nThe selected delivery mode is {action}."
-        return await generate_plan(turn, generate, model_messages(instructions, context),
+        plan = await generate_plan(turn, generate, model_messages(instructions, context),
                                    available={"goal"}, goal_review=context)
+        if not plan.error:
+            return plan if plan.tools else Plan((), clarify=True)
+        prompt = model_messages(REVIEW_PDF_DELIVERY, context, schema=PDF_RECOVERY_SCHEMA)
+        action = json_object(await generate(prompt, 35) or "").get("action")
+        if action not in {"FORMAT", "EDIT", "CLARIFY"}:
+            return plan
+    if action in {"FORMAT", "EDIT"}:
+        return Plan(({"name": "manage_goal", "operation": "edit", "format_only": action == "FORMAT"},))
+    if action in {"CLARIFY", "ADVICE"}:
+        return Plan((), clarify=action == "CLARIFY")
     return Plan((), "model_unavailable")
 
 

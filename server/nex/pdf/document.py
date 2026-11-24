@@ -30,6 +30,8 @@ Return only a JSON object with title (up to 120 characters), optional subtitle (
 layout ("report" or "newspaper"), and sections (1 to 18).
 Each section has an optional heading (up to 120 characters) and a paragraphs array of nonempty plain-text
 strings (up to 2500 characters each and 12000 characters total). Each list item can be its own paragraph.
+Use document_brief for the current output format if earlier goal text describes a different format.
+When published_check_in is supplied, copy its question and each choice verbatim as separate paragraphs.
 Use newspaper for a newspaper-style request, with a masthead title and short story headings arranged in two
 columns. Use report for a single-column document. Use the user's requested language and write the actual
 document, without commentary about creating or saving it. Markdown, markup, and emoji are unsupported.

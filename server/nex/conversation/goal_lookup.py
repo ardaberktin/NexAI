@@ -8,7 +8,7 @@ from ..goal_writing import json_object, model_messages
 from ..recall_dates import time_zone
 from ..store import excerpt, normalized
 from ..workspace_features import require
-from .goal_management_prompts import FIND_GOALS
+from .goal_management_prompts import FIND_GOALS, FIND_PDF_GOALS
 
 PAGE_SIZE = 8
 
@@ -34,6 +34,8 @@ def describe(goal, target, recent):
         data["last_discussed_goal"] = True
     if goal["request"]:
         data["request"] = excerpt(goal["request"], 200)
+    if instruction := goal.get("pdf_instruction"):
+        data["pdf_instruction"] = instruction
     if due := goal["check_in_due"] or goal["next_run"] or goal["scheduled_at"]:
         local = datetime.fromisoformat(due).astimezone(time_zone(goal["zone"]))
         data["scheduled_local"] = local.isoformat(timespec="minutes")
@@ -44,14 +46,25 @@ async def shortlist(descriptions, context, generate, *, verify_match=False):
     if len(descriptions) <= PAGE_SIZE and not verify_match:
         return descriptions
     matches = []
+    format_only = context.get("format_only", False)
     for offset in range(0, len(descriptions), PAGE_SIZE):
         page = descriptions[offset:offset + PAGE_SIZE]
-        labels = [row["title"] if row["title"].casefold() == row["task"].casefold()
-                  else f"{row['title']} — {row['task']}" for row in page]
+        if format_only:
+            labels = [{key: row[key] for key in ("title", "task", "status", "frequency", "scheduled_local")
+                       if key in row} for row in page]
+        else:
+            labels = [row["title"] if row["title"].casefold() == row["task"].casefold()
+                      else f"{row['title']} — {row['task']}" for row in page]
         data = {"goals": labels, "message": context["question"]}
         if context.get("history"):
             data["history"] = context["history"]
-        messages = model_messages(FIND_GOALS, data)
+        schema = None
+        if format_only:
+            size = len(page)
+            schema = {"type": "object", "required": ["matches"], "additionalProperties": False,
+                      "properties": {"matches": {"type": "array", "items": {"type": "boolean"},
+                                                 "minItems": size, "maxItems": size}}}
+        messages = model_messages(FIND_PDF_GOALS if format_only else FIND_GOALS, data, schema=schema)
         result = json_object(await generate(messages, 100) or "")
         mask = result.get("matches")
         if not isinstance(mask, list) or len(mask) != len(page) or any(type(item) is not bool for item in mask):

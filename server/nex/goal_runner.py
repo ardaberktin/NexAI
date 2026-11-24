@@ -157,6 +157,8 @@ def run_prompt(store, row, anchor, generate, classify):
             "local_time": anchor.astimezone(time_zone(goal["zone"])).isoformat()}
     tools = plan_for(generate, data)
     pdf_tool = next((tool for tool in tools or () if tool["name"] == "create_pdf"), None)
+    if instruction := goal.get("pdf_instruction"):
+        pdf_tool = {"query": instruction}
     if goal.get("watch_provider") == "gmail":
         watch = next((tool for tool in tools or () if tool["name"] == "new_mail"), {"name": "new_mail"})
         tools = [watch]

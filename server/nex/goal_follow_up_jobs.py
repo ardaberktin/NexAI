@@ -122,12 +122,15 @@ class GoalFollowUpJobs:
             if feature_revision(db, "goals") is None:
                 return
             due = db.execute(
-                "SELECT f.* FROM goal_follow_ups f JOIN goals g ON g.id=f.goal_id "
+                "SELECT f.id,f.goal_id,f.due,f.question,f.uses_goal_run,g.pdf_instruction "
+                "FROM goal_follow_ups f JOIN goals g ON g.id=f.goal_id "
                 "WHERE f.published_at IS NULL AND f.cancelled=0 AND f.due<=? AND g.status='active' "
                 "ORDER BY f.due,f.id LIMIT 24", (now,),
             ).fetchall()
             for row in due:
-                db.execute("UPDATE goal_follow_ups SET published_at=? WHERE id=?", (now, row["id"]))
+                instruction = row["pdf_instruction"]
+                db.execute("UPDATE goal_follow_ups SET published_at=?,pdf_instruction=?,pdf_retry_at=? WHERE id=?",
+                           (now, instruction, now if instruction else None, row["id"]))
                 db.execute("DELETE FROM goal_follow_up_notices WHERE follow_up_id=? AND text IS NULL", (row["id"],))
                 Goals.record(db, row["goal_id"], now, "Follow-up", row["question"], artifact=True, activity=row["id"])
                 if row["uses_goal_run"]:

@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from ..conversation_history import MAX_EXCHANGES
+from ..goal_writing import json_value
 from ..goals import Goals
 from ..recall_dates import time_zone
 from ..store import excerpt
@@ -17,6 +18,16 @@ def clarification_exchange(history):
             and "manage_goal" in answer.get("selected_tools", ()) and "?" in answer["text"]):
         return question, answer
     return ()
+
+
+def pending_pdf_edit(history):
+    if not (exchange := clarification_exchange(history)):
+        return False
+    tools = json_value(exchange[1].get("selected") or "")
+    return isinstance(tools, list) and any(
+        isinstance(tool, dict) and tool.get("name") == "manage_goal" and tool.get("format_only") is True
+        for tool in tools
+    )
 
 
 def with_goal_state(store, history):

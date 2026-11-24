@@ -34,4 +34,6 @@ def summary(row):
     }
     if provider := row["watch_provider"]:
         goal["watch_provider"] = provider
+    if instruction := row["pdf_instruction"]:
+        goal["pdf_instruction"] = instruction
     return goal
