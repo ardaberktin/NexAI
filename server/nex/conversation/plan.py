@@ -203,7 +203,7 @@ def validated(tools):
             if tool.get("mode") == "current" and (times or dates):
                 raise ValueError("Current activity uses fresh recordings. Use range for a date or time window.")
         if name == "manage_goal" and ("query" in tool or
-                ("operation" in tool and tool["operation"] not in OPERATIONS) or
+                ("operation" in tool and tool["operation"] not in OPERATIONS | {"keep_settings"}) or
                 ("format_only" in tool and tool.get("operation") != "edit")):
             raise ValueError("Use a supported manage_goal operation. format_only applies to an edit.")
     if len(names) > 1 and names.intersection({"screen", "goal", "manage_goal", "save_memory", "weather_city", "clock"}):
@@ -360,6 +360,9 @@ async def select_document(turn, generate, data):
         return Plan(({"name": "manage_goal", "operation": "remove_pdf"},))
     if action in {"FORMAT", "EDIT"}:
         return Plan(({"name": "manage_goal", "operation": "edit", "format_only": action == "FORMAT"},))
+    if action == "SKIP" and pending == "REMOVE":
+        # Preserve the private cancellation through handoff without replanning it as a public request.
+        return Plan(({"name": "manage_goal", "operation": "keep_settings"},))
     if action in {"CLARIFY", "ADVICE", "SKIP"}:
         return Plan((), clarify=action == "CLARIFY")
     return Plan((), "model_unavailable")

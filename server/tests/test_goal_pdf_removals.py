@@ -11,10 +11,8 @@ from nex.assistant import Assistant
 from nex.conversation.document_routing import CHOOSE_DOCUMENT_ACTION
 from nex.conversation.goal_management_prompts import (
     CHOOSE_DELETION_SCOPE,
-    SELECT_PDF_REMOVAL_GOAL,
-    VERIFY_PDF_REMOVAL,
+    RESOLVE_PDF_REMOVAL,
 )
-from nex.conversation.goal_pdf_removal import EXTRACT_GOAL_REFERENCE, FIND_GOAL_SUBJECTS
 from nex.conversation.reply import (
     VERIFY_GOAL_PDF_REMOVAL,
     VERIFY_UNSAVED_GOAL,
@@ -34,6 +32,11 @@ from nex.scheduled_plan import PLAN
 from nex.store import Store
 from nex.workspace_content import artifacts, chat_history
 from nex.workspace_schema import WorkspaceConflict
+
+
+def removal_decision(goals, titles):
+    choices = {label: label.partition(". ")[2] in titles for label in goals}
+    return json.dumps({"action": "disable_future_pdfs", "subject": "the named task", "goals": choices})
 
 
 class GoalPDFRemovalTests(unittest.TestCase):
@@ -72,22 +75,15 @@ class GoalPDFRemovalTests(unittest.TestCase):
                 if data["question"] == answer:
                     self.assertEqual(data["pending_pdf_action"], "REMOVE")
                 return '{"action":"REMOVE","sources":[]}'
-            if prompt == EXTRACT_GOAL_REFERENCE:
-                return json.dumps({"reference": None})
-            if prompt == FIND_GOAL_SUBJECTS:
-                ambiguous = needs_choice and data["user_reference"] != answer
-                return json.dumps({"evidence": "Compared the subjects.",
-                                   "matches": [row["number"] for row in data["goals"]
-                                               if not missing and (ambiguous or row["name"] == target)]})
-            if prompt == SELECT_PDF_REMOVAL_GOAL:
-                record, = [row for row in data["goals"] if row["title"] == target]
-                return json.dumps({key: record[key] for key in ("target", "title")})
-            if prompt == VERIFY_PDF_REMOVAL:
-                self.assertEqual(data["selected_goal"], target)
-                if authorization:
-                    self.assertEqual(data["preceding_clarification"][0]["content"], authorization)
-                    self.assertEqual(data["latest_message"], answer)
-                return "YES"
+            if prompt == RESOLVE_PDF_REMOVAL:
+                latest = messages[-1]["content"] if len(messages) > 2 else data["latest_message"]
+                ambiguous = needs_choice and latest != answer
+                if authorization and not ambiguous:
+                    self.assertEqual(data["request"], authorization)
+                    self.assertEqual(messages[-1]["content"], answer)
+                goals = data["goals"]
+                titles = [label.partition(". ")[2] for label in goals] if ambiguous else [target]
+                return removal_decision(goals, [] if missing else titles)
             if prompt == WRITE_GOAL_CLARIFICATION:
                 return json.dumps({"question": "Which goal do you mean, " + " or ".join(data["candidate_titles"]) + "?"})
             if prompt == WRITE_GOAL_PDF_REMOVAL:
@@ -103,7 +99,7 @@ class GoalPDFRemovalTests(unittest.TestCase):
                 status = data["outcome"]["status"]
                 if status == "change_rejected":
                     return "I removed the PDF." if prompt == WRITE_UNSAVED_GOAL else "The goal changed before I could save."
-                self.assertIn(status, {"unverified_change", "no_matching_goal"})
+                self.assertIn(status, {"no_matching_goal", "no_change_requested"})
                 return "No change was saved."
             self.assertEqual(prompt, VERIFY_UNSAVED_GOAL)
             self.assertFalse(data["outcome"]["changed"])
@@ -149,12 +145,13 @@ class GoalPDFRemovalTests(unittest.TestCase):
         self.assertIsNone(self.ask(question, model).get("goal_id"))
         offered = self.followups.previous("mac", self.session)[-1]["goal_choices"]
         self.assertCountEqual(offered, [morning["id"], card["id"], school["id"]])
+
         def narrow(messages, *args, **options):
-            if messages[0]["content"] == FIND_GOAL_SUBJECTS:
+            if messages[0]["content"] == RESOLVE_PDF_REMOVAL:
                 data = json.loads(messages[1]["content"])
-                self.assertEqual(data["user_reference"], "the card")
-                targets = [row["number"] for row in data["goals"] if row["name"] in (card["title"], school["title"])]
-                return json.dumps({"evidence": "Two goals track cards.", "matches": targets})
+                self.assertEqual(messages[-1]["content"], "the card")
+                goals = data["goals"]
+                return removal_decision(goals, [card["title"], school["title"]])
             return model(messages, *args, **options)
 
         self.assertIsNone(self.ask("the card", narrow).get("goal_id"))
@@ -162,12 +159,13 @@ class GoalPDFRemovalTests(unittest.TestCase):
         later = self.save("Walmart card statement")
 
         def resolve(messages, *args, **options):
-            if messages[0]["content"] == FIND_GOAL_SUBJECTS:
+            if messages[0]["content"] == RESOLVE_PDF_REMOVAL:
                 data = json.loads(messages[1]["content"])
-                self.assertEqual(data["user_reference"], answer)
-                self.assertEqual([entry["content"] for entry in data["previous_exchange"] if entry["role"] == "user"],
-                                 [question, "the card"])
-                self.assertCountEqual([row["name"] for row in data["goals"]], [card["title"], school["title"]])
+                self.assertEqual(messages[-1]["content"], answer)
+                self.assertEqual(data["request"], question)
+                self.assertEqual([entry["content"] for entry in messages[2:-1] if entry["role"] == "user"],
+                                 ["the card"])
+                self.assertCountEqual([label.partition(". ")[2] for label in data["goals"]], [card["title"], school["title"]])
             return model(messages, *args, **options)
 
         self.assertEqual(self.ask(answer, resolve)["goal_id"], card["id"])
@@ -182,19 +180,40 @@ class GoalPDFRemovalTests(unittest.TestCase):
         self.assertEqual(result["goal_id"], goal["id"])
         self.assertNotIn("pdf_instruction", self.goals.detail(goal["id"]))
 
-    def test_model_selected_nickname_has_a_unique_grounded_reference(self):
+    def test_generic_confirmation_is_rewritten_with_the_saved_goal_title(self):
         goal = self.save("Ask whether the library pass arrived")
         self.save("Garden check")
         demo = self.model(goal["title"])
+        drafts = []
 
         def generate(messages, *args, **options):
-            if messages[0]["content"] == WRITE_GOAL_PDF_REMOVAL:
-                return "The library pass check will send text updates only."
+            if messages[0]["content"].startswith(WRITE_GOAL_PDF_REMOVAL):
+                drafts.append(messages[0]["content"])
+                if len(drafts) == 1:
+                    return "The goal’s updates have PDF attachments turned off."
+                return f'PDF copies for “{goal["title"]}” are off.'
             return demo(messages, *args, **options)
 
         result = self.ask("Remove the PDF from my library pass check.", generate)
         self.assertEqual(result["goal_id"], goal["id"])
-        self.assertIn("text updates only", requests.inbox(self.store.privacy)["items"][0]["answer"])
+        self.assertEqual(len(drafts), 2)
+        self.assertIn(goal["title"], requests.inbox(self.store.privacy)["items"][0]["answer"])
+        self.assertNotIn("pdf_instruction", self.goals.detail(goal["id"]))
+
+    def test_failed_confirmation_preserves_the_committed_goal_without_publishing_a_generic_reply(self):
+        goal = self.save("Rent")
+        demo = self.model(goal["title"])
+
+        def generate(messages, *args, **options):
+            if messages[0]["content"].startswith(WRITE_GOAL_PDF_REMOVAL):
+                # "currently" contains the title as a substring.
+                return "PDF attachments are currently disabled for the goal."
+            return demo(messages, *args, **options)
+
+        self.ask("Turn off the PDFs for Rent.", generate)
+        row, = requests.inbox(self.store.privacy)["items"]
+        self.assertEqual((row["state"], row["goal_id"], row["answer"]), ("failed", goal["id"], None))
+        self.assertEqual(self.goals.detail(goal["id"])["revision"], goal["revision"] + 1)
         self.assertNotIn("pdf_instruction", self.goals.detail(goal["id"]))
 
     def test_model_cannot_use_an_unrelated_reference_to_turn_off_a_saved_goal(self):
@@ -205,22 +224,45 @@ class GoalPDFRemovalTests(unittest.TestCase):
         self.assertIsNone(result.get("goal_id"))
         self.assertCountEqual(self.goals.overview(), [garden, kitchen])
 
-    def test_verifier_can_reject_a_valid_target_that_belongs_to_the_wrong_goal(self):
-        intended = self.save("Morning report")
-        unrelated = self.save("Kitchen check")
-        model = self.model(unrelated["title"], reject_change=True)
-        asked = "Turn off PDF copies for the Morning report, please."
+    def test_cancelled_removal_decision_is_honored_even_if_routed_to_the_tool(self):
+        goal = self.save("Morning report")
+        model = self.model(goal["title"], reject_change=True)
+        question = "Actually, leave the PDF on for the Morning report."
 
         def generate(messages, *args, **options):
-            if messages[0]["content"] == SELECT_PDF_REMOVAL_GOAL:
-                data = json.loads(messages[1]["content"])
-                self.assertEqual(data["latest_message"], asked)
-                record, = [row for row in data["goals"] if row["title"] == intended["title"]]
-                return json.dumps({key: record[key] for key in ("target", "title")})
+            if messages[0]["content"] == RESOLVE_PDF_REMOVAL:
+                self.assertEqual(json.loads(messages[1]["content"])["latest_message"], question)
+                return json.dumps({"action": "keep_settings", "reason": "leave the PDF on"})
             return model(messages, *args, **options)
 
-        self.assertIsNone(self.ask(asked, generate).get("goal_id"))
-        self.assertCountEqual(self.goals.overview(), [intended, unrelated])
+        self.assertIsNone(self.ask(question, generate).get("goal_id"))
+        self.assertEqual(self.goals.overview(), [goal])
+
+    def test_cancelling_a_pending_removal_stays_private_and_does_not_replan_or_edit(self):
+        goal = self.save("Pass renewal")
+        self.followups.save("mac", self.session, (), "prior", "Switch the checks to text only.", "Which check?",
+                            private=True, selected_tools=["manage_goal"],
+                            selected='[{"name":"manage_goal","operation":"remove_pdf"}]', goal_choices=[goal["id"]])
+        demo = self.model(goal["title"], reject_change=True)
+        routes = []
+
+        def generate(messages, *args, **options):
+            prompt = messages[0]["content"]
+            if prompt.startswith(ROUTE_HEADER):
+                routes.append(messages)
+                return "DOCUMENT"
+            if prompt == CHOOSE_DOCUMENT_ACTION:
+                self.assertEqual(json.loads(messages[1]["content"])["pending_pdf_action"], "REMOVE")
+                return '{"action":"SKIP","sources":[]}'
+            self.assertNotEqual(prompt, RESOLVE_PDF_REMOVAL)
+            return demo(messages, *args, **options)
+
+        result = self.ask("Actually, leave the PDF on.", generate)
+        self.assertEqual(result["engine"], "private_request")
+        self.assertEqual(len(routes), 1)
+        row, = requests.inbox(self.store.privacy)["items"]
+        self.assertEqual((row["state"], row["answer"]), ("ready", "No change was saved."))
+        self.assertEqual(self.goals.overview(), [goal])
 
     def test_mismatched_goal_number_and_title_are_repaired_before_saving(self):
         intended = self.save("Pass renewal")
@@ -229,28 +271,32 @@ class GoalPDFRemovalTests(unittest.TestCase):
         selections = []
 
         def generate(messages, *args, **options):
-            if messages[0]["content"].startswith(SELECT_PDF_REMOVAL_GOAL):
+            if messages[0]["content"].startswith(RESOLVE_PDF_REMOVAL):
                 selections.append(messages)
                 data = json.loads(messages[1]["content"])
-                record, = [row for row in data["goals"] if row["title"] == intended["title"]]
-                return json.dumps({"target": record["target"],
-                                   "title": other["title"] if len(selections) == 1 else intended["title"]})
+                decision = json.loads(removal_decision(data["goals"], [intended["title"]]))
+                if len(selections) == 1:
+                    choices = decision["goals"]
+                    label = next(key for key, matched in choices.items() if matched)
+                    choices[label.partition(". ")[0] + ". " + other["title"]] = choices.pop(label)
+                return json.dumps(decision)
             return model(messages, *args, **options)
 
         self.assertEqual(self.ask("Turn off PDFs for pass renewal.", generate)["goal_id"], intended["id"])
         self.assertEqual(len(selections), 2)
         self.assertIn(other, self.goals.overview())
 
-    def test_invalid_goal_reference_or_missing_verifier_returns_failed_status(self):
+    def test_invalid_or_missing_decision_returns_failed_status_without_saving(self):
         goal = self.save("Library pass arrival")
         model = self.model(goal["title"])
-        for stage, invalid in ((EXTRACT_GOAL_REFERENCE, None),
-                               (FIND_GOAL_SUBJECTS, '{"evidence":"one goal","matches":[true]}'),
-                               (FIND_GOAL_SUBJECTS, '{"evidence":"unknown reference","matches":[99]}'),
-                               (SELECT_PDF_REMOVAL_GOAL, None), (VERIFY_PDF_REMOVAL, None)):
-            with self.subTest(stage=stage, invalid=invalid):
-                def generate(messages, *args, stage=stage, invalid=invalid, **options):
-                    if messages[0]["content"] == stage:
+        key = f'1. {goal["title"]}'
+        invalid_outputs = [None, "{}", '{"action":"keep_settings","goals":{}}']
+        invalid_outputs.extend(json.dumps({"action": "disable_future_pdfs", "subject": "the pass", "goals": fields})
+                               for fields in ({}, {"99. Other goal": True}, {key: 1}, {key: True, "2. Other": False}))
+        for invalid in invalid_outputs:
+            with self.subTest(invalid=invalid):
+                def generate(messages, *args, invalid=invalid, **options):
+                    if messages[0]["content"].startswith(RESOLVE_PDF_REMOVAL):
                         return invalid
                     return model(messages, *args, **options)
 

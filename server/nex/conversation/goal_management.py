@@ -96,6 +96,8 @@ def management_context(turn, operation, format_only, exchange):
 
 
 async def manage_goal(store, turn, generate, operation=None, *, format_only=False):
+    if operation == "keep_settings":
+        return outcome("no_change_requested")
     format_only = format_only or operation == "remove_pdf"
     try:
         goals = await asyncio.to_thread(saved_goals, store)
