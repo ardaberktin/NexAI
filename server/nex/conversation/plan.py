@@ -1,4 +1,5 @@
 """Plan each turn before reading any tool results. Model outputs are untrusted."""
+import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -79,6 +80,7 @@ class Turn:
     resolved_language: str | None = None
     device_clock: DeviceClock | None = None
     legacy_mail: dict | None = None
+    recalled_chat: dict | None = None
 
     @property
     def language(self):
@@ -105,6 +107,8 @@ class Turn:
             ]
         if self.legacy_mail:
             data["previous_mail_filter"] = self.legacy_mail
+        if self.recalled_chat is not None:
+            data["recalled_chat"] = self.recalled_chat
         return data
 
 
@@ -234,9 +238,9 @@ def validate_context(turn, plan):
         raise ValueError("Use daybook for journal facts and create_pdf for a requested file.")
 
 
-async def choose(turn, generate):
+async def choose(turn, generate, *, recall=None):
     data = turn.prompt(planning=True) | {"language": turn.preference}
-    plan = await select_tools(turn, generate, data)
+    plan = await select_tools(turn, generate, data, recall=recall)
     if turn.preference == "auto" and turn.resolved_language is None and not plan.error:
         language_data = {"history": data["history"][-4:], "latest_message": data["question"]}
         raw = await generate(model_messages(CHOOSE_LANGUAGE, language_data), 8)
@@ -246,10 +250,22 @@ async def choose(turn, generate):
     return plan
 
 
-async def select_tools(turn, generate, data):
-    route = Route("general") if turn.journal or (not turn.spoken and pasted_python(turn.text)) else await route_turn(
-        turn, generate, data
-    )
+async def route_with_context(turn, generate, data, recall):
+    if turn.journal or (not turn.spoken and pasted_python(turn.text)):
+        return Route("general")
+    route = await route_turn(turn, generate, data, allow_recall=recall is not None)
+    if route.recall_query is not None:
+        turn.recalled_chat = await asyncio.to_thread(recall, route.recall_query)
+        data["recalled_chat"] = turn.recalled_chat
+        route = await route_turn(turn, generate, data)
+        if route.exchange is not None:
+            match = turn.recalled_chat["exchanges"][route.exchange - 1]
+            turn.recalled_chat = data["recalled_chat"] = {"status": "matched", "exchanges": [match]}
+    return route
+
+
+async def select_tools(turn, generate, data, *, recall=None):
+    route = await route_with_context(turn, generate, data, recall)
     label = route.label
     if label in {"answer", "clarify"}:
         return Plan((), clarify=label == "clarify")
@@ -356,8 +372,11 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
 
 def schedule_context(turn, data):
     history = prompt_history(turn.history, include_tools=False, include_goal_receipts=False)[-4:] if data["history"] else []
-    return {"local_time": data["local_time"], "goal_time_zone": turn.zone, "tomorrow_date": data["tomorrow_date"],
-            "history": history, "goal_references": data.get("goal_references", []), "question": data["question"]}
+    context = {"local_time": data["local_time"], "goal_time_zone": turn.zone, "tomorrow_date": data["tomorrow_date"],
+               "history": history, "goal_references": data.get("goal_references", []), "question": data["question"]}
+    if "recalled_chat" in data:
+        context["recalled_chat"] = data["recalled_chat"]
+    return context
 
 
 async def generate_plan(turn, generate, base, *, goal_review=None, available=None, required=None):

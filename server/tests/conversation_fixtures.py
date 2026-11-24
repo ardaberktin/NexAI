@@ -14,10 +14,10 @@ from nex.conversation.catalog import (
     WEATHER_SCOPE,
 )
 from nex.conversation.clock_tool import PLAN_CLOCK
-from nex.conversation.goal_management_prompts import GOAL_INTENT
 from nex.conversation.mail_watch_plan import PLAN_MAIL_WATCH
 from nex.conversation.question_quotes import SELECT_QUOTES
 from nex.conversation.reply import VERIFY_GOAL, VERIFY_WEB, WRITE, WRITE_GOAL
+from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.privacy.state import digest
 from nex.recorded_intent import INSTRUCTIONS as RECORDED_INTENT
 
@@ -31,10 +31,10 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
     """Accept a fixed tool list or a callable of the actual turn payload."""
     def generate(messages, *_args, **_kwargs):
         prompt = messages[0]["content"]
-        if prompt == GOAL_INTENT:
-            return goal_intent
         if prompt == CLARITY:
             return "CLEAR"
+        if prompt.startswith(ROUTE_HEADER):
+            return goal_intent
         if prompt == WEATHER_SCOPE:
             return "USE"
         if prompt == CHOOSE_LANGUAGE:

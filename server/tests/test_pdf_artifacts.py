@@ -12,10 +12,11 @@ from pypdfium2 import PdfDocument
 from conversation_fixtures import unlock
 from nex.assistant import Assistant
 from nex.conversation.catalog import CLARITY, INSTRUCTIONS, REVIEW_SCHEDULE
-from nex.conversation.goal_management_prompts import GOAL_INTENT, SELECT_GOAL
+from nex.conversation.goal_management_prompts import SELECT_GOAL
 from nex.conversation.pdf_tool import save
 from nex.conversation.plan import choose, validated
 from nex.conversation.reply import WRITE, run
+from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.conversation.sync import make_turn
 from nex.goals import Goals
 from nex.http_api import API
@@ -92,7 +93,7 @@ class PDFWorkflowTests(unittest.TestCase):
         def generate(messages, *_args, **_options):
             prompt = messages[0]["content"]
             payload = json.loads(messages[1]["content"])
-            if prompt == GOAL_INTENT:
+            if prompt.startswith(ROUTE_HEADER):
                 return "OTHER"
             if prompt.startswith((INSTRUCTIONS, REVIEW_SCHEDULE)):
                 seen.append(payload["question"])

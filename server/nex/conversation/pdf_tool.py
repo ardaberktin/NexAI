@@ -37,6 +37,8 @@ def save(store, identifier, goal, document):
 async def find_goal(store, turn, query, generate):
     goals = await asyncio.to_thread(saved_goals, store)
     context = {"question": turn.text, "goal_reference": query, "history": turn.prompt()["history"]}
+    if turn.recalled_chat is not None:
+        context["recalled_chat"] = turn.recalled_chat
     descriptions = [describe(goal, index, None) for index, goal in enumerate(goals, start=1)]
     matches = await shortlist(descriptions, context, generate)
     if not matches:

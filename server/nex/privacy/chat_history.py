@@ -29,11 +29,11 @@ class ChatFollowups:
     def clear(self, device):
         self.latest.pop(device, None)
 
-    def remember(self, device, token, question, result):
+    def remember(self, device, token, identifier, question, result):
         previous = self.previous(device, token)
         if previous and previous[-1].get("private"):
             previous = ()
-        self.save(device, token, previous, question, result["text"], engine=result["engine"])
+        self.save(device, token, previous, identifier, question, result["text"], engine=result["engine"])
 
     def remember_private(self, state, device, token, identifier, question, tools):
         if not token:
@@ -49,15 +49,15 @@ class ChatFollowups:
         if row:
             selected = json.dumps(list(tools), ensure_ascii=False)
             sources = json.loads(row["sources"] or "[]")
-            self.save(device, token, self.previous(device, token), question, row["answer"], private=True,
+            self.save(device, token, self.previous(device, token), identifier, question, row["answer"], private=True,
                       selected=selected, sources=sources, selected_tools=[tool["name"] for tool in tools],
                       goal_id=row["goal_id"],
                       recall_cursor=json.loads(row["cursor"]) if row["cursor"] else None,
                       engine="calculation" if any(t["name"] == "age" for t in tools) else "private_request")
 
-    def save(self, device, token, previous, question, response, **metadata):
+    def save(self, device, token, previous, identifier, question, response, **metadata):
         self.clear(device)
         if token:
-            messages = (*previous[-6:], {"kind": "question", "text": excerpt(question, 900)},
+            messages = (*previous[-6:], {"kind": "question", "text": excerpt(question, 900), "exchange_id": identifier},
                         {"kind": "answer", "text": excerpt(response, 900), **metadata})
             self.latest[device] = Exchange(digest(token), monotonic() + RESUME_WINDOW.total_seconds(), messages)

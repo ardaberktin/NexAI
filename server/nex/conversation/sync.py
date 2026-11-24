@@ -21,8 +21,8 @@ def generator(assistant, turn):
     return generate
 
 
-def select(assistant, turn):
-    return asyncio.run(choose(turn, generator(assistant, turn)))
+def select(assistant, turn, *, recall=None):
+    return asyncio.run(choose(turn, generator(assistant, turn), recall=recall))
 
 
 def execute(assistant, turn, plan, **options):
