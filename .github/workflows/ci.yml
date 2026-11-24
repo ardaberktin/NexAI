@@ -41,6 +41,13 @@ jobs:
           xcodebuild -project apple/Nex.xcodeproj
           -scheme "${{ matrix.scheme }}" -destination "${{ matrix.destination }}"
           -derivedDataPath .build/ci CODE_SIGNING_ALLOWED=NO build
+      - name: Check Chat history and message actions
+        if: matrix.scheme == 'Nex macOS'
+        run: |
+          xcrun swiftc -warnings-as-errors -o .build/chat-sync-check \
+            apple/tests/WorkspaceChatSyncCheck.swift \
+            apple/Nex/{WorkspaceChat,WorkspaceAPI,Types,PrivateChat,WebLookup,ClockAlert,ChatSpeech}.swift
+          .build/chat-sync-check
   source-archives:
     runs-on: ubuntu-24.04
     steps:

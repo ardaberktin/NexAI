@@ -7,6 +7,7 @@ final class Controller {
     var pages: [String: WorkspaceHistoryPage] = [:]
     var answer: (String) async throws -> Reply = { _ in throw URLError(.notConnectedToInternet) }
     var requestedPrivateAnswer = false
+    var requestedText = ""
 
     func workspaceHistory(cursor: String?, wait: Bool) async throws -> WorkspaceHistory { snapshot }
 
@@ -17,6 +18,7 @@ final class Controller {
 
     func ask(_ question: String, id: String, publishReply: Bool, privately: Bool) async throws -> Reply {
         requestedPrivateAnswer = privately
+        requestedText = question
         return try await answer(id)
     }
 }
@@ -70,9 +72,11 @@ enum WorkspaceChatSyncCheck {
         model.answer = { _ in reply }
         await chat.send(model, privately: true)
         precondition(model.requestedPrivateAnswer && chat.sendError == nil)
-        checkPrivateTimeline()
+        let privateAnswer = checkPrivateTimeline()
         await checkHistoryPages()
-        print("Chat reconciled paginated history, private approvals and dismissals, and a lost send response.")
+        await checkReplyActions(privateAnswer)
+        checkSpeechChunks()
+        print("Chat sync, message actions, and speech chunk checks passed.")
     }
 
     @MainActor
@@ -110,7 +114,7 @@ enum WorkspaceChatSyncCheck {
     }
 
     @MainActor
-    static func checkPrivateTimeline() {
+    static func checkPrivateTimeline() -> WorkspaceMessage {
         let chat = WorkspaceChat()
         let original = pair("private")
         original.forEach(chat.receiveVoiceMessage)
@@ -146,7 +150,9 @@ enum WorkspaceChatSyncCheck {
         precondition(history.last?.goalId == "goal-from-chat")
         precondition(history.last?.pdfAttachment == ready.pdfAttachment)
         precondition(history.dropLast().allSatisfy { $0.pdfAttachment == nil })
-        precondition(history.last?.offersReadAloud == false)
+        precondition(history.last?.offersReadAloud == true && history.last?.offersReply == true)
+        precondition(history[2].isPrivate && history.last?.isPrivate == true)
+        precondition(history[2].copyableText == ready.question && history.last?.copyableText == ready.answer)
         // A late device echo must not bring an expired or dismissed exchange back into Chat.
         chat.reconcilePrivate([])
         original.forEach(chat.receiveVoiceMessage)
@@ -154,5 +160,58 @@ enum WorkspaceChatSyncCheck {
         let reopened = WorkspaceMessage.timeline([], privateItems: [ready])
         precondition(reopened.map(\.text) == [ready.question, "Private answer."])
         precondition(reopened.last?.pdfAttachment?.pageCount == 1)
+        return history[3]
+    }
+
+    @MainActor
+    static func checkReplyActions(_ privateAnswer: WorkspaceMessage) async {
+        let model = Controller()
+        let chat = WorkspaceChat()
+        let rows = pair("actions")
+        precondition(rows[0].copyableText == "Ready?" && !rows[0].offersReply && !rows[0].offersReadAloud)
+        precondition(rows[1].copyableText == reply.text && rows[1].offersReply && rows[1].offersReadAloud)
+        precondition(rows.allSatisfy { NexDate.display($0.date) != $0.date })
+
+        chat.draft = "Can you explain this?"
+        chat.insertReply(to: rows[0])
+        precondition(chat.draft == "Can you explain this?" && chat.replyInsertion == 0)
+        chat.insertReply(to: rows[1])
+        precondition(chat.draft == "Can you explain this?\n\nReady.\n\n" && chat.replyInsertion == 1)
+        precondition(model.requestedText.isEmpty && !chat.replyingPrivately)
+
+        chat.draft = "Keep this draft"
+        chat.insertReply(to: privateAnswer)
+        precondition(chat.replyingPrivately)
+        chat.clearPrivateReply()
+        precondition(chat.draft == "Keep this draft" && !chat.replyingPrivately)
+
+        chat.draft = ""
+        chat.insertReply(to: privateAnswer)
+        await chat.send(model, web: true)
+        precondition(model.requestedPrivateAnswer && model.requestedText == privateAnswer.text)
+        precondition(chat.replyingPrivately && chat.draft == privateAnswer.text)
+        precondition(chat.messages.isEmpty && chat.sendError != nil)
+
+        model.answer = { _ in
+            chat.clearPrivateReply()
+            throw CancellationError()
+        }
+        await chat.send(model)
+        precondition(!chat.replyingPrivately && chat.draft.isEmpty)
+        precondition(chat.messages.isEmpty && chat.sendError == nil)
+    }
+
+    static func checkSpeechChunks() {
+        let sentence = "Nex reads the full reply, including its last sentence. "
+        let text = String(repeating: sentence, count: 100) + "End of the reply."
+        let chunks = ChatSpeech.chunks(text)
+        precondition(chunks.count > 1 && chunks.joined(separator: " ") == text)
+        precondition(chunks.allSatisfy { $0.unicodeScalars.count <= ChatSpeech.requestLimit })
+
+        let unicode = String(repeating: "🎙️", count: 1200)
+        let split = ChatSpeech.chunks(unicode)
+        precondition(split.count > 1 && split.joined() == unicode)
+        precondition(split.allSatisfy { $0.unicodeScalars.count <= ChatSpeech.requestLimit })
+        precondition(ChatSpeech.chunks(" \n").isEmpty)
     }
 }

@@ -55,6 +55,8 @@ final class Controller: ObservableObject {
     @Published var liveState: LiveConversation.State?
     @Published private(set) var liveTranscript: String?
     @Published var playing = false
+    @Published private(set) var chatSpeechID: String?
+    @Published private(set) var chatSpeechError: String?
     @Published var reply: Reply?
     let voiceChatMessages = PassthroughSubject<WorkspaceMessage, Never>()
 
@@ -78,6 +80,8 @@ final class Controller: ObservableObject {
     private var syncRequested = false
     private var waitingForVoice: Set<String> = []
     private var speakingStream: String?
+    private var chatSpeechTask: Task<Void, Never>?
+    private var privateChatSpeechGeneration: UUID?
     private var connectSince = Date.now
     private var seenReplies: Set<String> = []
     private var lastStatus = Date.distantPast
@@ -164,6 +168,7 @@ final class Controller: ObservableObject {
     }
 
     private func setConnection(_ connection: NexAPI?, featureCachePin: String? = nil) {
+        if chatSpeechID != nil { stopPlayback() }
         accountSignIn.reset()
         api?.cancelPending()
         api = connection
@@ -659,9 +664,7 @@ final class Controller: ObservableObject {
         let serverVoice = status?.models.speech.contains(answer.language) == true
         var audio: Data?
         if serverVoice, let api {
-            audio = try? await api.bytes("/v1/speech", method: "POST", body: JSONEncoder().encode([
-                "text": text, "language": answer.language
-            ]), timeout: 50)
+            audio = try? await serverSpeech(text, language: answer.language, using: api)
         }
         guard liveConversation == nil, !playing, !capture.voice, !capture.listeningForQuestion else { return }
         beginPlayback()
@@ -677,7 +680,67 @@ final class Controller: ObservableObject {
         }
     }
 
-    func stopPlayback() { speech.stop() }
+    var canStartChatSpeech: Bool {
+        pairing != nil && liveConversation == nil && !playing && !capture.voice && !capture.listeningForQuestion
+    }
+
+    func readChatMessage(_ message: WorkspaceMessage, language: String) {
+        if chatSpeechID == message.id {
+            stopPlayback()
+            return
+        }
+        guard canStartChatSpeech, let api, message.offersReadAloud, let text = message.copyableText,
+              !message.isPrivate || (privacy.unlocked && privacy.connected) else { return }
+
+        let spokenText = MessageMarkdown(text).preview
+        let chunks = ChatSpeech.chunks(spokenText.isEmpty ? text : spokenText)
+        guard !chunks.isEmpty else { return }
+
+        chatSpeechError = nil
+        chatSpeechID = message.id
+        privateChatSpeechGeneration = message.isPrivate ? privacy.generation : nil
+        beginPlayback()
+        speech.beginAudioStream { [weak self] in self?.endPlayback() }
+        chatSpeechTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                for chunk in chunks {
+                    try checkChatSpeechAccess()
+                    let audio = try await serverSpeech(chunk, language: language, using: api)
+                    try checkChatSpeechAccess()
+                    try speech.enqueueAudio(audio)
+                }
+                speech.endAudioStream()
+            } catch {
+                guard !Task.isCancelled else { return }
+                if !(error is CancellationError) { chatSpeechError = error.localizedDescription }
+                stopPlayback()
+            }
+        }
+    }
+
+    private func checkChatSpeechAccess() throws {
+        try Task.checkCancellation()
+        if let generation = privateChatSpeechGeneration,
+           generation != privacy.generation || !privacy.unlocked || !privacy.connected {
+            throw CancellationError()
+        }
+    }
+
+    func stopPrivateChatSpeech() {
+        if privateChatSpeechGeneration != nil { stopPlayback() }
+    }
+
+    private func serverSpeech(_ text: String, language: String, using api: NexAPI) async throws -> Data {
+        try await api.bytes("/v1/speech", method: "POST", body: JSONEncoder().encode([
+            "text": text, "language": language
+        ]), timeout: 50)
+    }
+
+    func stopPlayback() {
+        chatSpeechTask?.cancel()
+        speech.stop()
+    }
 
     private func beginPlayback() {
         playing = true
@@ -685,6 +748,9 @@ final class Controller: ObservableObject {
     }
 
     private func endPlayback() {
+        chatSpeechTask = nil
+        chatSpeechID = nil
+        privateChatSpeechGeneration = nil
         speakingStream = nil
         playing = false
         capture.endPlayback()

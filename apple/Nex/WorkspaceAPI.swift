@@ -222,6 +222,7 @@ struct WorkspaceMessage: Decodable, Identifiable {
     var pdfAttachment: NexArtifact?
     var privateRequest: PrivateAnswer?
     var privateNotice = false
+    var privateQuestion = false
 }
 
 enum WorkspaceDate {
