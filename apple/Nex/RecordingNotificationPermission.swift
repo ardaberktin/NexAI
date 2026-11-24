@@ -10,6 +10,9 @@ struct RecordingNotificationPermission<Details: View>: View {
     var body: some View {
         Group {
             switch authorization {
+            case nil:
+                ProgressView("Checking notification permissions…")
+                    .controlSize(.small)
             case .notDetermined:
                 Button("Enable device notifications", systemImage: "bell") {
                     Task {
