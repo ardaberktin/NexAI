@@ -13,7 +13,7 @@ from nex.assistant import Assistant
 from nex.conversation.calendar_scope import RESOLVE_SCOPE, repair_calendar_scopes
 from nex.conversation.catalog import REVIEW_SCHEDULE, WEATHER_SCOPE
 from nex.conversation.goal_management_prompts import GOAL_INTENT
-from nex.conversation.mail_watch_plan import CHOOSE_MAIL_ACTION, PLAN_MAIL_WATCH
+from nex.conversation.mail_watch_plan import PLAN_MAIL_WATCH
 from nex.conversation.plan import Plan, choose, validated
 from nex.conversation.reply import REVIEW_REPLY, VERIFY_WEB, compose, run
 from nex.conversation.sync import make_turn
@@ -44,12 +44,64 @@ class ModelConversationTests(unittest.TestCase):
             generate = AsyncMock(return_value=tools(*calls))
             self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan(tuple(calls)))
 
-    def test_planning_examples_use_this_turns_local_dates(self):
+    def test_model_can_choose_an_answer_and_language_in_one_call(self):
+        self.turn.preference = "auto"
+        generate = AsyncMock(return_value='{"capabilities":["answer"],"language":"en"}')
+        self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan(()))
+        self.assertEqual(self.turn.language, "en")
+        generate.assert_awaited_once()
+
+    def test_auto_language_verifies_turkish_before_using_it_for_the_reply(self):
+        self.turn.preference = "auto"
+        generate = AsyncMock(side_effect=['{"capabilities":["answer"],"language":"tr"}', "en"])
+        self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan(()))
+        self.assertEqual(self.turn.language, "en")
+        self.assertEqual(generate.await_count, 2)
+
+    def test_selected_capability_gets_its_schema_and_normalizes_a_relative_date_in_one_pass(self):
+        question = "Is it likely to rain tomorrow?"
+        self.turn.text = question
+        generate = AsyncMock(side_effect=[
+            '{"capabilities":["weather"],"language":"en"}',
+            tools({"name": "weather", "period": "forecast", "date": "tomorrow"}),
+        ])
+        plan = asyncio.run(choose(self.turn, generate))
+        self.assertEqual(plan.tools, ({"name": "weather", "period": "forecast", "date": "2026-11-23"},))
+        self.assertEqual(generate.await_count, 2)
+        messages = generate.await_args.args[0]
+        schema = messages.response_format["json_schema"]["schema"]
+        variants = schema["properties"]["tools"]["items"]["anyOf"]
+        self.assertEqual([tool["properties"]["name"]["const"] for tool in variants], ["weather"])
+        self.assertEqual(json.loads(messages[1]["content"])["question"], question)
+
+    def test_equivalent_calendar_timestamp_and_repeated_call_need_no_model_retry(self):
+        args = {"name": "calendar", "start_date": "2026-11-22 00:00:00-08:00"}
+        generate = AsyncMock(side_effect=[
+            '{"capabilities":["calendar"],"language":"en"}',
+            tools(args, {"name": "calendar", "start_date": "2026-11-22"}),
+        ])
+        self.assertEqual(asyncio.run(choose(self.turn, generate)).tools,
+                         ({"name": "calendar", "start_date": "2026-11-22"},))
+        self.assertEqual(generate.await_count, 2)
+
+    def test_long_pasted_python_has_an_explicit_preview_and_keeps_the_original_source(self):
+        program = "# synthetic program\n" * 350 + 'print("done")'
+        request = "Run Python:\n" + program
+        self.turn.text = request
+        data = self.turn.prompt(planning=True)
+        self.assertEqual(data["pasted_program"], {"preview_only": True, "source_bytes": len(program.encode())})
+        self.assertIn("Run Python:", data["question"])
+        self.assertEqual(self.turn.text, request)
+
+    def test_general_planner_uses_the_turn_clock_and_omits_specialized_examples(self):
         generate = AsyncMock(return_value=tools())
         asyncio.run(choose(self.turn, generate))
-        prompt = generate.await_args.args[0][0]["content"]
-        self.assertIn('"start":"2026-11-23T14:00"', prompt)
-        self.assertNotIn("2025-04", prompt)
+        system, payload = generate.await_args.args[0]
+        self.assertEqual(json.loads(payload["content"])["local_time"],
+                         ANCHOR.astimezone(ZoneInfo(ZONE)).isoformat(timespec="minutes"))
+        self.assertNotIn("Set an alarm", system["content"])
+        self.assertNotIn("every evening", system["content"])
+        self.assertNotIn("newspaper", system["content"])
 
     def test_invalid_plans_retry_once_and_cannot_open_tools(self):
         for bad in ([{"name": "shell"}], [dict(MAIL, private=True)], [dict(MAIL, unread=1)],
@@ -141,14 +193,14 @@ class ModelConversationTests(unittest.TestCase):
         watch = {key: value for key, value in proposed.items() if key != "delay_minutes"} | {
             "start": first_run.isoformat(timespec="minutes"), "watch_provider": "gmail",
         }
-        generate = AsyncMock(side_effect=["SCHEDULE", "WATCH", tools({"name": "agenda", "query": "committee decision"}),
-                                          tools(proposed)])
+        generate = AsyncMock(side_effect=['{"capabilities":["mail_watch"],"language":"en"}',
+                                          tools({"name": "agenda", "query": "committee decision"}), tools(proposed)])
         with patch("nex.conversation.plan.repair_calendar_scopes", wraps=repair_calendar_scopes) as repair:
             self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan((watch,)))
             self.assertEqual(repair.await_args.args[1], (watch,))
             repair.assert_awaited_once()
         prompts = [call.args[0][0]["content"] for call in generate.await_args_list]
-        self.assertEqual(prompts, [GOAL_INTENT, CHOOSE_MAIL_ACTION, PLAN_MAIL_WATCH, PLAN_MAIL_WATCH])
+        self.assertEqual(prompts, [GOAL_INTENT, PLAN_MAIL_WATCH, PLAN_MAIL_WATCH])
 
     def test_reminder_feedback_includes_the_users_verbatim_time_phrase(self):
         self.turn.text = "Remind me tomorrow at 2 pm to send an email"
@@ -156,7 +208,7 @@ class ModelConversationTests(unittest.TestCase):
         tomorrow = self.turn.started.astimezone(ZoneInfo(ZONE)).date() + timedelta(days=1)
         task = {"name": "goal", "query": "Send an email", "start": f"{tomorrow}T14:00"}
         corrected = task | {"timing": "tomorrow at 2 pm"}
-        generate = AsyncMock(side_effect=["SCHEDULE", "OTHER", tools(task | {"timing": "at 2 pm tomorrow"}), tools(corrected)])
+        generate = AsyncMock(side_effect=["SCHEDULE", tools(task | {"timing": "at 2 pm tomorrow"}), tools(corrected)])
         self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan((corrected,)))
         self.assertIn("tomorrow at 2 pm", generate.await_args.args[0][-1]["content"])
 
@@ -182,9 +234,16 @@ class ModelConversationTests(unittest.TestCase):
         schedule = "November 29 at 9:00 AM"
         goal = Evidence({"prompt": "Ask whether the library card arrived", "schedule_text": schedule})
         expected = f"I’ll ask whether the card arrived on {schedule}."
-        generate = AsyncMock(side_effect=["I’ll check in tomorrow at 9:00 AM.", expected, "YES"])
+        generate = AsyncMock(side_effect=["I’ll check in tomorrow at 9:00 AM.", "NO", expected, "YES"])
         self.assertEqual(asyncio.run(compose(self.turn, {"goal": goal}, generate)), expected)
-        self.assertEqual(generate.await_count, 3)
+        self.assertEqual(generate.await_count, 4)
+
+    def test_goal_writer_accepts_a_verifiably_equivalent_schedule_format(self):
+        goal = Evidence({"prompt": "Move the car", "schedule_text": "November 29 at 9:00 AM"})
+        expected = "I saved the reminder to move the car at 9 a.m. on November 29."
+        generate = AsyncMock(side_effect=[expected, "YES"])
+        self.assertEqual(asyncio.run(compose(self.turn, {"goal": goal}, generate)), expected)
+        self.assertEqual(generate.await_count, 2)
 
     def test_goal_writer_retries_an_unsupported_promise_when_the_goal_has_no_time(self):
         goal = Evidence({"prompt": "Ask whether the card arrived", "schedule_text": None, "check_in": True})

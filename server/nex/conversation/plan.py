@@ -1,7 +1,8 @@
 """Plan each turn before reading any tool results. Model outputs are untrusted."""
+import logging
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from ..accounts.intent import validate_scope
 from ..activities.recognition import TITLES
@@ -10,30 +11,34 @@ from ..conversation_history import MAX_EXCHANGES, prompt_history
 from ..daybook import DayContext
 from ..goal_schedule import FREQUENCIES
 from ..goal_writing import json_object, model_messages
+from ..model_context import ModelMessages, constrained_messages
 from ..news_sources import validate_news_date
 from ..recall_dates import time_zone
 from ..store import excerpt
-from ..tool_dates import clock_bounds, date_selection
+from ..tool_dates import absolute_day, clock_bounds, date_selection
 from ..weather_intent import weather_city
 from ..web_intent import literal_web_topic
-from .calendar_scope import CALENDAR_READS, repair_calendar_scopes
+from .calendar_scope import (
+    CALENDAR_READS,
+    normalize_calendar_dates,
+    repair_calendar_scopes,
+)
 from .catalog import (
     CATALOG,
     CHOOSE_LANGUAGE,
-    CLARITY,
-    INSTRUCTIONS,
     OPTIONS,
+    PLANNING_TOOLS,
     PUBLIC,
     REVIEW_GOAL_EDIT,
     WEATHER_SCOPE,
-    routing_examples,
+    planning_instructions,
     schedule_instructions,
 )
 from .clock import DeviceClock
 from .clock_tool import PLAN_CLOCK
 from .document_routing import (
     CHOOSE_DOCUMENT_ACTION,
-    CHOOSE_PDF_CADENCE,
+    DOCUMENT_ACTION_SCHEMA,
     PDF_READ_TOOLS,
     PLAN_PDF,
     PLAN_PDF_GOAL,
@@ -41,14 +46,20 @@ from .document_routing import (
     repair_document_search,
 )
 from .goal_context import goal_references
-from .goal_management_prompts import GOAL_INTENT, OPERATIONS
+from .goal_management_prompts import OPERATIONS
 from .goal_plans import (
     GoalPlanError,
     choose_goal_target,
     review_goal_plan,
     validate_goal_action,
 )
-from .mail_watch_plan import PLAN_MAIL_WATCH, prepare_mail_watch, wants_mail_watch
+from .mail_watch_plan import PLAN_MAIL_WATCH, prepare_mail_watch
+from .planning_schema import plan_schema
+from .routing_prompt import Route, route_turn
+
+LOG = logging.getLogger(__name__)
+SCHEDULE_TOOLS = {"goal", "manage_goal", "agenda", "calendar", "ticktick", "gmail"}
+PREFERENCE_TOOLS = {"save_memory", "weather_city"}
 
 
 @dataclass
@@ -77,10 +88,14 @@ class Turn:
             "local_time": local.isoformat(timespec="minutes"),
             "local_time_display": local.strftime("%I:%M %p").lstrip("0"),
             "local_time_zone": self.device_clock.time_zone if self.device_clock else self.zone,
+            "local_date": local.date().isoformat(), "tomorrow_date": (local.date() + timedelta(days=1)).isoformat(),
             "language": self.language, "selected_day": self.journal.day if self.journal else None,
             "history": prompt_history(self.history, include_goal_receipts=not planning),
-            "question": excerpt(self.text, 3600),
+            "question": self.text,
         }
+        if len(self.text) > 3600 and (program := pasted_python(self.text)):
+            data["question"] = excerpt(self.text, 1800)
+            data["pasted_program"] = {"preview_only": True, "source_bytes": len(program.source.encode())}
         if references := goal_references(self.history):
             data["goal_references"] = [
                 {"target": index, **description}
@@ -220,7 +235,7 @@ def validate_context(turn, plan):
 async def choose(turn, generate):
     data = turn.prompt(planning=True) | {"language": turn.preference}
     plan = await select_tools(turn, generate, data)
-    if turn.preference == "auto" and not plan.error:
+    if turn.preference == "auto" and turn.resolved_language is None and not plan.error:
         language_data = {"history": data["history"][-4:], "latest_message": data["question"]}
         raw = await generate(model_messages(CHOOSE_LANGUAGE, language_data), 8)
         selected = raw.strip().lower().rstrip(".") if isinstance(raw, str) else None
@@ -230,36 +245,43 @@ async def choose(turn, generate):
 
 
 async def select_tools(turn, generate, data):
-    label = ""
-    if turn.spoken:
-        check = model_messages(CLARITY, {"history": data["history"], "latest_utterance": data["question"]})
-        verdict = await generate(check, 6)
-        status = verdict.strip().upper().rstrip(".") if isinstance(verdict, str) else ""
-        if status in {"SOCIAL", "UNCLEAR"}:
-            return Plan((), clarify=status == "UNCLEAR")
-        label = status.lower()
-    if not turn.spoken and not turn.journal and not pasted_python(turn.text):
-        request = {key: data[key] for key in ("local_time", "local_time_display", "local_time_zone")}
-        request.update(history=data["history"][-4:], latest_message=data["question"])
-        intent = await generate(model_messages(GOAL_INTENT, request), 6)
-        label = intent.strip().lower().rstrip(".") if isinstance(intent, str) else ""
+    route = Route("general") if turn.journal or (not turn.spoken and pasted_python(turn.text)) else await route_turn(
+        turn, generate, data
+    )
+    label = route.label
+    if label in {"answer", "clarify"}:
+        return Plan((), clarify=label == "clarify")
     if not turn.journal and (label == "manage" or label in OPERATIONS):
         tool = {"name": "manage_goal"}
         if label in OPERATIONS:
             tool["operation"] = label
         return Plan((tool,))
-    if not turn.journal and label == "schedule":
-        return await select_schedule(turn, generate, data)
+    if not turn.journal and label in {"schedule", "recurring", "check_in"}:
+        return await select_schedule(turn, generate, data, goal_type=label)
+    if not turn.journal and label == "mail_watch":
+        context = schedule_context(turn, data) | {"mail_watch": True}
+        watch = {key: context[key] for key in ("local_time", "goal_time_zone", "question")}
+        messages = model_messages(PLAN_MAIL_WATCH, watch, schema=plan_schema({"goal"}, goal_type=label))
+        return await generate_plan(turn, generate, messages, goal_review=context, available={"goal"})
     if not turn.journal and label == "clock":
         return await generate_plan(turn, generate, model_messages(PLAN_CLOCK, data), available={"clock"})
     if label == "document" and not turn.journal:
         return await select_document(turn, generate, data)
-    clock = f"Reading from the asking device's clock: {data['local_time_display']} ({data['local_time']})."
-    instructions = INSTRUCTIONS + routing_examples(data["local_time"]) + "\n" + clock
+    names = {"daybook", "create_pdf"} if turn.journal else route.tools or PLANNING_TOOLS
+    setting_change = bool(route.tools & PREFERENCE_TOOLS)
+    if setting_change:
+        names = names | PREFERENCE_TOOLS
+    instructions = planning_instructions(names, selected=bool(route.tools))
+    if setting_change:
+        instructions += ("\nChoose at most one change. Personal facts and preferences go to save_memory. "
+                         "Changing or forgetting the forecast city goes to weather_city. Act only on an explicit request.")
     if turn.journal:
         instructions += "\nThe user selected a journal entry. Use only daybook for facts about this selection."
         data["selected_highlight"] = turn.journal.focus
-    plan = await generate_plan(turn, generate, model_messages(instructions, data))
+    schema = plan_schema(names, minimum=1 if route.tools and not setting_change else 0,
+                         maximum=1 if setting_change else None)
+    plan = await generate_plan(turn, generate, model_messages(instructions, data, schema=schema),
+                               available=names if route.tools else None)
     names = {tool["name"] for tool in plan.tools}
     if data["history"] and "weather" in names and "agenda" not in names:
         raw = await generate(model_messages(WEATHER_SCOPE, data), 12)
@@ -268,68 +290,69 @@ async def select_tools(turn, generate, data):
             return Plan(())
         if verdict == "REPLAN":
             data = data | {"history": []}
-            plan = await generate_plan(turn, generate, model_messages(instructions, data))
+            fallback = planning_instructions(PLANNING_TOOLS)
+            plan = await generate_plan(turn, generate, model_messages(fallback, data, schema=plan_schema(PLANNING_TOOLS)))
     proposal = next((tool for tool in plan.tools if tool["name"] in {"agenda", "goal"}), None)
-    if proposal and all(tool["name"] != "create_pdf" for tool in plan.tools):
+    if (proposal and (proposal["name"] == "goal" or not label)
+            and "create_pdf" not in names and not turn.journal):
         return await select_schedule(turn, generate, data, proposal, plan.tools)
     return plan
 
 
 async def select_document(turn, generate, data):
     context = schedule_context(turn, data)
-    raw = await generate(model_messages(CHOOSE_DOCUMENT_ACTION, context), 12)
-    action = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
+    raw = await generate(model_messages(CHOOSE_DOCUMENT_ACTION, context, schema=DOCUMENT_ACTION_SCHEMA), 72)
+    raw = raw if isinstance(raw, str) else ""
+    decision = json_object(raw)
+    action = decision.get("action", raw.strip().upper().rstrip("."))
     if action in {"FORMAT", "EDIT"}:
         return Plan(({"name": "manage_goal", "operation": "edit", "format_only": action == "FORMAT"},))
-    if action not in {"CREATE", "SCHEDULE"}:
-        return Plan((), "" if action == "CLARIFY" else "model_unavailable")
-    raw = await generate(model_messages(CHOOSE_PDF_CADENCE, context), 8)
-    cadence = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
-    # A one-time PDF is immediate unless the delivery planner identified a future request.
-    if action == "CREATE" and cadence in {"NOW", "ONCE"}:
+    if action in {"CLARIFY", "ADVICE"}:
+        return Plan((), clarify=action == "CLARIFY")
+    if action == "NOW":
+        sources = decision.get("sources")
+        available = ({"create_pdf"} | {name for name in PDF_READ_TOOLS if name in sources}
+                     if isinstance(sources, list) else PDF_READ_TOOLS)
         descriptions = "\n".join(
-            f"{name}: {description}" for name, description in CATALOG.items() if name in PDF_READ_TOOLS
+            f"{name}: {description}" for name, description in CATALOG.items() if name in available
         )
-        return await generate_plan(turn, generate, model_messages(f"{PLAN_PDF}\n{descriptions}", data),
-                                   available=PDF_READ_TOOLS, required="create_pdf")
-    if cadence in {"REPEAT", "ONCE"}:
-        context["document_delivery"] = cadence
-        instructions = PLAN_PDF_GOAL + f"\nThe selected delivery mode is {cadence}."
+        messages = model_messages(f"{PLAN_PDF}\n{descriptions}", data, schema=plan_schema(available, minimum=1))
+        return await generate_plan(turn, generate, messages, available=available, required="create_pdf")
+    if action in {"REPEAT", "ONCE"}:
+        context["document_delivery"] = action
+        instructions = PLAN_PDF_GOAL + f"\nThe selected delivery mode is {action}."
         return await generate_plan(turn, generate, model_messages(instructions, context),
                                    available={"goal"}, goal_review=context)
     return Plan((), "model_unavailable")
 
 
-async def select_schedule(turn, generate, data, proposal=None, tools=()):
+async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal_type=None):
     context = schedule_context(turn, data)
     instructions = schedule_instructions(data["local_time"])
     can_edit_goal = context["goal_references"] and (proposal is None or proposal["name"] == "goal")
     if can_edit_goal and (target := await choose_goal_target(context, generate)):
         context["edit_target"] = target
         instructions = REVIEW_GOAL_EDIT
-    if "edit_target" not in context and await wants_mail_watch(context, generate):
-        context["mail_watch"] = True
-        watch = {key: context[key] for key in ("local_time", "goal_time_zone", "question")}
-        return await generate_plan(turn, generate, model_messages(PLAN_MAIL_WATCH, watch), goal_review=context)
-    if proposal is None and "edit_target" not in context:
-        context["require_goal"] = True
-        instructions += "\nPlan future delivery using goal. Include the requested format and contents in its query."
     review = {
         **context, "first_choice": proposal["name"] if proposal else None, "proposal": proposal,
         "related_tools": [tool for tool in tools if tool is not proposal],
     }
     if proposal and proposal["name"] == "agenda" and date_selection(proposal):
         review["agenda_dates"] = {key: proposal[key] for key in ("start_date", "end_date") if key in proposal}
-    return await generate_plan(turn, generate, model_messages(instructions, review), goal_review=context)
+    selected_type = goal_type if "edit_target" not in context else None
+    schema = plan_schema(SCHEDULE_TOOLS | {tool["name"] for tool in tools}, goal_type=selected_type)
+    return await generate_plan(turn, generate, model_messages(instructions, review, schema=schema), goal_review=context)
 
 
 def schedule_context(turn, data):
     history = prompt_history(turn.history, include_tools=False, include_goal_receipts=False)[-4:] if data["history"] else []
-    return {"local_time": data["local_time"], "goal_time_zone": turn.zone,
+    return {"local_time": data["local_time"], "goal_time_zone": turn.zone, "tomorrow_date": data["tomorrow_date"],
             "history": history, "goal_references": data.get("goal_references", []), "question": data["question"]}
 
 
 async def generate_plan(turn, generate, base, *, goal_review=None, available=None, required=None):
+    if available is not None and not getattr(base, "response_format", None):
+        base = constrained_messages(base, plan_schema(available))
     messages = base
     invalid_goal = False
     for _ in range(2):
@@ -338,6 +361,9 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
             break
         try:
             tools = json_object(raw).get("tools")
+            if isinstance(tools, list) and len(tools) <= 4:
+                tools = [normalize_plan_tool(turn, tool) for tool in tools]
+                tools = [tool for index, tool in enumerate(tools) if tool not in tools[:index]]
             if required == "create_pdf":
                 tools = normalize_source_url(tools, turn.text)
             if goal_review and goal_review.get("mail_watch"):
@@ -359,8 +385,26 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
             return plan
         except ValueError as error:
             invalid_goal |= isinstance(error, GoalPlanError)
-            messages = [*base, {"role": "assistant", "content": excerpt(raw, 400)},
-                        {"role": "user", "content": f'{error} Return a JSON object with a "tools" array.'}]
+            LOG.debug("Nex tool plan failed validation (%s)", type(error).__name__)
+            messages = ModelMessages(
+                [*base, {"role": "assistant", "content": excerpt(raw, 400)},
+                 {"role": "user", "content": f'{error} Return a JSON object with a "tools" array.'}],
+                getattr(base, "response_format", None),
+            )
     if invalid_goal:
         return Plan((), "invalid_goal_plan")
     return Plan((), "model_unavailable")
+
+
+def normalize_plan_tool(turn, tool):
+    if not isinstance(tool, dict):
+        return tool
+    tool = normalize_calendar_dates(tool, turn.zone, turn.started)
+    if (tool.get("name") == "weather" and isinstance(place := tool.get("query"), str)
+            and place.strip().casefold() in {"local", "here", "my location", "current location"}):
+        tool = {key: value for key, value in tool.items() if key != "query"}
+    if tool.get("name") in ("weather", "archive", "past_questions", "activities", "daybook"):
+        fields = {key: absolute_day(tool[key], turn.zone, turn.started)
+                  for key in ("date", "start_date", "end_date") if key in tool}
+        tool = tool | fields
+    return tool

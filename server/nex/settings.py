@@ -4,10 +4,12 @@ import re
 import threading
 from pathlib import Path
 
+from .model_context import DEFAULT_CONTEXT
+
 DEFAULTS = {
     "llama_server": "", "language_model": "", "ffmpeg": "", "whisper_cli": "",
     "whisper_model": "", "piper": "", "voice_en": "", "voice_tr": "",
-    "threads": 3, "gpu_layers": 0, "context_size": 4096, "use_mac_model": False,
+    "threads": 3, "gpu_layers": 0, "context_size": DEFAULT_CONTEXT, "use_mac_model": False,
 }
 
 

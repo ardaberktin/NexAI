@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 from ..goal_writing import json_object, model_messages
+from .calendar_scope import scope_prompt, weekday_selector, with_weekday
 from .goal_context import clarification_exchange
 from .goal_lookup import describe
 from .goal_management_prompts import EDIT_GOAL
@@ -58,6 +59,7 @@ def changes_for(turn, goal, changes):
 async def plan_edit(turn, goal, context, generate):
     data = {key: value for key, value in context.items() if key != "goals"}
     data["selected_goal"] = describe(goal, 1, None) | {"task": goal["prompt"]}
+    data["upcoming_days"] = scope_prompt(turn.text, turn.zone, turn.started, "")["upcoming_days"]
     instructions = EDIT_GOAL
     if data.get("format_only"):
         instructions += ('\nThis is a format-only change. Return exactly {"format_instruction":"..."} with '
@@ -71,6 +73,10 @@ async def plan_edit(turn, goal, context, generate):
         try:
             if data.get("format_only") and changes.keys() != {"format_instruction"}:
                 raise ValueError("Only format_instruction may change for this request.")
+            if (isinstance(start := changes.get("start"), str) and len(start) > 10
+                    and (weekday := weekday_selector({"query": changes.get("timing")}))):
+                day = with_weekday({}, weekday, turn.zone, turn.started)["start_date"]
+                changes = changes | {"start": day + start[10:]}
             return changes, changes_for(turn, goal, changes)
         except ValueError as error:
             instructions = f"{instructions}\nCorrect the previous edit {changes!r}. {error}"

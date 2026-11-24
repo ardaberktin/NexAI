@@ -6,7 +6,7 @@ from ..accounts.intent import validate_scope
 from ..goal_writing import json_object, model_messages
 from ..recall_dates import time_zone
 from ..store import excerpt
-from ..tool_dates import date_selection
+from ..tool_dates import absolute_day, date_selection
 
 CALENDAR_READS = {"agenda", "calendar", "ticktick"}
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
@@ -29,6 +29,8 @@ async def repair_calendar_scopes(turn, tools, generate):
 async def repair_scope(turn, tool, generate):
     if weekday := weekday_selector(tool):
         return with_weekday(tool, weekday, turn.zone, turn.started)
+    if date_selection(tool):
+        return tool
     try:
         validate_scope({"query": tool.get("query", "")}, turn.zone, turn.started)
     except ValueError:
@@ -55,20 +57,37 @@ def resolved_scope(tool, raw, zone, anchor):
     raise ValueError("Choose a validated calendar date or ask the user for clarification.")
 
 
+def normalize_calendar_dates(tool, zone, anchor):
+    name = tool.get("name")
+    if not isinstance(name, str) or name not in CALENDAR_READS | {"new_calendar"}:
+        return tool
+    fields = {key: absolute_day(tool[key], zone, anchor) for key in ("start_date", "end_date") if key in tool}
+    normalized = tool | fields
+    if "start_date" in fields and "end_date" not in fields and (weekday := weekday_selector({"query": fields["start_date"]})):
+        normalized = with_weekday(normalized, weekday, zone, anchor)
+    if normalized != tool and normalized.get("start_date") and normalized.get("end_date") == normalized["start_date"]:
+        normalized.pop("end_date")
+    return normalized
+
+
 def weekday_selector(tool):
     # Decode an exact enum from the model's tool arguments, independent of the user's natural-language wording.
-    parts = tool.get("query", "").strip().casefold().split()
-    if len(parts) == 2 and parts[0] in ("next", "last") and parts[1] in WEEKDAYS:
-        return parts[1], "next" if parts[0] == "next" else "previous"
+    query = tool.get("query", "")
+    parts = query.strip().casefold().split() if isinstance(query, str) else []
+    if len(parts) == 2 and parts[0] in ("next", "last", "this") and parts[1] in WEEKDAYS:
+        return parts[1], "previous" if parts[0] == "last" else parts[0]
 
 
 def with_weekday(tool, selector, zone, anchor):
     name, direction = selector
-    if name not in WEEKDAYS or direction not in ("next", "previous"):
+    if name not in WEEKDAYS or direction not in ("next", "previous", "this"):
         raise ValueError("Select a valid weekday and next or previous direction.")
     local = anchor.astimezone(time_zone(zone)).date()
     weekday = WEEKDAYS.index(name)
-    days = (weekday - local.weekday()) % 7 if direction == "next" else (local.weekday() - weekday) % 7
-    offset = days or 7
-    chosen = local + timedelta(days=offset if direction == "next" else -offset)
+    if direction == "previous":
+        offset = -((local.weekday() - weekday) % 7 or 7)
+    else:
+        days = (weekday - local.weekday()) % 7
+        offset = days if direction == "this" else (days or 7)
+    chosen = local + timedelta(days=offset)
     return {key: value for key, value in tool.items() if key != "end_date"} | {"start_date": chosen.isoformat()}

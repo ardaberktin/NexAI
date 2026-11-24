@@ -95,8 +95,15 @@ class Goals:
             if old is None and self.was_deleted(db, identifier):
                 raise WorkspaceMissing("That goal is unavailable.")
             result = save_prompt(db, self, identifier, data, old, anchor)
-            return self.save_assessment(db, old, result, anchor, data.get("revision"), request, language, check_in,
-                                        chat_request_id)
+            result = self.save_assessment(db, old, result, anchor, data.get("revision"), request, language, check_in,
+                                          chat_request_id)
+            if old is None or old["revision"] != result["revision"]:
+                db.execute(
+                    "UPDATE goals SET original_request=CASE WHEN original_request='' THEN ? ELSE original_request END,"
+                    "reply_language=COALESCE(?, reply_language) WHERE id=?",
+                    (request, language if language in ("en", "tr") else None, identifier),
+                )
+            return result
 
     def save_assessment(self, db, old, goal, anchor, revision, request, language, check_in, chat_request_id):
         identifier = goal["id"]

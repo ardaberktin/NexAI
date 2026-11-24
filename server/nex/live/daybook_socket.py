@@ -4,7 +4,9 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 
-MAX_REQUEST = 32_768
+from ..model_context import ModelMessages
+
+MAX_REQUEST = 262_144
 
 
 @asynccontextmanager
@@ -14,13 +16,14 @@ async def daybook_socket(path, dialogue):
             async with asyncio.timeout(32):
                 raw = await reader.readline()
                 body = json.loads(raw)
+                messages = ModelMessages(body["messages"], body.get("response_format"))
                 if body.get("decision") is True:
                     async with asyncio.timeout(4.5):
                         await dialogue.idle.wait()
-                        text = await dialogue.classify(body["messages"])
+                        text = await dialogue.classify(messages)
                 else:
                     sampling = {"temperature": 0} if body.get("temperature") == 0 else {}
-                    text = await dialogue.background_text(body["messages"], body["max_tokens"], **sampling)
+                    text = await dialogue.background_text(messages, body["max_tokens"], **sampling)
                 writer.write(json.dumps({"text": text}).encode() + b"\n")
                 await writer.drain()
         except (TimeoutError, OSError, ValueError, KeyError, TypeError):

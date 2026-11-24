@@ -10,13 +10,13 @@ from .intent import AccountIntent, date_window
 from .read import account_reply, prepare_account
 
 
-def agenda_evidence(store, query, zone, reference, *, limit=12, selection=None):
+def agenda_evidence(store, query, zone, reference, *, limit=12, selection=None, exclude_goal=None):
     start, end = local_bounds(selection, zone) if selection else date_window(query, zone, reference)
     with store.connect() as db:
         scheduled = db.execute(
             """SELECT title,scheduled_at FROM goals WHERE interval_minutes=0 AND status='active'
-               AND scheduled_at>=? AND scheduled_at<? ORDER BY scheduled_at, id LIMIT 20""",
-            (time_key(start), time_key(end)),
+               AND scheduled_at>=? AND scheduled_at<? AND id IS NOT ? ORDER BY scheduled_at, id LIMIT 20""",
+            (time_key(start), time_key(end), exclude_goal),
         ).fetchall() if enabled(db, "goals") else []
     items = [(datetime.fromisoformat(row["scheduled_at"]).astimezone(start.tzinfo).strftime("%Y-%m-%d %H:%M"),
               "Nex goal", row["title"]) for row in scheduled]

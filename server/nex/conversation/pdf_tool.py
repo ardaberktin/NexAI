@@ -5,7 +5,7 @@ import asyncio
 from ..goal_writing import json_object, model_messages
 from ..goals import Goals
 from ..pdf import artifacts
-from ..pdf.document import WRITE_DOCUMENT, Document, PDFError
+from ..pdf.document import DOCUMENT_SCHEMA, WRITE_DOCUMENT, Document, PDFError
 from ..pdf.render import render
 from ..pdf.web import WRITE_WEB_DOCUMENT, document_with_sources
 from ..store import now
@@ -70,7 +70,7 @@ async def create_pdf(store, turn, tool, evidence, generate):
         instructions = WRITE_WEB_DOCUMENT if web else WRITE_DOCUMENT
         revision = ""
         for attempt in range(2):
-            raw = await generate(model_messages(instructions + revision, context), 2600)
+            raw = await generate(model_messages(instructions + revision, context, schema=DOCUMENT_SCHEMA), 2600)
             if not raw:
                 context["revision_needed"] = "Return the complete document as concise JSON using the supplied evidence."
                 status = "model_unavailable"

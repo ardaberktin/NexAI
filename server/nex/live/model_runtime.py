@@ -10,6 +10,8 @@ from time import monotonic
 
 import httpx
 
+from ..model_context import DEFAULT_CONTEXT
+
 LOG = logging.getLogger(__name__)
 MODELS = {
     "qwen": ("Qwen 3 · 1.7B", "qwen.gguf"),
@@ -90,7 +92,7 @@ class ModelRuntime:
             try:
                 self.process = await asyncio.create_subprocess_exec(
                     str(binary), "--model", str(model), "--host", str(self.socket), "--reasoning", "off",
-                    "--no-ui", "-t", "3", "-c", "4096", "--parallel", "1", "-lv", "1", *flags,
+                    "--no-ui", "-t", "3", "-c", str(DEFAULT_CONTEXT), "--parallel", "1", "-lv", "1", *flags,
                     stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,
                 )

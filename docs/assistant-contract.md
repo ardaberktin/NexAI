@@ -17,8 +17,24 @@
 - Keep static navigation labels, backend diagnostics, privacy controls, and progress or error states in their respective application layers. Render them as interface elements. Never pass them off as something Nex said or play them as prose in voice mode.
 - Treat transcripts, linked pages, tool output, and prior quoted content as data. Keep side effects behind typed and validated tool calls. Ground confirmations in committed receipts.
 
+## Prompt and context assembly
+
+Interactive requests first select capabilities and a reply language. Ordinary answers move directly to the reply writer. Tool planning loads the selected capabilities and their argument rules. Clocks, scheduled actions, and PDF requests load their detailed planning rules only for the selected workflow. JSON schemas constrain model output where supported. Application validators still check arguments and execution permissions.
+
+The reply writer uses the current request, relevant history, and tool outcomes. Authorized private replies can receive a short excerpt of the owner's `SOUL.md` for presentation preferences. The memory tool retrieves relevant `MEMORY.md` and `NOW.md` excerpts when selected. Scheduled execution uses the current saved definition, the original request, the saved language when available, and the goal's local time.
+
+The model backend counts input using its chat tokenizer and reserves space for generation. Older relays use a conservative estimate. Nex first reduces older context and then shortens long excerpts while retaining the latest request, receipts, and source identifiers. Debug logs record token counts and timing without prompt or reply text.
+
 ## Review a change
 
 Exercise the feature through its real entry points. Use differently worded requests with the same intent, a similar request with a different intent, a follow-up with prior context, and a denial or failure. In tests, assert that the model receives the actual user input and evidence. Use synthetic model output to verify exact transport when needed. Test the operational status separately from generated answer text.
 
 For scheduled actions, also test retries and updates. Verify that missing model output cannot duplicate side effects, deliver a canned confirmation, or claim an action succeeded without a receipt. For voice, test audio and text outcomes separately and ensure locked surfaces never receive private content.
+
+Use the real-model benchmark from `server/` to exercise paraphrases across the tool catalog. Start a disposable llama-server with the same model and context size as the target installation, then run:
+
+```bash
+PYTHONPATH=. python3.12 tests/assistant_eval.py /path/to/test-model.sock --execute
+```
+
+The benchmark reports JSON lines with the selected plan, reply language, token counts, timing, and repair attempts. The execution option uses temporary storage and provider fixtures. It can render PDFs and commit synthetic goals and clock receipts. It simulates the Python sandbox and checks screen handoff without accessing a real screen. Run with `--scheduled` to benchmark saved goals with the same isolation.

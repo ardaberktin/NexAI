@@ -5,6 +5,22 @@ from datetime import date, datetime, time, timedelta
 from .recall_dates import time_zone
 
 DATE_FIELDS = {"start_date", "end_date"}
+RELATIVE_DAY = {"yesterday": -1, "today": 0, "tomorrow": 1}
+
+
+def absolute_day(value, zone, anchor):
+    """Convert a tool's relative day or timestamp to a local calendar date."""
+    if not isinstance(value, str):
+        return value
+    local = anchor.astimezone(time_zone(zone)).date()
+    if value.casefold() in RELATIVE_DAY:
+        return (local + timedelta(days=RELATIVE_DAY[value.casefold()])).isoformat()
+    if "T" in value or " " in value:
+        try:
+            return datetime.fromisoformat(value).date().isoformat()
+        except ValueError:
+            pass
+    return value
 
 
 def date_selection(tool):

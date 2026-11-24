@@ -27,6 +27,8 @@ class PublicSpeechPrivacyTests(unittest.IsolatedAsyncioTestCase):
         generate = model([], compose="Hello. Welcome.")
 
         def stream(request):
+            if request.url.path.endswith("/input_tokens"):
+                return httpx.Response(200, json={"input_tokens": 50})
             sends.append(json.loads(request.content))
             content = generate(sends[-1]["messages"])
             return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})

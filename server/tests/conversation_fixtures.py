@@ -15,7 +15,7 @@ from nex.conversation.catalog import (
 )
 from nex.conversation.clock_tool import PLAN_CLOCK
 from nex.conversation.goal_management_prompts import GOAL_INTENT
-from nex.conversation.mail_watch_plan import CHOOSE_MAIL_ACTION, PLAN_MAIL_WATCH
+from nex.conversation.mail_watch_plan import PLAN_MAIL_WATCH
 from nex.conversation.question_quotes import SELECT_QUOTES
 from nex.conversation.reply import VERIFY_GOAL, VERIFY_WEB, WRITE, WRITE_GOAL
 from nex.privacy.state import digest
@@ -27,7 +27,7 @@ def tools(*calls):
 
 
 def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", recorded=None, quotes=None,
-          mail_action="OTHER", goal_intent="OTHER"):
+          goal_intent="OTHER"):
     """Accept a fixed tool list or a callable of the actual turn payload."""
     def generate(messages, *_args, **_kwargs):
         prompt = messages[0]["content"]
@@ -45,8 +45,6 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
             return "YES"
         if prompt == CHOOSE_GOAL_TARGET:
             return "1"
-        if prompt == CHOOSE_MAIL_ACTION:
-            return mail_action
         if prompt == RECORDED_INTENT:
             if recorded is None:
                 return "{}"

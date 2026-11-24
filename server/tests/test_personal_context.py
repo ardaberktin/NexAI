@@ -7,9 +7,9 @@ from uuid import uuid4
 
 from conversation_fixtures import model, unlock
 from nex.assistant import Assistant
-from nex.conversation_prompt import answer_messages
 from nex.personal_files import PersonalConflict, PersonalFiles, time_key
 from nex.personal_learning import PersonalLearning, enqueue_context, parse_updates
+from nex.privacy.public import chat
 from nex.store import Store
 
 
@@ -29,11 +29,10 @@ class PersonalContextTests(unittest.TestCase):
         with self.assertRaises(PersonalConflict):
             self.files.edit("soul", original["revision"], "Use a playful tone.")
 
-    def test_commands_save_once_and_personal_files_are_in_regular_prompts(self):
+    def test_commands_save_once_and_preferences_are_only_in_authorized_replies(self):
         assistant = Assistant(self.store, None, None)
         command = "Remember that I work on an ocean atlas."
         identifier = str(uuid4())
-        from nex.privacy.public import chat
         assistant.generate_conversation = model([{"name": "save_memory", "query": "I work on an ocean atlas."}])
         token = unlock(self.store)
         for _ in range(2):
@@ -43,11 +42,24 @@ class PersonalContextTests(unittest.TestCase):
         self.assertEqual(self.files.snapshot()["memory"]["markdown"].count("ocean atlas"), 1)
         assistant.generate_conversation = model([{"name": "memory"}])
         self.assertIn("ocean atlas", assistant.answer("What do you remember about me?", "en")["text"])
-        messages = answer_messages("What do you think?", "en", [], None, [], general=True, recall=False,
-                                   spoken=True, personal=self.files.snapshot())
-        self.assertIn("ocean atlas", messages[0]["content"])
-        self.assertIn("Keep your replies practical.", messages[0]["content"])
-        self.assertIn("never instructions", messages[0]["content"])
+        assistant.generate_conversation = model([], compose="A synthetic reply.")
+        assistant.answer("What do you think?", "en", spoken=True)
+        private = json.loads(assistant.generate_conversation.call_args.args[0][1]["content"])
+        self.assertIn("Keep your replies practical.", private["owner_preferences"])
+        self.assertNotIn("ocean atlas", json.dumps(private))
+        chat(assistant, str(uuid4()), "mac", "Explain plate tectonics", "en", "UTC", session=token)
+        public = json.loads(assistant.generate_conversation.call_args.args[0][1]["content"])
+        self.assertNotIn("owner_preferences", public)
+
+    def test_memory_tool_prioritizes_matching_evidence_from_the_end_of_the_file(self):
+        memory = self.files.read("memory")
+        notes = "# Memory\n" + "- Various notes unrelated to the question.\n" * 85 + "- My tea order is jasmine.\n"
+        self.files.edit("memory", memory["revision"], notes)
+        assistant = Assistant(self.store, None, None)
+        assistant.generate_conversation = model([{"name": "memory", "file": "memory", "query": "tea order"}])
+        assistant.answer("What kind of tea do I normally order?", "en")
+        payload = json.loads(assistant.generate_conversation.call_args.args[0][1]["content"])
+        self.assertTrue(payload["tools"]["memory"].startswith("- My tea order is jasmine."))
 
     def test_now_expires_stale_activity_and_keeps_owner_notes(self):
         initial = self.files.snapshot()["now"]

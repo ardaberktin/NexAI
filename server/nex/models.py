@@ -14,6 +14,14 @@ from array import array
 from pathlib import Path
 
 from .audio_files import open_audio
+from .model_context import (
+    INPUT_TOKENS_PATH,
+    ContextBudget,
+    context_size,
+    input_tokens,
+    log_completion,
+    response_options,
+)
 from .settings import chat_route
 from .transcription import has_audible_input, read_whisper_transcript
 from .warm_speech import WarmPiper
@@ -265,7 +273,7 @@ class Engines:
     def generate_warm(self, messages, tokens, *, decision=False, temperature=None):
         # The live daemon gives its active voice conversation priority over archive clients.
         path = self.runtime.parent / "nex-live" / "daybook.sock"
-        body = {"messages": messages, "max_tokens": tokens}
+        body = {"messages": messages, "max_tokens": tokens} | response_options(messages)
         if decision:
             body["decision"] = True
         if temperature is not None:
@@ -283,13 +291,25 @@ class Engines:
             pass
         return None
 
+    def budget_completion(self, options, config, socket_options):
+        capacity = config["context_size"]
+        if socket_options:
+            props = self.request("GET", "/props", timeout=2, **socket_options)
+            capacity = context_size(props, capacity)
+        budget = ContextBudget(options, capacity)
+        for candidate in budget.candidates():
+            payload = self.request("POST", INPUT_TOKENS_PATH, candidate, timeout=2, **socket_options)
+            if fitted := budget.fit(candidate, input_tokens(payload)):
+                return fitted
+        return budget.remaining()
+
     def generate(self, messages, tokens, config, *, on_text=None, wait=True, decision=False, temperature=None,
                  thinking=True):
         route = "live" if self.managed_live() else chat_route(config)
         if route is None:
             return None
         options = {"messages": messages, "max_tokens": tokens, "temperature": 0.25 if temperature is None else temperature,
-                   "stream": on_text is not None}
+                   "stream": on_text is not None} | response_options(messages)
         if decision or not thinking:
             options["chat_template_kwargs"] = {"enable_thinking": False}
         if decision:
@@ -310,11 +330,15 @@ class Engines:
                 path = self.mac_socket()
                 if not path:
                     raise ModelError("Start the Mac model relay to use the optional Mac backend.")
+            socket_options = {"socket_path": path} if path is not None else {}
+            started = time.monotonic()
+            options = self.budget_completion(options, config, socket_options)
             if on_text is not None:
                 answer = self.stream_completion(options, path, on_text)
+                log_completion(route, started, None)
             else:
-                socket_option = {"socket_path": path} if path is not None else {}
-                output = self.request("POST", "/v1/chat/completions", options, timeout=5 if decision else 130, **socket_option)
+                output = self.request("POST", "/v1/chat/completions", options, timeout=5 if decision else 130, **socket_options)
+                log_completion(route, started, output, status="ok" if output else "failed")
                 answer = output["choices"][0]["message"]["content"].strip()
             if not answer:
                 raise ModelError("The offline language model returned an empty answer.")

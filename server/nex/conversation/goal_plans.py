@@ -23,8 +23,6 @@ def validate_goal_action(tools, review):
     tool, *other = tools
     if review.get("edit_target") and tool["name"] not in {"goal", "manage_goal"}:
         raise GoalPlanError("Return a goal update for the matched edit_target.")
-    if review.get("require_goal") and tool["name"] not in {"goal", "manage_goal", "clock"}:
-        raise GoalPlanError("Use a goal for future delivery. Preserve the requested cadence and output format.")
     delivery = review.get("document_delivery")
     if delivery and (not tool.get("start") or tool.get("check_in") or "target" in tool
                      or bool(tool.get("frequency")) != (delivery == "REPEAT")):

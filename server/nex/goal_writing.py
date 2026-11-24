@@ -2,6 +2,7 @@
 
 import json
 
+from .model_context import constrained_messages
 from .store import excerpt
 
 MAIL_GUIDANCE = """Explain what the sender says and what it means for the user.
@@ -23,13 +24,16 @@ MAIL_TRIAGE = (
 )
 
 
-def model_messages(system, data):
-    return [{"role": "system", "content": system},
-            {"role": "user", "content": json.dumps(data, ensure_ascii=False)}]
+def model_messages(system, data, *, schema=None):
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(data, ensure_ascii=False)}]
+    if schema is None:
+        return messages
+    return constrained_messages(messages, schema)
 
 
-def ask(generate, system, data, tokens):
-    result = generate(model_messages(system, data), tokens) if generate else None
+def ask(generate, system, data, tokens, *, schema=None):
+    result = generate(model_messages(system, data, schema=schema), tokens) if generate else None
     return result.strip() if isinstance(result, str) else ""
 
 

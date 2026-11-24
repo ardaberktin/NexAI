@@ -3,10 +3,20 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
+from time import monotonic
 
 import httpx
 
 from ..daybook import DayContext
+from ..model_context import (
+    DEFAULT_CONTEXT,
+    INPUT_TOKENS_PATH,
+    ContextBudget,
+    context_size,
+    input_tokens,
+    log_completion,
+    response_options,
+)
 from .public_reply import public_reply
 from .weather_location import Coordinates
 
@@ -85,7 +95,7 @@ class Dialogue:
 
     @staticmethod
     def request(messages, limit, *, stream=False, thinking=False):
-        result = {"messages": messages, "max_tokens": limit, "temperature": 0.4, "stream": stream}
+        result = {"messages": messages, "max_tokens": limit, "temperature": 0.4, "stream": stream} | response_options(messages)
         if not thinking:
             result["chat_template_kwargs"] = {"enable_thinking": False}
         return result
@@ -94,9 +104,32 @@ class Dialogue:
         options = self.request(messages, limit, thinking=client is self.mac)
         if temperature is not None:
             options["temperature"] = temperature
+        started = monotonic()
+        options = await self.budget_completion(client, options)
         response = await client.post("/v1/chat/completions", json=options)
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"].strip()
+        payload = response.json()
+        log_completion("mac" if client is self.mac else "live", started, payload)
+        return payload["choices"][0]["message"]["content"].strip()
+
+    async def budget_completion(self, client, options):
+        capacity = DEFAULT_CONTEXT
+        if client is self.mac:
+            try:
+                props = await client.get("/props", timeout=2)
+                capacity = context_size(props.json()) if props.is_success else DEFAULT_CONTEXT
+            except (httpx.HTTPError, ValueError):
+                pass
+        budget = ContextBudget(options, capacity)
+        for candidate in budget.candidates():
+            try:
+                response = await client.post(INPUT_TOKENS_PATH, json=candidate, timeout=2)
+                count = input_tokens(response.json()) if response.is_success else None
+            except (httpx.HTTPError, ValueError):
+                count = None
+            if fitted := budget.fit(candidate, count):
+                return fitted
+        return budget.remaining()
 
     async def classify(self, messages):
         # A standby decision has a short deadline even while a Daybook job is generating.

@@ -57,6 +57,46 @@ class PromptGoalTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT id FROM goal_push_delivery").fetchone()[0], update["id"])
         self.assertEqual(self.goals.detail(self.id)["next_run"], stamp(datetime(2026, 11, 1, 16, tzinfo=UTC)))
 
+    def test_goal_runs_receive_original_request_saved_language_and_current_definition(self):
+        original = "Her gün bitkiler hakkında Türkçe bir özet gönder."
+        draft = {"prompt": "Summarize the plants every day.", "frequency_minutes": 1440,
+                 "scheduled_at": stamp(self.due), "zone": "America/Los_Angeles"}
+        saved = self.goals.save(self.id, draft, anchor=self.now, request=original, language="tr")
+        amended = "Summarize the garden lights every day."
+        self.goals.save(self.id, draft | {"prompt": amended, "revision": saved["revision"]}, anchor=self.now)
+        self.generate.side_effect = ['{"tools":[]}', "Bahçe ışıkları açık."]
+        self.goals.run(self.due)
+        for call in self.generate.call_args_list:
+            data = json.loads(call.args[0][1]["content"])
+            self.assertEqual((data["original_request"], data["language"], data["goal"], data["time_zone"]),
+                             (original, "tr", amended, draft["zone"]))
+        self.assertEqual(chat_history(self.store)[0]["text"], "Bahçe ışıkları açık.")
+
+    def test_scheduled_source_selection_scopes_arguments_to_the_selected_provider(self):
+        self.save("List tomorrow's Google Calendar appointments.")
+        self.generate.side_effect = [
+            '{"sources":["calendar"]}', '{"tools":[{"name":"calendar","query":"tomorrow"}]}', "Lab at 10.",
+        ]
+        with patch("nex.goal_runner.prepare_account", return_value=("Calendar", [{"title": "Lab"}], "")) as calendar:
+            self.goals.run(self.due)
+        calendar.assert_called_once()
+        self.assertEqual(calendar.call_args.args[1].provider, "calendar")
+        planned = self.generate.call_args_list[1].args[0]
+        self.assertIn("calendar: Named Google Calendar", planned[0]["content"])
+        self.assertNotIn("gmail:", planned[0]["content"])
+        self.assertEqual(chat_history(self.store)[0]["text"], "Lab at 10.")
+
+    def test_goal_context_migration_recovers_saved_language(self):
+        draft = {"prompt": "A legacy goal", "scheduled_at": stamp(self.due), "zone": "UTC"}
+        self.goals.save(self.id, draft, anchor=self.now, request="Orijinal görev", language="tr")
+        with self.store.connect() as db:
+            db.execute("ALTER TABLE goals DROP COLUMN original_request")
+            db.execute("ALTER TABLE goals DROP COLUMN reply_language")
+        upgraded = Store(self.store.root, 0, 2**20)
+        with upgraded.connect() as db:
+            row = db.execute("SELECT original_request,reply_language FROM goals WHERE id=?", (self.id,)).fetchone()
+        self.assertEqual(tuple(row), ("Orijinal görev", "tr"))
+
     def test_run_now_preserves_a_future_one_time_run(self):
         goal = self.save("Remind me to stretch")
         self.generate.side_effect = ['{"tools":[]}', "Time to stretch."] * 2

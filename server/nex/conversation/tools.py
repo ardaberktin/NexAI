@@ -16,7 +16,7 @@ from ..goal_writing import mail_context
 from ..news_sources import news_date
 from ..passages import matching_passage
 from ..personal_age import age_reply
-from ..personal_files import PersonalFiles, safe_line
+from ..personal_files import PersonalFiles, context_excerpt, safe_line
 from ..recall_dates import recall_dates, time_key, time_zone
 from ..store import excerpt, search_prefixes
 from ..tool_dates import date_selection, local_bounds
@@ -112,7 +112,7 @@ def memory_result(store, turn, tool):
     if name == "memory":
         with files.locked():
             item = files.current(datetime.now(UTC)) if key == "now" else files.read(key)
-        return Evidence(excerpt(item["markdown"], 2200))
+        return Evidence(context_excerpt(key, item["markdown"], query))
     content = safe_line(query, 500)
     if not content:
         raise ValueError("Missing content to save.")

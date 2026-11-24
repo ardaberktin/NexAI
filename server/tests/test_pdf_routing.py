@@ -12,7 +12,6 @@ from nex.assistant import Assistant
 from nex.conversation.catalog import VERIFY_GOAL_PLAN
 from nex.conversation.document_routing import (
     CHOOSE_DOCUMENT_ACTION,
-    CHOOSE_PDF_CADENCE,
     PLAN_PDF,
     PLAN_PDF_GOAL,
 )
@@ -29,13 +28,14 @@ from nex.conversation.reply import (
     WRITE_GOAL,
     WRITE_GOAL_FORMAT,
 )
-from nex.goal_runner import EXECUTE, PLAN, RETRY_PLAN
+from nex.goal_runner import EXECUTE
 from nex.goals import Goals
 from nex.pdf.artifacts import content
 from nex.pdf.document import WRITE_DOCUMENT
 from nex.pdf.scheduled import VERIFY_SKIP_PDF, WRITE_NOTE
 from nex.pdf.web import VERIFY_DOCUMENT_WEB, WRITE_WEB_DOCUMENT
 from nex.privacy import public
+from nex.scheduled_plan import PLAN, RETRY_PLAN
 from nex.store import Store
 from nex.web_html import Page
 from nex.web_transport import WebReadError
@@ -75,9 +75,7 @@ class PDFRoutingTests(unittest.TestCase):
                         return "DOCUMENT"
                     self.assertEqual(data["question"], question)
                     if prompt == CHOOSE_DOCUMENT_ACTION:
-                        return "CREATE"
-                    if prompt == CHOOSE_PDF_CADENCE:
-                        return "ONCE"
+                        return "NOW"
                     if prompt.startswith(PLAN_PDF):
                         if len(messages) == 2:
                             return tools({"name": "agenda", "query": "today"})
@@ -117,8 +115,6 @@ class PDFRoutingTests(unittest.TestCase):
             if prompt == GOAL_INTENT:
                 return "DOCUMENT"
             if prompt == CHOOSE_DOCUMENT_ACTION:
-                return "CREATE"
-            if prompt == CHOOSE_PDF_CADENCE:
                 return "NOW"
             if prompt.startswith(PLAN_PDF):
                 return tools({"name": "web", "query": "public museum opening"}, {"name": "create_pdf"})
@@ -147,8 +143,6 @@ class PDFRoutingTests(unittest.TestCase):
                 self.assertEqual(data["latest_message"], question)
                 return "DOCUMENT"
             if prompt == CHOOSE_DOCUMENT_ACTION:
-                return "CREATE"
-            if prompt == CHOOSE_PDF_CADENCE:
                 return "REPEAT"
             if prompt.startswith(PLAN_PDF_GOAL):
                 if len(messages) == 2:
