@@ -44,7 +44,7 @@ CATALOG = {
             "timing = exact words in the latest request asking for this one-time run time. "
             "Set check_in:true to ask the user to confirm an outcome. "
             "To update a goal, use target from goal_references. Omitted fields keep their current values.",
-    "manage_goal": "Look up goals privately. Optional operation: complete, edit, delete, keep. Use alone.",
+    "manage_goal": "Look up goals privately. Optional operation: complete, edit, delete, keep, remove_pdf. Use alone.",
     "screen": "Inspect the shared Mac screen. Use alone.",
 }
 PUBLIC = {"weather", "web", "python"}
@@ -135,6 +135,7 @@ and goal_references for saved facts.
 6. Use {"tools":[{"name":"manage_goal"}]} for a reported fulfilled outcome or a request to change the date,
    task, or status of an existing goal or remove it. This tool can find goals outside recent chat.
    Adding a PDF copy while keeping the scheduled task uses {"tools":[{"name":"manage_goal","operation":"edit","format_only":true}]}.
+   Turning off saved PDF attachments uses {"tools":[{"name":"manage_goal","operation":"remove_pdf"}]}.
    A pending personal outcome can use manage_goal with operation keep. For other requests use proposal and
    related_tools if they serve the latest question. Never make a goal for an action the user did not request.
 
@@ -157,6 +158,7 @@ For a fulfilled outcome, changed date or task, or a request to remove a goal, us
 {"tools":[{"name":"manage_goal"}]} so the private goal manager can review and apply the change.
 Use one goal tool with target set to edit_target. Include only fields changed by the user.
 For a PDF attachment without changing the task or schedule, use manage_goal with operation edit and format_only:true.
+To turn off saved PDF attachments, use manage_goal with operation remove_pdf.
 If the user wants another check only if the outcome is still pending, use check_in:true and keep
 the existing question and time. For edit_target 1 that is {"tools":[{"name":"goal","target":1,"check_in":true}]}.
 If the user changes the reminder time, give a future local start in YYYY-MM-DDTHH:MM and quote the user's

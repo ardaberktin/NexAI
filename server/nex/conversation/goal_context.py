@@ -20,14 +20,19 @@ def clarification_exchange(history):
     return ()
 
 
-def pending_pdf_edit(history):
+def pending_pdf_action(history):
     if not (exchange := clarification_exchange(history)):
-        return False
+        return None
     tools = json_value(exchange[1].get("selected") or "")
-    return isinstance(tools, list) and any(
-        isinstance(tool, dict) and tool.get("name") == "manage_goal" and tool.get("format_only") is True
-        for tool in tools
-    )
+    if not isinstance(tools, list):
+        return None
+    for tool in tools:
+        if isinstance(tool, dict) and tool.get("name") == "manage_goal":
+            if tool.get("operation") == "remove_pdf":
+                return "REMOVE"
+            if tool.get("format_only") is True:
+                return "FORMAT"
+    return None
 
 
 def with_goal_state(store, history):

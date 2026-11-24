@@ -75,6 +75,14 @@ async def shortlist(descriptions, context, generate, *, verify_match=False):
     return matches
 
 
+def pdf_goal_references(context, candidates):
+    data = {"latest_message": context["question"],
+            "goals": [{key: row[key] for key in ("target", "title", "task")} for row in candidates]}
+    if clarification := context.get("clarification"):
+        data["preceding_clarification"] = clarification
+    return data
+
+
 def pdf_target_schema(candidates):
     options = [
         {"type": "object", "required": ["target", "title"], "additionalProperties": False,
@@ -91,8 +99,6 @@ def pdf_target_schema(candidates):
 
 
 def pdf_clarification_targets(result, candidates):
-    if result == {"action": "none"}:
-        return candidates
     targets = result.get("targets")
     if (result.keys() != {"action", "targets"} or not isinstance(targets, list) or not targets
             or any(type(target) is not int for target in targets)):
@@ -118,3 +124,15 @@ def named_targets(question, goals):
         if title and f" {title} " in words:
             found.append(goal["target"])
     return found
+
+
+def validate_pdf_reference(reference, question, candidates, target):
+    """Ground a model-supplied reference in the request and one saved goal."""
+    if not isinstance(reference, str) or len(reference.split()) < 2:
+        return False
+    literal = {"target": target, "title": reference}
+    if not named_targets(question, [literal]):
+        return False
+    matches = {row["target"] for row in candidates
+               if named_targets(row["title"], [literal]) or named_targets(row["task"], [literal])}
+    return matches == {target}

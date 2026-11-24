@@ -48,8 +48,8 @@ from .document_routing import (
     normalize_source_url,
     repair_document_search,
 )
-from .goal_context import goal_references, pending_pdf_edit
-from .goal_management_prompts import OPERATIONS
+from .goal_context import goal_references, pending_pdf_action
+from .goal_management_prompts import CHOOSE_DELETION_SCOPE, OPERATIONS
 from .goal_plans import (
     GoalPlanError,
     choose_goal_target,
@@ -269,8 +269,16 @@ async def select_tools(turn, generate, data, *, recall=None):
     label = route.label
     if label in {"answer", "clarify"}:
         return Plan((), clarify=label == "clarify")
-    if label == "manage" and pending_pdf_edit(turn.history):
+    if label == "manage" and pending_pdf_action(turn.history):
         return await select_document(turn, generate, data)
+    if label == "delete" and not turn.journal:
+        request = {"latest_message": turn.text, "history": data["history"][-4:]}
+        raw = await generate(model_messages(CHOOSE_DELETION_SCOPE, request), 8)
+        scope = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
+        if scope == "PDF":
+            return Plan(({"name": "manage_goal", "operation": "remove_pdf"},))
+        if scope == "OTHER":
+            return Plan((), clarify=True)
     if not turn.journal and (label == "manage" or label in OPERATIONS):
         tool = {"name": "manage_goal"}
         if label in OPERATIONS:
@@ -321,6 +329,8 @@ async def select_tools(turn, generate, data, *, recall=None):
 
 async def select_document(turn, generate, data):
     context = schedule_context(turn, data)
+    if pending := pending_pdf_action(turn.history):
+        context["pending_pdf_action"] = pending
     raw = await generate(model_messages(CHOOSE_DOCUMENT_ACTION, context, schema=DOCUMENT_ACTION_SCHEMA), 72)
     raw = raw if isinstance(raw, str) else ""
     decision = json_object(raw)
@@ -344,8 +354,10 @@ async def select_document(turn, generate, data):
             return plan if plan.tools else Plan((), clarify=True)
         prompt = model_messages(REVIEW_PDF_DELIVERY, context, schema=PDF_RECOVERY_SCHEMA)
         action = json_object(await generate(prompt, 35) or "").get("action")
-        if action not in {"FORMAT", "CLARIFY"}:
+        if action not in {"FORMAT", "REMOVE", "CLARIFY"}:
             return plan
+    if action == "REMOVE":
+        return Plan(({"name": "manage_goal", "operation": "remove_pdf"},))
     if action in {"FORMAT", "EDIT"}:
         return Plan(({"name": "manage_goal", "operation": "edit", "format_only": action == "FORMAT"},))
     if action in {"CLARIFY", "ADVICE", "SKIP"}:
