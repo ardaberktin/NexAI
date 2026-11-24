@@ -29,7 +29,7 @@ from nex.conversation.reply import (
     WRITE_GOAL,
     WRITE_GOAL_FORMAT,
 )
-from nex.goal_runner import EXECUTE, PLAN
+from nex.goal_runner import EXECUTE, PLAN, RETRY_PLAN
 from nex.goals import Goals
 from nex.pdf.artifacts import content
 from nex.pdf.document import WRITE_DOCUMENT
@@ -214,8 +214,10 @@ class PDFRoutingTests(unittest.TestCase):
             data = json.loads(messages[1]["content"])
             self.assertEqual(data["goal"], revised_task)
             if prompt == PLAN and calls == 0:
-                return tools({"name": "create_pdf"}, {"name": "web"}, {"name": "web"})
-            if prompt.startswith(PLAN):
+                return tools({"name": "web"}, {"name": "web"})
+            if prompt == RETRY_PLAN:
+                return tools("create_pdf")
+            if prompt == PLAN:
                 return tools({"name": "create_pdf", "query": "newspaper"})
             if prompt.startswith(EXECUTE):
                 return "NO_UPDATE" if calls == 0 else STORY
