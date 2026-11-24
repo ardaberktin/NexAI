@@ -11,7 +11,8 @@ LINK = re.compile(r"https?://[^\s<>)\]]+")
 WRITE_WEB_DOCUMENT = """Write the requested PDF as JSON. This document uses numbered web references.
 For each public factual paragraph, put the supporting source number in brackets, such as [1], at the
 end of the claim it supports. Write short paragraphs stating only what the source excerpt establishes.
-Keep names, numbers and dates as written in the source. Preserve uncertainty and attribution.
+Keep names as written in the source. Omit figures and event dates unless they are needed and appear
+in the excerpt in that form. Preserve uncertainty and attribution.
 Leave out the bibliography and URLs. Nex adds the exact source links after verification.
 
 """ + WRITE_DOCUMENT
@@ -38,7 +39,7 @@ async def document_with_sources(document, turn, evidence, generate):
             claim = CITATION.sub("", LINK.sub("", paragraph))
             if numbers and not supported_numbers(claim, facts):
                 raise PDFError("source_verification_failed",
-                               "Remove numbers or dates that are not stated in the cited source.")
+                               f"Remove numbers or dates that are not stated in the cited source for this paragraph: {paragraph}")
     sources = [pages[number] for number in sorted(cited)]
     data = {"question": turn.text, "local_time": turn.prompt()["local_time"], "document": text,
             "cited_pages": sources,

@@ -69,8 +69,9 @@ async def create_pdf(store, turn, tool, evidence, generate):
         if web:
             context["cite_web_with_numbers"] = True
         instructions = WRITE_WEB_DOCUMENT if web else WRITE_DOCUMENT
+        revision = ""
         for _ in range(2):
-            raw = await generate(model_messages(instructions, context), 2600)
+            raw = await generate(model_messages(instructions + revision, context), 2600)
             if not raw:
                 context["revision_needed"] = "Return the complete document as concise JSON using the supplied evidence."
                 status = "model_unavailable"
@@ -85,9 +86,14 @@ async def create_pdf(store, turn, tool, evidence, generate):
                     raise
                 context["revision_needed"] = str(error)
                 status = error.code
+                if status == "source_verification_failed":
+                    revision = ("\nRevise using concise, directly supported claims. Omit any disputed detail. "
+                                "Keep the requested layout and the numbered citations.")
             else:
                 return await asyncio.to_thread(save, store, identifier, goal["id"] if goal else None, pdf)
-        return {"status": status, "detail": context["revision_needed"]}
+        detail = ("The drafted claims could not be verified using the retrieved pages."
+                  if status == "source_verification_failed" else context["revision_needed"])
+        return {"status": status, "detail": detail}
     except PDFError as error:
         return {"status": error.code, "detail": str(error)}
     except (FeatureDisabled, WorkspaceMissing, ValueError) as error:

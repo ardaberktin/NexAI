@@ -77,14 +77,14 @@ class PDFRoutingTests(unittest.TestCase):
                     if prompt == CHOOSE_DOCUMENT_ACTION:
                         return "CREATE"
                     if prompt == CHOOSE_PDF_CADENCE:
-                        return "NOW"
+                        return "ONCE"
                     if prompt.startswith(PLAN_PDF):
                         if len(messages) == 2:
                             return tools({"name": "agenda", "query": "today"})
                         self.assertIn("Include create_pdf", messages[-1]["content"])
                         return tools({"name": "create_pdf"},
                                      {"name": "web", "date": DATE, "query": "invented public topic"})
-                    if prompt == WRITE_WEB_DOCUMENT:
+                    if prompt.startswith(WRITE_WEB_DOCUMENT):
                         self.assertTrue(data["cite_web_with_numbers"])
                         self.assertEqual(data["evidence"]["web"][0]["url"], URL)
                         if "revision_needed" not in data:

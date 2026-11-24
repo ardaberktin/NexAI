@@ -285,7 +285,8 @@ async def select_document(turn, generate, data):
         return Plan((), "" if action == "CLARIFY" else "model_unavailable")
     raw = await generate(model_messages(CHOOSE_PDF_CADENCE, context), 8)
     cadence = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
-    if cadence == "NOW":
+    # A one-time PDF is immediate unless the delivery planner identified a future request.
+    if action == "CREATE" and cadence in {"NOW", "ONCE"}:
         descriptions = "\n".join(
             f"{name}: {description}" for name, description in CATALOG.items() if name in PDF_READ_TOOLS
         )
