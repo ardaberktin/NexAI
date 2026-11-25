@@ -14,6 +14,7 @@ CREATE INDEX IF NOT EXISTS activity_due ON activity_clips(started DESC) WHERE du
 CREATE INDEX IF NOT EXISTS activity_sound_due ON activity_clips(started DESC) WHERE sound_due IS NOT NULL;
 CREATE INDEX IF NOT EXISTS activity_history ON activity_clips(category,started DESC);
 CREATE TABLE IF NOT EXISTS activity_screen_samples (observed TEXT PRIMARY KEY, summary TEXT);
+CREATE TABLE IF NOT EXISTS activity_migrations (name TEXT PRIMARY KEY);
 DROP TRIGGER IF EXISTS activity_new_recording;
 CREATE TRIGGER activity_new_recording AFTER INSERT ON recordings
 WHEN NOT EXISTS (SELECT 1 FROM workspace_features WHERE name='activities' AND enabled=0) BEGIN
@@ -27,6 +28,16 @@ WHEN OLD.transcript IS NOT NEW.transcript BEGIN
 END;
 """
 
+REQUEUE_SOUND_OBSERVATIONS = """
+UPDATE activity_clips SET due='',version=version+1
+WHERE category='unknown' AND due IS NULL AND json_array_length(sounds)>0
+  AND COALESCE(screen,'')='' AND EXISTS (
+      SELECT 1 FROM recordings WHERE id=activity_clips.recording_id AND COALESCE(transcript,'')=''
+  )
+  AND NOT EXISTS (SELECT 1 FROM activity_migrations WHERE name='numbered_sound_evidence');
+INSERT OR IGNORE INTO activity_migrations VALUES('numbered_sound_evidence');
+"""
+
 SCREEN_FRESHNESS = timedelta(seconds=75)
 
 
@@ -35,7 +46,7 @@ def initialize(db):
     seed = "" if existing else (
         "INSERT OR IGNORE INTO activity_clips(recording_id,started) SELECT id,started FROM recordings;"
     )
-    db.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + seed + "\nCOMMIT;")
+    db.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + seed + REQUEUE_SOUND_OBSERVATIONS + "\nCOMMIT;")
 
 
 def interval(row):

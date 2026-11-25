@@ -40,7 +40,9 @@ class ActivityTests(unittest.TestCase):
 
     def classify_sound(self, label, category):
         self.jobs.save_sounds(self.jobs.next(audio=True), [label])
-        dialogue = Mock(background_text=AsyncMock(return_value=json.dumps({"category": category, "quote": label})))
+        dialogue = Mock(background_text=AsyncMock(return_value=json.dumps({
+            "category": category, "source": "sound", "evidence": ["1"],
+        })))
         worker = ActivityWorker(self.store, self.store.root, None, dialogue)
         asyncio.run(worker.analyze(self.jobs.next(), False))
 
@@ -142,6 +144,52 @@ class ActivityTests(unittest.TestCase):
             self.assertEqual(interpret(raw, speech, screen, fallback), fallback)
         self.assertIsNone(interpret("invalid", "", "", fallback))
 
+    def test_worker_uses_model_classification_and_numbered_sound_evidence(self):
+        for offset, sounds in enumerate((["Typing", "Computer keyboard"], ["Keyboard clicks", "Typing"]), start=1):
+            self.clip(self.start + timedelta(seconds=offset * 60))
+            self.jobs.save_sounds(self.jobs.next(audio=True), sounds)
+            dialogue = Mock(background_text=AsyncMock(return_value=json.dumps({
+                "category": "computer", "source": "sound", "evidence": ["1", "2"],
+            })))
+            worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+            asyncio.run(worker.analyze(self.jobs.next(), False))
+            messages = dialogue.background_text.await_args.args[0]
+            self.assertEqual(json.loads(messages[-1]["content"]), {
+                "sound_events": {"1": sounds[0], "2": sounds[1]},
+            })
+            properties = messages.response_format["json_schema"]["schema"]["properties"]
+            self.assertEqual(properties["source"]["enum"], ["sound", "none"])
+            self.assertEqual(properties["evidence"]["items"]["enum"], ["1", "2"])
+            activity = timeline(self.store, self.context.bounds)["items"][-1]
+            self.assertEqual((activity["title"], activity["basis"], activity["confidence"], activity["detail"]),
+                             ("Using a computer", "Room audio", "Possible", f"Heard {', '.join(sounds)}."))
+
+    def test_sound_evidence_requires_valid_references_and_preserves_model_abstention(self):
+        sounds = ["Typing", "Computer keyboard"]
+        fallback = from_sounds(sounds, "ambient", "")
+        for category, source, evidence in (
+            ("unknown", "none", []),
+            ("computer", "sound", ["1", "3"]),
+            ("computer", "speech", ["Typing"]),
+            ("ps5", "sound", ["2"]),
+        ):
+            with self.subTest(category=category, source=source, evidence=evidence):
+                raw = json.dumps({"category": category, "source": source, "evidence": evidence})
+                self.assertEqual(interpret(raw, "", "", fallback, sounds), fallback)
+
+    def test_model_failure_keeps_the_detected_sounds_and_defers_recognition(self):
+        key = self.clip(self.start)
+        self.jobs.save_sounds(self.jobs.next(audio=True), ["Typing", "Computer keyboard"])
+        dialogue = Mock(background_text=AsyncMock(return_value=""))
+        worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+        asyncio.run(worker.analyze(self.jobs.next(), False))
+
+        activity = timeline(self.store, self.context.bounds)["items"][0]
+        self.assertEqual((activity["category"], activity["detail"]), ("unknown", "Heard Typing, Computer keyboard."))
+        self.assertIsNone(self.jobs.next())
+        with self.store.connect() as db:
+            self.assertIsNotNone(db.execute("SELECT due FROM activity_clips WHERE recording_id=?", (key,)).fetchone()[0])
+
     def test_audible_interface_prompts_can_identify_the_platform_without_self_narration(self):
         for category, prompt in (
             ("ps5", "Welcome back to PlayStation 5. Press the PS button to continue."),
@@ -219,6 +267,34 @@ class ActivityTests(unittest.TestCase):
         self.assertIsNone(ActivityJobs(reopened).next(audio=True))
         self.assertEqual(timeline(reopened, self.context.bounds)["items"][0]["category"], "unknown")
         self.assertEqual(ActivityJobs(reopened).next()["recording_id"], key)
+
+    def test_upgrade_requeues_only_unclear_clips_with_sound_evidence_once(self):
+        known = self.clip(self.start)
+        self.classify_sound("Video game music", "gaming")
+        self.clip(self.start + timedelta(seconds=30))
+        self.jobs.save_sounds(self.jobs.next(audio=True), [])
+        mixed = self.clip(self.start + timedelta(seconds=45))
+        with self.store.connect() as db:
+            db.execute("UPDATE recordings SET transcript='Hi there' WHERE id=?", (mixed,))
+        self.jobs.save_sounds(self.jobs.next(audio=True), ["Speech"])
+        self.jobs.save(self.jobs.next(), from_sounds(["Speech"], "ambient", "Hi there"))
+        unclear = self.clip(self.start + timedelta(seconds=60))
+        sounds = ["Typing", "Computer keyboard"]
+        self.jobs.save_sounds(self.jobs.next(audio=True), sounds)
+        self.jobs.save(self.jobs.next(), from_sounds(sounds, "ambient", ""))
+        self.assertIsNone(self.jobs.next())
+        with self.store.connect() as db:
+            db.execute("DROP TABLE activity_migrations")
+
+        upgraded = Store(self.store.root, 0, 2**20)
+        jobs = ActivityJobs(upgraded)
+        self.assertEqual(jobs.next()["recording_id"], unclear)
+        self.assertIsNone(jobs.next(audio=True))
+        self.assertEqual([(item["id"], item["category"]) for item in timeline(upgraded, self.context.bounds)["items"]
+                          if item["id"] in (known, unclear)], [(known, "gaming"), (unclear, "unknown")])
+        jobs.save(jobs.next(), from_sounds(sounds, "ambient", ""))
+        reopened = Store(self.store.root, 0, 2**20)
+        self.assertIsNone(ActivityJobs(reopened).next())
 
     def test_cross_midnight_and_historical_questions_use_recording_time(self):
         start = datetime(2026, 4, 20, 6, 59, 55, tzinfo=UTC)

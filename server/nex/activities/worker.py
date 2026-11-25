@@ -56,7 +56,7 @@ class ActivityWorker:
         result = fallback
         if (transcript or screen or sounds) and fallback.category != "nex":
             messages = classifier_messages(transcript, screen, sounds)
-            raw = await self.dialogue.background_text(messages, 110)
+            raw = await self.dialogue.background_text(messages, 110, temperature=None if transcript or screen else 0)
             result = interpret(raw, transcript, screen, fallback, sounds)
         await asyncio.to_thread(self.jobs.save, job, result or fallback, due=None if result else retry_time())
 
