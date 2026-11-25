@@ -43,6 +43,7 @@
 		7EFA00000000000000000FB4 /* HostedAccountAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB3 /* HostedAccountAPI.swift */; };
 		7EFA00000000000000000FB7 /* HostedAccountFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB6 /* HostedAccountFields.swift */; };
 		7EFA00000000000000000FBA /* HostedAccountSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB9 /* HostedAccountSettings.swift */; };
+		7EFA00000000000000000FC3 /* ServerLinkActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FC2 /* ServerLinkActions.swift */; };
 		7EFA00000000000000000FBD /* HostedCredentialEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FBC /* HostedCredentialEditor.swift */; };
 		7EFA00000000000000000FC0 /* HostedUserEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FBF /* HostedUserEditor.swift */; };
 		7EFA00000000000000000FA5 /* NexServerSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA4 /* NexServerSignInView.swift */; };
@@ -57,6 +58,7 @@
 		7EFA00000000000000000FB5 /* HostedAccountAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB3 /* HostedAccountAPI.swift */; };
 		7EFA00000000000000000FB8 /* HostedAccountFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB6 /* HostedAccountFields.swift */; };
 		7EFA00000000000000000FBB /* HostedAccountSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB9 /* HostedAccountSettings.swift */; };
+		7EFA00000000000000000FC4 /* ServerLinkActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FC2 /* ServerLinkActions.swift */; };
 		7EFA00000000000000000FBE /* HostedCredentialEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FBC /* HostedCredentialEditor.swift */; };
 		7EFA00000000000000000FC1 /* HostedUserEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FBF /* HostedUserEditor.swift */; };
 		7EFA00000000000000000FA6 /* NexServerSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA4 /* NexServerSignInView.swift */; };
@@ -367,6 +369,7 @@
 		7EFA00000000000000000FB3 /* HostedAccountAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccountAPI.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FB6 /* HostedAccountFields.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccountFields.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FB9 /* HostedAccountSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccountSettings.swift; sourceTree = "<group>"; };
+		7EFA00000000000000000FC2 /* ServerLinkActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerLinkActions.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FBC /* HostedCredentialEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedCredentialEditor.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FBF /* HostedUserEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedUserEditor.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FA4 /* NexServerSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NexServerSignInView.swift; sourceTree = "<group>"; };
@@ -586,6 +589,7 @@
 				7EFA00000000000000000FB3 /* HostedAccountAPI.swift */,
 				7EFA00000000000000000FB6 /* HostedAccountFields.swift */,
 				7EFA00000000000000000FB9 /* HostedAccountSettings.swift */,
+				7EFA00000000000000000FC2 /* ServerLinkActions.swift */,
 				7EFA00000000000000000FBC /* HostedCredentialEditor.swift */,
 				7EFA00000000000000000FBF /* HostedUserEditor.swift */,
 				7EFA00000000000000000FA4 /* NexServerSignInView.swift */,
@@ -929,6 +933,7 @@
 				7EFA00000000000000000FB4 /* HostedAccountAPI.swift in Sources */,
 				7EFA00000000000000000FB7 /* HostedAccountFields.swift in Sources */,
 				7EFA00000000000000000FBA /* HostedAccountSettings.swift in Sources */,
+				7EFA00000000000000000FC3 /* ServerLinkActions.swift in Sources */,
 				7EFA00000000000000000FBD /* HostedCredentialEditor.swift in Sources */,
 				7EFA00000000000000000FC0 /* HostedUserEditor.swift in Sources */,
 				7EFA00000000000000000FA5 /* NexServerSignInView.swift in Sources */,
@@ -1048,6 +1053,7 @@
 				7EFA00000000000000000FB5 /* HostedAccountAPI.swift in Sources */,
 				7EFA00000000000000000FB8 /* HostedAccountFields.swift in Sources */,
 				7EFA00000000000000000FBB /* HostedAccountSettings.swift in Sources */,
+				7EFA00000000000000000FC4 /* ServerLinkActions.swift in Sources */,
 				7EFA00000000000000000FBE /* HostedCredentialEditor.swift in Sources */,
 				7EFA00000000000000000FC1 /* HostedUserEditor.swift in Sources */,
 				7EFA00000000000000000FA6 /* NexServerSignInView.swift in Sources */,

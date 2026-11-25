@@ -54,7 +54,7 @@ struct HostedAccountSettings: View {
                 Button("Change Password") { panel = .credentials(.changePassword) }
             }
             if let link = model.serverProfile?.serverLink {
-                ShareLink(item: link) { Label("Share Server Link", systemImage: "square.and.arrow.up") }
+                ServerLinkActions(link: link)
             }
             Button("Sign Out", role: .destructive) { Task { await model.signOut() } }
                 .disabled(model.signingOut)
