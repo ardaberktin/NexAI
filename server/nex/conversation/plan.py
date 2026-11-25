@@ -54,8 +54,10 @@ from .document_routing import (
 from .goal_context import goal_references, pending_pdf_action
 from .goal_management_prompts import CHOOSE_DELETION_SCOPE, OPERATIONS
 from .goal_plans import (
+    MCP_GOAL_PLAN,
     GoalPlanError,
     choose_goal_target,
+    connected_frequency,
     review_goal_plan,
     validate_goal_action,
 )
@@ -300,7 +302,7 @@ async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
             tool["operation"] = label
         return Plan((tool,))
     if not turn.journal and label in {"schedule", "recurring", "check_in"}:
-        return await select_schedule(turn, generate, data, goal_type=label)
+        return await select_schedule(turn, generate, data, goal_type=label, connected=mcp_route is not None)
     if not turn.journal and label == "mail_watch":
         context = schedule_context(turn, data) | {"mail_watch": True}
         watch = {key: context[key] for key in ("local_time", "goal_time_zone", "question")}
@@ -413,22 +415,31 @@ async def select_document(turn, generate, data):
     return Plan((), "model_unavailable")
 
 
-async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal_type=None):
+async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal_type=None, connected=False):
     context = schedule_context(turn, data)
     instructions = schedule_instructions(data["local_time"])
     can_edit_goal = context["goal_references"] and (proposal is None or proposal["name"] == "goal")
     if can_edit_goal and (target := await choose_goal_target(context, generate)):
         context["edit_target"] = target
         instructions = REVIEW_GOAL_EDIT
+    selected_type = goal_type if "edit_target" not in context else None
+    names = SCHEDULE_TOOLS | {tool["name"] for tool in tools}
+    frequency = None
+    if connected and "edit_target" not in context:
+        frequency = await connected_frequency(context, generate)
+        if frequency is None:
+            return Plan((), clarify=True)
+        context["mcp_frequency"] = frequency
+        context["mcp_sources"] = sorted({server for server, _ in turn.mcp_tools.values()})
+        selected_type = "recurring" if frequency else "schedule"
+        names, instructions = {"goal"}, MCP_GOAL_PLAN
     review = {
         **context, "first_choice": proposal["name"] if proposal else None, "proposal": proposal,
         "related_tools": [tool for tool in tools if tool is not proposal],
     }
     if proposal and proposal["name"] == "agenda" and date_selection(proposal):
         review["agenda_dates"] = {key: proposal[key] for key in ("start_date", "end_date") if key in proposal}
-    selected_type = goal_type if "edit_target" not in context else None
-    names = SCHEDULE_TOOLS | {tool["name"] for tool in tools}
-    schema = plan_schema(names, goal_type=selected_type)
+    schema = plan_schema(names, goal_type=selected_type, goal_frequency=frequency)
     if "mcp_tools" in context:
         instructions += MCP_PROMPT + "For a saved goal, preserve named MCP sources and their purpose in query."
     return await generate_plan(turn, generate, plan_messages(turn, instructions, review, names, schema), goal_review=context)

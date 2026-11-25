@@ -37,7 +37,7 @@ def argument_schema(name, field):
     return {"type": "string"}
 
 
-def tool_object(name, scheduled, goal_type):
+def tool_object(name, scheduled, goal_type, goal_frequency):
     if is_alias(name):
         return {"type": "object", "properties": {"name": {"const": name}, "arguments": {"type": "object",
                 "additionalProperties": True}}, "required": ["name", "arguments"], "additionalProperties": False}
@@ -62,14 +62,17 @@ def tool_object(name, scheduled, goal_type):
         properties.pop("check_in", None)
         properties.pop("target", None)
         required.extend(("query", "frequency"))
+    if name == "goal" and goal_frequency is not None:
+        properties["frequency"] = {"const": goal_frequency}
     return {"type": "object", "properties": properties, "required": ["name", *required],
             "additionalProperties": False}
 
 
-def plan_schema(names, *, scheduled=False, minimum=0, maximum=None, goal_type=None):
+def plan_schema(names, *, scheduled=False, minimum=0, maximum=None, goal_type=None, goal_frequency=None):
     limit = min(len(names), maximum or (5 if scheduled else 4))
     return {
         "type": "object", "required": ["tools"], "additionalProperties": False,
         "properties": {"tools": {"type": "array", "minItems": minimum, "maxItems": limit,
-                                 "items": {"anyOf": [tool_object(name, scheduled, goal_type) for name in sorted(names)]}}},
+                                 "items": {"anyOf": [tool_object(name, scheduled, goal_type, goal_frequency)
+                                                     for name in sorted(names)]}}},
     }
