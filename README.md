@@ -6,6 +6,7 @@ Nex is a self-hosted AI assistant and audio journal for Mac, iPhone, and Apple W
 - **Chat and voice** share a model-driven tool flow. Start a live conversation or record a question for later.
 - **Recordings and Daybook** keep time-stamped audio, searchable transcripts, editable notes, and source citations. Devices can queue audio offline and upload when they reconnect.
 - **Goals and workspace tools** support scheduled check-ins, local alarms and timers, and optional public web, weather, Gmail, Google Calendar, and TickTick access.
+- **MCP servers** add tools to Chat, approved voice requests, and scheduled goals. [Connect a server](server/README.md#connect-an-mcp-server).
 - **Private answers** use device-bound biometric approval and stay in the unlocked workspace. Voice recognition is separate from authentication.
 
 ## Get started

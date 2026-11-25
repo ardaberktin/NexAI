@@ -39,7 +39,12 @@ class BrowserSetupTests(HostedAccountFixture):
         options = {"Host": HOST, "Origin": ORIGIN, "Content-Type": "application/json"} | (headers or {})
         connection = SocketConnection(self.setup.path)
         try:
-            connection.request("GET" if data is None else "POST", path, json.dumps(data) if data else None, options)
+            try:
+                connection.request("GET" if data is None else "POST", path, json.dumps(data) if data else None, options)
+            except BrokenPipeError:
+                # Origin and media-type checks can send a complete rejection before the client writes its body.
+                if status not in {403, 415}:
+                    raise
             response = connection.getresponse()
             payload = response.read()
             self.assertEqual(response.status, status, payload)

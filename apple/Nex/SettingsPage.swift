@@ -25,6 +25,8 @@ struct SettingsPage: View {
                 HostedAccountSettings(model: model)
             case .accounts:
                 AccountConnectionsView(model: model)
+            case .mcp:
+                MCPSettings(model: model)
             case .excalibur:
                 NexServerSettings(model: model)
             case .models:

@@ -91,11 +91,20 @@ def finish_prompt(goals, row, result, anchor, epoch):
             return
         next_run = following_run(row["scheduled_at"], row["interval_minutes"], row["zone"], anchor)
         latest, checked = current["latest"], current["last_checked"]
+        for outcome in result.writes.values():
+            if outcome["status"] != "ok":
+                title = "MCP tool call needs review"
+            else:
+                title = "MCP write call completed" if outcome["operation"] == "write" else "MCP read completed"
+            goals.record(db, identifier, now, title, f'{outcome["server"]} · {outcome["tool"]}')
         if result.error:
-            next_run = stamp(anchor + timedelta(minutes=5))
+            if result.writes:
+                checked = now
+            else:
+                next_run = stamp(anchor + timedelta(minutes=5))
             if result.error != current["error"]:
                 goals.record(db, identifier, now, "Run needs attention", result.error)
-        else:
+        if not result.error or (result.writes and result.text):
             if result.text:
                 latest = result.text
                 activity = goals.record(db, identifier, now, GOAL_UPDATE_TITLE, latest, artifact=True)
@@ -105,7 +114,7 @@ def finish_prompt(goals, row, result, anchor, epoch):
                     db.execute("INSERT INTO goal_update_pdfs VALUES(?,?,?,?,?,?)",
                                (activity, identifier, result.pdf_copy, current["title"], current["reply_language"], now))
                 enqueue(db, activity, anchor)
-            if any(watch.pending for watch in result.watches.values()):
+            if not result.writes and any(watch.pending for watch in result.watches.values()):
                 next_run = stamp(anchor + timedelta(seconds=15))
             else:
                 checked = now

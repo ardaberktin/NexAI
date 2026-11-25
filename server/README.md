@@ -114,6 +114,34 @@ journalctl --user -u nex.service -n 30
 
 See [Live voice and optional integrations](deploy/README.md) for the second service and account configuration.
 
+## Connect an MCP server
+
+On Mac or iPhone, unlock Nex and open **Settings → MCP Servers → Add MCP Server**. Enter a name and the server's
+MCP endpoint URL. Choose **Streamable HTTP** or **Legacy HTTP with SSE** according to the server's documentation.
+If it requires authentication, enter a bearer token or add the provider's HTTP headers. **Connect** discovers
+the available tools and shares the connection with your other signed-in device. Use **Refresh Tools** after
+the provider changes its catalog. Pause a connection with **Enabled**, or remove it to delete its saved settings.
+
+Open a connection to set access for each tool. **Read only** permits calls to tools the server marks
+read-only. **Write only** permits explicitly requested changes through tools that may write. **Read & write**
+grants both permissions, and **Off** disables the tool. Tools marked read-only start with read access.
+Tools that may write require opt-in, including for existing connections. Nex checks the server's tool
+metadata again before each call. The server ultimately controls how a tool behaves.
+
+To use read tools in a scheduled goal, turn on **Allow read-only tools in goals** for the connection.
+To let a goal make changes, grant write access to the relevant tool, then turn on **Allow writes in goals**
+for that tool. Describe the change in the goal. Nex records attempted scheduled writes in the goal’s
+activity and keeps a receipt so it can avoid replaying the same run after an interruption.
+
+The Nex server makes requests to the configured endpoint. Direct connections support public HTTPS and
+operator-configured loopback endpoints. For an MCP server that runs as a local command over stdio, run a
+stdio-to-HTTP bridge on the Nex host under a separate service identity. Bind it to `127.0.0.1` or `::1`.
+The host operator can authorize its exact endpoint by placing `mcp-loopback.json` in the intended account's
+private archive directory. Its contents are a JSON array of URLs, for example
+`["http://127.0.0.1:8123/mcp"]`. Add that same URL in Settings. The owner archive lives at the data root.
+Member archives live under `users/<account-id>/`. Use provider-issued credentials or an authenticated bridge
+for services that require OAuth sign-in.
+
 ## Maintain and verify
 
 - Back up the entire private archive with Nex stopped or take a consistent filesystem snapshot. Include any externally configured SSD audio directory. Include `accounts.sqlite` and the account archives under `users/`. Keep backups and account credentials outside the source checkout.

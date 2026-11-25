@@ -12,6 +12,9 @@ from ..conversation_history import MAX_EXCHANGES, prompt_history
 from ..daybook import DayContext
 from ..goal_schedule import FREQUENCIES
 from ..goal_writing import json_object, model_messages
+from ..mcp.planning import choose_connected
+from ..mcp.tool import PROMPT as MCP_PROMPT
+from ..mcp.tool import catalog_menu, is_alias, planning_context, validate_call
 from ..model_context import ModelMessages, constrained_messages
 from ..news_sources import validate_news_date
 from ..recall_dates import time_zone
@@ -51,8 +54,10 @@ from .document_routing import (
 from .goal_context import goal_references, pending_pdf_action
 from .goal_management_prompts import CHOOSE_DELETION_SCOPE, OPERATIONS
 from .goal_plans import (
+    MCP_GOAL_PLAN,
     GoalPlanError,
     choose_goal_target,
+    connected_schedule,
     review_goal_plan,
     validate_goal_action,
 )
@@ -81,6 +86,7 @@ class Turn:
     device_clock: DeviceClock | None = None
     legacy_mail: dict | None = None
     recalled_chat: dict | None = None
+    mcp_tools: dict = field(default_factory=dict)
 
     @property
     def language(self):
@@ -137,16 +143,19 @@ def validated(tools):
     names = set()
     for tool in tools:
         name = tool.get("name") if isinstance(tool, dict) else None
-        if not isinstance(name, str) or name not in CATALOG:
+        if not isinstance(name, str) or (name not in CATALOG and not is_alias(name)):
             raise ValueError('Use objects with a known tool name, such as {"name":"agenda","query":"today"}.')
         if name in names:
             raise ValueError(f"Select {name} only once.")
+        names.add(name)
+        if is_alias(name):
+            validate_call(tool)
+            continue
         allowed = {"name"} | OPTIONS.get(name, set())
         if name != "clock":
             allowed.add("query")
         if tool.keys() - allowed:
             raise ValueError(f"{name} only accepts these fields: {', '.join(sorted(allowed))}.")
-        names.add(name)
         for key, value in tool.items():
             if key in {"unread", "lists", "priority", "access_check", "exact", "check_in", "format_only"}:
                 valid = type(value) is bool
@@ -240,7 +249,15 @@ def validate_context(turn, plan):
 
 async def choose(turn, generate, *, recall=None):
     data = turn.prompt(planning=True) | {"language": turn.preference}
-    plan = await select_tools(turn, generate, data, recall=recall)
+    mcp_route = None
+    if turn.mcp_tools and not (not turn.spoken and pasted_python(turn.text)):
+        matches, workflow, language = await choose_connected(generate, turn.mcp_tools, data["question"], data["history"])
+        turn.mcp_tools = matches
+        if matches and workflow in {"general", "mixed", "schedule", "recurring", "document"}:
+            if turn.preference == "auto" and language in ("en", "tr"):
+                turn.resolved_language = language
+            mcp_route = Route(workflow, frozenset(matches) if workflow in {"general", "mixed"} else frozenset())
+    plan = await select_tools(turn, generate, data, recall=recall, mcp_route=mcp_route)
     if turn.preference == "auto" and turn.resolved_language is None and not plan.error:
         language_data = {"history": data["history"][-4:], "latest_message": data["question"]}
         raw = await generate(model_messages(CHOOSE_LANGUAGE, language_data), 8)
@@ -264,8 +281,8 @@ async def route_with_context(turn, generate, data, recall):
     return route
 
 
-async def select_tools(turn, generate, data, *, recall=None):
-    route = await route_with_context(turn, generate, data, recall)
+async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
+    route = mcp_route or await route_with_context(turn, generate, data, recall)
     label = route.label
     if label in {"answer", "clarify"}:
         return Plan((), clarify=label == "clarify")
@@ -285,7 +302,7 @@ async def select_tools(turn, generate, data, *, recall=None):
             tool["operation"] = label
         return Plan((tool,))
     if not turn.journal and label in {"schedule", "recurring", "check_in"}:
-        return await select_schedule(turn, generate, data, goal_type=label)
+        return await select_schedule(turn, generate, data, goal_type=label, connected=mcp_route is not None)
     if not turn.journal and label == "mail_watch":
         context = schedule_context(turn, data) | {"mail_watch": True}
         watch = {key: context[key] for key in ("local_time", "goal_time_zone", "question")}
@@ -295,21 +312,33 @@ async def select_tools(turn, generate, data, *, recall=None):
         return await generate_plan(turn, generate, model_messages(PLAN_CLOCK, data), available={"clock"})
     if label == "document" and not turn.journal:
         return await select_document(turn, generate, data)
-    names = {"daybook", "create_pdf"} if turn.journal else route.tools or PLANNING_TOOLS
+    names = {"daybook", "create_pdf"} if turn.journal else route.tools or PLANNING_TOOLS | turn.mcp_tools.keys()
     setting_change = bool(route.tools & PREFERENCE_TOOLS)
     if setting_change:
         names = names | PREFERENCE_TOOLS
-    instructions = planning_instructions(names, selected=bool(route.tools))
+    direct_mcp = mcp_route is not None and label in {"general", "mixed"}
+    if label == "mixed":
+        names = names | (PLANNING_TOOLS - PREFERENCE_TOOLS - {"screen"})
+    instructions = planning_instructions(names, selected=bool(route.tools) and label != "mixed")
+    if direct_mcp:
+        instructions += ("\nThe request requires the selected MCP source. The connected server name identifies "
+                         "the provider. Use the specific values in the request and history to fill its arguments. "
+                         "Use an empty tools array only when an essential argument is missing.")
+    if label == "mixed":
+        instructions += "\nUse a built-in tool only for another independent part of the request."
     if setting_change:
         instructions += ("\nChoose at most one change. Personal facts and preferences go to save_memory. "
                          "Changing or forgetting the forecast city goes to weather_city. Act only on an explicit request.")
     if turn.journal:
         instructions += "\nThe user selected a journal entry. Use only daybook for facts about this selection."
         data["selected_highlight"] = turn.journal.focus
-    schema = plan_schema(names, minimum=1 if route.tools and not setting_change else 0,
+    schema = plan_schema(names, minimum=1 if route.tools and not (setting_change or direct_mcp) else 0,
                          maximum=1 if setting_change else None)
-    plan = await generate_plan(turn, generate, model_messages(instructions, data, schema=schema),
-                               available=names if route.tools else None)
+    plan = await generate_plan(turn, generate, plan_messages(turn, instructions, data, names, schema),
+                               available=names if route.tools else None,
+                               required_mcp=direct_mcp)
+    if direct_mcp and not plan.tools and not plan.error:
+        return Plan((), clarify=True)
     names = {tool["name"] for tool in plan.tools}
     if data["history"] and "weather" in names and "agenda" not in names:
         raw = await generate(model_messages(WEATHER_SCOPE, data), 12)
@@ -318,8 +347,9 @@ async def select_tools(turn, generate, data, *, recall=None):
             return Plan(())
         if verdict == "REPLAN":
             data = data | {"history": []}
-            fallback = planning_instructions(PLANNING_TOOLS)
-            plan = await generate_plan(turn, generate, model_messages(fallback, data, schema=plan_schema(PLANNING_TOOLS)))
+            fallback = PLANNING_TOOLS | turn.mcp_tools.keys()
+            messages = plan_messages(turn, planning_instructions(fallback), data, fallback, plan_schema(fallback))
+            plan = await generate_plan(turn, generate, messages)
     proposal = next((tool for tool in plan.tools if tool["name"] in {"agenda", "goal"}), None)
     if (proposal and (proposal["name"] == "goal" or not label)
             and "create_pdf" not in names and not turn.journal):
@@ -327,22 +357,39 @@ async def select_tools(turn, generate, data, *, recall=None):
     return plan
 
 
+def plan_messages(turn, instructions, data, names, schema):
+    context = planning_context(data, turn.mcp_tools, names)
+    if context is not data:
+        instructions += MCP_PROMPT + "Use the MCP tool identifier as name and put its inputs in arguments."
+    return model_messages(instructions, context, schema=schema)
+
+
 async def select_document(turn, generate, data):
     context = schedule_context(turn, data)
     if pending := pending_pdf_action(turn.history):
         context["pending_pdf_action"] = pending
-    raw = await generate(model_messages(CHOOSE_DOCUMENT_ACTION, context, schema=DOCUMENT_ACTION_SCHEMA), 72)
+    read_tools = PDF_READ_TOOLS | {alias for alias, (_, tool) in turn.mcp_tools.items() if tool.read_only}
+    schema = DOCUMENT_ACTION_SCHEMA
+    if read_tools != PDF_READ_TOOLS:
+        schema = schema | {"properties": schema["properties"] | {"sources": {
+            "type": "array", "maxItems": 3, "items": {"enum": sorted(read_tools - {"create_pdf"})},
+        }}}
+        context["mcp_tools"] = catalog_menu({alias: turn.mcp_tools[alias] for alias in read_tools if is_alias(alias)})
+    instructions = CHOOSE_DOCUMENT_ACTION
+    if "mcp_tools" in context:
+        instructions += MCP_PROMPT + "Also consider the attached MCP read tools when choosing sources."
+    raw = await generate(model_messages(instructions, context, schema=schema), 125 if turn.mcp_tools else 72)
     raw = raw if isinstance(raw, str) else ""
     decision = json_object(raw)
     action = decision.get("action", raw.strip().upper().rstrip("."))
     if action == "NOW":
         sources = decision.get("sources")
-        available = ({"create_pdf"} | {name for name in PDF_READ_TOOLS if name in sources}
-                     if isinstance(sources, list) else PDF_READ_TOOLS)
+        available = ({"create_pdf"} | {name for name in read_tools if name in sources}
+                     if isinstance(sources, list) else read_tools)
         descriptions = "\n".join(
             f"{name}: {description}" for name, description in CATALOG.items() if name in available
         )
-        messages = model_messages(f"{PLAN_PDF}\n{descriptions}", data, schema=plan_schema(available, minimum=1))
+        messages = plan_messages(turn, f"{PLAN_PDF}\n{descriptions}", data, available, plan_schema(available, minimum=1))
         return await generate_plan(turn, generate, messages, available=available, required="create_pdf")
     if action in {"REPEAT", "ONCE"}:
         context["document_delivery"] = action
@@ -368,40 +415,59 @@ async def select_document(turn, generate, data):
     return Plan((), "model_unavailable")
 
 
-async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal_type=None):
+async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal_type=None, connected=False):
     context = schedule_context(turn, data)
     instructions = schedule_instructions(data["local_time"])
     can_edit_goal = context["goal_references"] and (proposal is None or proposal["name"] == "goal")
     if can_edit_goal and (target := await choose_goal_target(context, generate)):
         context["edit_target"] = target
         instructions = REVIEW_GOAL_EDIT
+    selected_type = goal_type if "edit_target" not in context else None
+    names = SCHEDULE_TOOLS | {tool["name"] for tool in tools}
+    frequency = None
+    if connected and "edit_target" not in context:
+        frequency, weekday = await connected_schedule(context, generate)
+        if frequency is None:
+            return Plan((), clarify=True)
+        context["mcp_frequency"] = frequency
+        context["mcp_weekday"] = weekday
+        context["mcp_sources"] = sorted({server for server, _ in turn.mcp_tools.values()})
+        selected_type = "recurring" if frequency else "schedule"
+        names, instructions = {"goal"}, MCP_GOAL_PLAN
     review = {
         **context, "first_choice": proposal["name"] if proposal else None, "proposal": proposal,
         "related_tools": [tool for tool in tools if tool is not proposal],
     }
     if proposal and proposal["name"] == "agenda" and date_selection(proposal):
         review["agenda_dates"] = {key: proposal[key] for key in ("start_date", "end_date") if key in proposal}
-    selected_type = goal_type if "edit_target" not in context else None
-    schema = plan_schema(SCHEDULE_TOOLS | {tool["name"] for tool in tools}, goal_type=selected_type)
-    return await generate_plan(turn, generate, model_messages(instructions, review, schema=schema), goal_review=context)
+    schema = plan_schema(names, goal_type=selected_type, goal_frequency=frequency)
+    if "mcp_tools" in context:
+        instructions += MCP_PROMPT + "For a saved goal, preserve named MCP sources and their purpose in query."
+    return await generate_plan(turn, generate, plan_messages(turn, instructions, review, names, schema), goal_review=context)
 
 
 def schedule_context(turn, data):
     history = prompt_history(turn.history, include_tools=False, include_goal_receipts=False)[-4:] if data["history"] else []
     context = {"local_time": data["local_time"], "goal_time_zone": turn.zone, "tomorrow_date": data["tomorrow_date"],
                "history": history, "goal_references": data.get("goal_references", []), "question": data["question"]}
+    if turn.mcp_tools:
+        context["mcp_tools"] = catalog_menu(turn.mcp_tools)
+        today = date.fromisoformat(data["local_date"])
+        days = [today + timedelta(days=offset) for offset in range(1, 8)]
+        context["upcoming_weekdays"] = {day.strftime("%A"): day.isoformat() for day in days}
     if "recalled_chat" in data:
         context["recalled_chat"] = data["recalled_chat"]
     return context
 
 
-async def generate_plan(turn, generate, base, *, goal_review=None, available=None, required=None):
+async def generate_plan(turn, generate, base, *, goal_review=None, available=None, required=None,
+                        required_mcp=False):
     if available is not None and not getattr(base, "response_format", None):
         base = constrained_messages(base, plan_schema(available))
     messages = base
     invalid_goal = False
     for _ in range(2):
-        raw = await generate(messages, 260)
+        raw = await generate(messages, 510 if turn.mcp_tools else 260)
         if not isinstance(raw, str) or not raw.strip():
             break
         try:
@@ -414,8 +480,12 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
             if goal_review and goal_review.get("mail_watch"):
                 tools = prepare_mail_watch(tools, turn)
             plan = validated(tools)
+            if any(is_alias(tool["name"]) and tool["name"] not in turn.mcp_tools for tool in plan.tools):
+                raise ValueError("Use only MCP tools advertised for this request.")
             if available is not None and any(tool["name"] not in available for tool in plan.tools):
                 raise ValueError("Use one of the tools described in this plan or return an empty tools array.")
+            if required_mcp and plan.tools and not any(is_alias(tool["name"]) for tool in plan.tools):
+                raise ValueError("Include a matching MCP tool to use the connected source.")
             if required and plan.tools and all(tool["name"] != required for tool in plan.tools):
                 raise ValueError(f"Include {required} with the read tools needed to complete the request.")
             validate_goal_action(plan.tools, goal_review)

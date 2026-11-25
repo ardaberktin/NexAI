@@ -5,6 +5,9 @@ from datetime import datetime
 from .conversation.calendar_scope import CALENDAR_READS, normalize_calendar_dates
 from .conversation.planning_schema import plan_schema
 from .goal_writing import ask, json_object
+from .mcp.planning import shortlist_goal
+from .mcp.tool import PROMPT as MCP_PROMPT
+from .mcp.tool import catalog_menu, is_alias, planning_context, validate_call
 from .news_sources import validate_news_date
 from .tool_dates import date_selection
 
@@ -62,9 +65,26 @@ SOURCE_SCHEMA = {
 }
 
 
-def plan_for(generate, data):
-    plan = json_object(ask(generate, PLAN, data, 224, schema=SOURCE_SCHEMA))
-    selected = TOOLS
+def plan_for(generate, data, mcp_tools=None):
+    mcp_tools = shortlist_goal(generate, mcp_tools, data) if mcp_tools else {}
+    available = TOOLS | mcp_tools.keys()
+    instructions, schema, budget = PLAN, SOURCE_SCHEMA, 224
+    if mcp_tools:
+        data = data | {"mcp_tools": catalog_menu(mcp_tools)}
+        choices = SOURCE_SCHEMA["properties"]["sources"]["anyOf"]
+        schema = SOURCE_SCHEMA | {"properties": {"sources": {"anyOf": [
+            choices[0], choices[1] | {"items": {"enum": sorted(available)}},
+        ]}}}
+        instructions = (
+            "The mcp_tools input maps source identifiers to [connected server name, tool name, purpose, capability]. "
+            "For current data owned by a named connection or covered by an MCP tool's purpose, put that exact "
+            "identifier in sources. Archive searches local recordings. Web searches public information. "
+            "Use the source from the current goal. For an explicitly requested external change, choose the corresponding "
+            "authorized MCP action. Use a read tool for reports and lookups.\n" + MCP_PROMPT + PLAN
+        )
+        budget = 500
+    plan = json_object(ask(generate, instructions, data, budget, schema=schema))
+    selected = available
     limit = 5
     if "sources" in plan:
         sources = plan["sources"]
@@ -74,7 +94,7 @@ def plan_for(generate, data):
             return []
         if "none" in sources:
             return None
-        selected = TOOLS & set(sources)
+        selected = available & set(sources)
         if not selected:
             return None
         limit = len(selected)
@@ -82,7 +102,10 @@ def plan_for(generate, data):
             selected |= {"gmail", "new_mail"}
         if selected & {"calendar", "new_calendar"}:
             selected |= {"calendar", "new_calendar"}
-        instructions = SELECTED_PLAN + "\n".join(f"{name}: {SOURCE_GUIDANCE[name]}" for name in sorted(selected))
+        instructions = SELECTED_PLAN + "\n".join(
+            f"{name}: {SOURCE_GUIDANCE[name]}" for name in sorted(selected & TOOLS))
+        if selected & mcp_tools.keys():
+            instructions += MCP_PROMPT + "Use the MCP identifier as name and put all inputs inside arguments."
         if "new_mail" in selected:
             instructions += ("\nAn update triggered by new incoming mail uses new_mail alone. "
                              "Use gmail for the request to read existing messages.")
@@ -90,8 +113,9 @@ def plan_for(generate, data):
             instructions += ("\nAn update triggered by a newly added calendar event uses new_calendar. "
                              "Use calendar when the goal asks for entries already on Google Calendar.")
         schema = plan_schema(selected, scheduled=True, minimum=1, maximum=limit)
-        plan = json_object(ask(generate, instructions, data, 224, schema=schema))
-    if (tools := read_plan(plan, data)) is not None and len(tools) <= limit and all(
+        context = planning_context(data, mcp_tools, selected)
+        plan = json_object(ask(generate, instructions, context, budget, schema=schema))
+    if (tools := read_plan(plan, data, mcp_tools)) is not None and len(tools) <= limit and all(
         tool["name"] in selected for tool in tools
     ):
         return tools
@@ -99,15 +123,19 @@ def plan_for(generate, data):
     if not isinstance(proposal, list):
         return None
     names = [tool["name"] for tool in proposal if isinstance(tool, dict) and isinstance(tool.get("name"), str)]
-    if "create_pdf" not in names and len(names) == len(set(names)):
+    if "create_pdf" not in names and len(names) == len(set(names)) and not selected & mcp_tools.keys():
         return None
     schema = plan_schema(selected, scheduled=True, maximum=limit)
-    repair = json_object(ask(generate, RETRY_PLAN, data, 224, schema=schema))
-    tools = read_plan(repair, data)
+    context = planning_context(data, mcp_tools, selected)
+    instructions = RETRY_PLAN if context is data else RETRY_PLAN + MCP_PROMPT + (
+        "Use the connected MCP identifier as name with its inputs in arguments."
+    )
+    repair = json_object(ask(generate, instructions, context, budget, schema=schema))
+    tools = read_plan(repair, data, mcp_tools)
     return tools if tools is not None and len(tools) <= limit and all(tool["name"] in selected for tool in tools) else None
 
 
-def read_plan(plan, context=None):
+def read_plan(plan, context=None, mcp_tools=None):
     try:
         tools = plan["tools"]
         if not isinstance(tools, list) or len(tools) > 5:
@@ -118,6 +146,13 @@ def read_plan(plan, context=None):
         normalized = []
         for tool in tools:
             name, query = tool["name"], tool.get("query", "")
+            if is_alias(name):
+                if name not in (mcp_tools or {}) or name in names:
+                    raise ValueError
+                validate_call(tool)
+                names.add(name)
+                normalized.append(tool)
+                continue
             if (name not in TOOLS or name in names or not isinstance(query, str) or len(query) > 240
                     or any(type(tool.get(key, False)) is not bool for key in ("unread", "priority", "exact"))):
                 raise ValueError

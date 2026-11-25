@@ -7,6 +7,8 @@ from . import goal_follow_ups, shared_weather, workspace_features
 from .clock_alerts import ClockAlerts
 from .feed import Feed
 from .goals import IDENTIFIER, Goals
+from .mcp.routes import ROOT as MCP_ROOT
+from .mcp.routes import request as mcp_request
 from .pdf.artifacts import content as pdf_content
 from .push_queue import PushQueue
 from .workspace_chat_pages import chat_page, paged_chat_snapshot
@@ -17,6 +19,8 @@ from .workspace_sync import watch_chat
 
 def workspace_request(api, method, path, query, device, problem):
     store = api.app.store
+    if path == MCP_ROOT or path.startswith(MCP_ROOT + "/"):
+        return mcp_request(api, method, path, device, problem)
     sharing = "/v1/workspace/weather-location"
     if path in (sharing, sharing + "/fix", sharing + "/clear"):
         if device not in ("mac", "iphone") or method != "PUT":

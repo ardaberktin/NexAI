@@ -12,6 +12,7 @@ from .activities.schema import attach_screen
 from .activities.schema import initialize as initialize_activities
 from .audio_archive import AudioArchive
 from .daybook_schedule import schedule_recordings
+from .mcp.connections import SCHEMA as MCP_SCHEMA
 from .privacy.state import PrivacyState
 from .workspace_features import SCHEMA as FEATURES_SCHEMA
 from .workspace_features import snapshot as feature_snapshot
@@ -197,7 +198,7 @@ class Store:
                 db.execute("ALTER TABLE memory ADD COLUMN recall_cursor TEXT")
             self.archive.initialize(db, quota)
         with self.connect() as db:
-            db.executescript(LIVE_SCHEMA + DAYBOOK_SCHEMA + PERSONAL_SCHEMA + WORKSPACE_SCHEMA + FEATURES_SCHEMA)
+            db.executescript(LIVE_SCHEMA + DAYBOOK_SCHEMA + PERSONAL_SCHEMA + WORKSPACE_SCHEMA + FEATURES_SCHEMA + MCP_SCHEMA)
             initialize_activities(db)
             migrate_workspace(db, self.root)
             if "with_activities" not in {column["name"] for column in db.execute("PRAGMA table_info(daybook_reports)")}:

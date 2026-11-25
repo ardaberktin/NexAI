@@ -7,6 +7,7 @@ from ..conversation.access import needs_unlock
 from ..conversation.plan import Turn as ConversationTurn
 from ..conversation.plan import choose
 from ..conversation.reply import run, spoken_text
+from ..mcp.connections import catalog
 from ..privacy.requests import queue
 from ..privacy.voice import with_approval_notice
 from ..voice_stream import SpeechChunks
@@ -21,6 +22,8 @@ async def public_reply(dialogue, voice, history, emit, locate=None, *, read_cloc
     async def generate(messages, tokens):
         return await dialogue.complete(dialogue.local, messages, tokens, temperature=0)
 
+    if not turn.journal:
+        turn.mcp_tools = await asyncio.to_thread(catalog, dialogue.memory)
     plan = await choose(turn, generate)
     if needs_unlock(turn, plan) and plan.error != "model_unavailable":
         result = await asyncio.to_thread(queue, dialogue.memory.privacy, turn.id, turn.device, turn.text,

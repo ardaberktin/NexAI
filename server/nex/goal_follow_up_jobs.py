@@ -9,6 +9,9 @@ from .feed import stamp
 from .follow_up_timing import choose_time
 from .follow_up_tools import Schedule, choose_follow_up
 from .goals import Goals
+from .mcp.connections import catalog
+from .mcp.planning import shortlist_goal
+from .mcp.tool import catalog_menu
 from .push_queue import enqueue
 from .recall_dates import time_zone
 from .store import excerpt
@@ -73,7 +76,7 @@ class GoalFollowUpJobs:
 
     def context(self, goal, answers, now):
         zone = goal["zone"]
-        return {"goal": goal["prompt"], "original_request": goal["request"], "language": goal["language"],
+        context = {"goal": goal["prompt"], "original_request": goal["request"], "language": goal["language"],
                 "local_time": local_time(now, zone), "time_zone": zone,
                 "first_run": local_time(goal["scheduled_at"], zone),
                 "next_run": local_time(goal["next_run"], zone), "frequency_minutes": goal["interval_minutes"],
@@ -81,6 +84,11 @@ class GoalFollowUpJobs:
                 "check_in_requested": bool(goal["required"]),
                 "account_access": Credentials(self.store.root).status(),
                 "earlier_answers": answers[:-1], "latest_answer": answers[-1] if answers else None}
+        if tools := catalog(self.store, scheduled=True):
+            choices = shortlist_goal(self.generate, tools, context)
+            if choices:
+                context["mcp_tools"] = catalog_menu(choices)
+        return context
 
     def apply(self, job, decision, anchor, epoch):
         now, identifier = stamp(anchor), job["id"]
