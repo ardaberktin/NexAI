@@ -25,6 +25,35 @@ class HostedAccountSettingsTests(HostedAccountFixture):
     def enroll(self, **extras):
         return {"username": "owner", "password": PASSWORD, "device": "iphone", "public": public_key(self.key)} | extras
 
+    def test_disconnect_requires_unlock_and_only_removes_the_selected_grant_in_its_workspace(self):
+        owner, owner_workspace = self.owner_login()
+        self.accounts.create("member", PASSWORD)
+        member = self.login("member")
+        member_workspace = self.unlock(member)
+        member_app = self.host.workspace(self.accounts.authenticate(member["token"]).account)
+        for app in (self.host.owner, member_app):
+            vault = app.sign_in.vault
+            for provider in ("google", "ticktick"):
+                with vault.locked(provider):
+                    grant = vault.accept(provider, {"client_id": "fixture"}, {"access_token": "fixture-token"})
+                    vault.write(provider, grant)
+
+        path = "accounts/disconnect"
+        google = {"provider": "google"}
+        self.request("POST", path, body=google, status=401)
+        self.request("POST", path, member["token"], body=google, status=403)
+        self.request("POST", path, member["token"], workspace=owner_workspace, body=google, status=403)
+        for invalid in ("gmail", "../google", ["google"], None):
+            self.request("POST", path, member["token"], workspace=member_workspace, body={"provider": invalid}, status=422)
+
+        both = dict.fromkeys(("gmail", "calendar", "ticktick"), "connected")
+        expected = both | {"gmail": "disconnected", "calendar": "disconnected"}
+        for _ in range(2):
+            result = self.request("POST", path, member["token"], body=google, workspace=member_workspace)
+            self.assertEqual(result["connections"], expected)
+        self.assertEqual(self.request("GET", "status", member["token"], workspace=member_workspace)["connections"], expected)
+        self.assertEqual(self.request("GET", "status", owner["token"], workspace=owner_workspace)["connections"], both)
+
     def test_obsolete_profile_credentials_cannot_access_or_claim_an_existing_archive(self):
         legacy, identifier = "x" * 48, str(uuid4())
         self.host.credentials["keys"]["iphone"] = legacy

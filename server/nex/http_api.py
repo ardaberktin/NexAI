@@ -337,7 +337,7 @@ class API(BaseHTTPRequestHandler):
         if path in {"/v1/context", "/v1/context/screen"}:
             self.context_request(method, path, device, query)
             return
-        if path in {"/v1/accounts/setup", "/v1/accounts/start", "/v1/accounts/finish"}:
+        if path in {"/v1/accounts/setup", "/v1/accounts/start", "/v1/accounts/finish", "/v1/accounts/disconnect"}:
             self.account_request(method, path, device)
             return
         if method == "GET":
@@ -423,7 +423,7 @@ class API(BaseHTTPRequestHandler):
 
     def account_request(self, method, path, device):
         if device == "console":
-            raise Problem(403, "Start account sign-in in a paired Nex app.")
+            raise Problem(403, "Manage connected accounts in a paired Nex app.")
         sign_in = self.app.sign_in
         try:
             if (method, path) == ("GET", "/v1/accounts/setup"):
@@ -436,8 +436,10 @@ class API(BaseHTTPRequestHandler):
             elif (method, path) == ("POST", "/v1/accounts/finish"):
                 body = self.object(12000)
                 result = sign_in.finish(body.get("provider"), body.get("callback"), device)
+            elif (method, path) == ("POST", "/v1/accounts/disconnect"):
+                result = sign_in.disconnect(self.object(1000).get("provider"))
             else:
-                raise Problem(405, "This account sign-in operation is unavailable.")
+                raise Problem(405, "This connected account operation is unavailable.")
         except AccountError as error:
             raise Problem(422, str(error)) from None
         self.send(result)

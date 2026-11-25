@@ -80,6 +80,10 @@ enum AccountSignInError: LocalizedError {
 }
 
 extension NexAPI {
+    private struct AccountConnections: Decodable {
+        let connections: [String: String]
+    }
+
     func googleClientOptions() async throws -> GoogleClientOptions {
         try await get("/v1/accounts/setup")
     }
@@ -108,12 +112,13 @@ extension NexAPI {
             let provider: AccountProvider
             let callback: URL
         }
-        struct Result: Decodable {
-            let connections: [String: String]
-        }
-        let result: Result = try await send(
+        let result: AccountConnections = try await send(
             "/v1/accounts/finish", body: Finish(provider: provider, callback: callback), timeout: 20
         )
         return result.connections
+    }
+
+    func disconnectAccount(_ provider: AccountProvider) async throws {
+        let _: AccountConnections = try await send("/v1/accounts/disconnect", body: ["provider": provider])
     }
 }

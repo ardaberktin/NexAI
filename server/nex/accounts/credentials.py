@@ -54,6 +54,9 @@ class Credentials:
             finally:
                 name.unlink(missing_ok=True)
 
+    def remove(self, provider):
+        (self.root / (provider + ".json")).unlink(missing_ok=True)
+
     def accept(self, provider, client, response, *, prior=None):
         access = response.get("access_token") if isinstance(response, dict) else None
         if not isinstance(access, str) or not TOKEN.fullmatch(access):

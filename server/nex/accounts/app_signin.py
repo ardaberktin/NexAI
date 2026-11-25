@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
-from .credentials import Credentials
+from .credentials import SCOPES, Credentials
 from .http import TOKEN, AccountError
 from .setup import TICK_REDIRECT, Authorization, ticktick_client
 
@@ -43,6 +43,9 @@ class AppSignIn:
         if client:
             return client
         # Older connections authorized through the CLI used a Desktop client.
+        return self.legacy_google_desktop()
+
+    def legacy_google_desktop(self):
         prior = self.vault.read("google")
         if prior.get("client_secret") and prior.get("client_id"):
             return {key: prior[key] for key in ("client_id", "client_secret")}
@@ -133,3 +136,23 @@ class AppSignIn:
         finally:
             with self.lock:
                 self.finishing.discard(provider)
+
+    def disconnect(self, provider):
+        if not isinstance(provider, str) or provider not in SCOPES:
+            raise AccountError("Choose Google or TickTick.")
+        with self.lock:
+            if provider in self.finishing:
+                raise AccountError("Nex is finishing another sign-in for this account. Try again shortly.")
+            with self.vault.locked(provider):
+                if provider == "google":
+                    self.preserve_google_desktop()
+                self.vault.remove(provider)
+            for key in list(self.pending):
+                if key[0] == provider:
+                    del self.pending[key]
+            return {"connections": self.vault.status()}
+
+    def preserve_google_desktop(self):
+        with self.vault.locked(GOOGLE_DESKTOP):
+            if not self.read_client(GOOGLE_DESKTOP) and (client := self.legacy_google_desktop()):
+                self.vault.write(GOOGLE_DESKTOP, client)

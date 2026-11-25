@@ -7,17 +7,19 @@ import AppKit
 @MainActor
 final class AccountSignIn: ObservableObject {
     @Published private(set) var provider: AccountProvider?
+    @Published private(set) var disconnecting: AccountProvider?
     @Published private(set) var awaitingUnlock = false
     @Published private(set) var error: String?
     @Published private(set) var confirmation: String?
     @Published var showGoogleSetup = false
     private var task: Task<Void, Never>?
     private var timeout: Task<Void, Never>?
+    var busy: Bool { provider != nil || disconnecting != nil }
     #if os(iOS)
     private var returnToSettings = false
 
     func workspaceWillLock() {
-        if provider != nil { returnToSettings = true }
+        if busy { returnToSettings = true }
     }
 
     func takeSettingsReturn() -> Bool {
@@ -52,6 +54,30 @@ final class AccountSignIn: ObservableObject {
                 } else {
                     confirmation = provider == .google ? "Gmail and Google Calendar connected." : "TickTick connected."
                 }
+            } catch {
+                if !Task.isCancelled { self.error = error.localizedDescription }
+            }
+        }
+    }
+
+    func disconnect(_ provider: AccountProvider, model: Controller) {
+        guard task == nil else { return }
+        disconnecting = provider
+        error = nil
+        confirmation = nil
+        task = Task {
+            defer {
+                task = nil
+                disconnecting = nil
+            }
+            do {
+                try await waitForWorkspace(model.privacy)
+                let connection = try model.connection()
+                try await connection.disconnectAccount(provider)
+                try? await model.refreshStatus()
+                try Task.checkCancellation()
+                confirmation = provider == .google ? String(localized: "Gmail and Google Calendar disconnected.")
+                    : String(localized: "TickTick disconnected.")
             } catch {
                 if !Task.isCancelled { self.error = error.localizedDescription }
             }

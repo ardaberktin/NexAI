@@ -55,6 +55,12 @@ jobs:
             apple/tests/HostedAccountCheck.swift apple/Nex/{HostedAccount,Connection,Types,Spool}.swift \
             apple/WatchSupport/WatchLink.swift
           .build/hosted-account-check
+      - name: Check connected account operations
+        if: matrix.scheme == 'Nex macOS'
+        run: |
+          xcrun swiftc -warnings-as-errors -o .build/account-sign-in-check \
+            apple/tests/AccountSignInCheck.swift apple/Nex/{AccountSignIn,AccountAuthorization,AccountLoopback}.swift
+          .build/account-sign-in-check
   source-archives:
     runs-on: ubuntu-24.04
     steps:
