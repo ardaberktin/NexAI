@@ -77,12 +77,15 @@ def listed(db):
 
 
 def catalog(store, *, scheduled=False):
-    return {tool.alias(connection.id): (
+    from ..accounts.write_tools import available
+
+    remote = {tool.alias(connection.id): (
                 connection.name, AvailableTool(tool.name, tool.description, tool.schema, tool.read_only,
                                                connection.permission(tool).access.allows_read),
             )
             for connection in list_connections(store)
             for tool in connection.tools if connection.permits(tool, scheduled=scheduled)}
+    return available(store, scheduled=scheduled) | remote
 
 
 def lookup(db, identifier):

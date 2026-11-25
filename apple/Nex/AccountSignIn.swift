@@ -8,13 +8,15 @@ import AppKit
 final class AccountSignIn: ObservableObject {
     @Published private(set) var provider: AccountProvider?
     @Published private(set) var disconnecting: AccountProvider?
+    @Published private(set) var changingWriteAccess = false
     @Published private(set) var awaitingUnlock = false
     @Published private(set) var error: String?
     @Published private(set) var confirmation: String?
     @Published var showGoogleSetup = false
+    private(set) var setupWriteAccount: ConnectedAccount?
     private var task: Task<Void, Never>?
     private var timeout: Task<Void, Never>?
-    var busy: Bool { provider != nil || disconnecting != nil }
+    var busy: Bool { provider != nil || disconnecting != nil || changingWriteAccess }
     #if os(iOS)
     private var returnToSettings = false
 
@@ -28,7 +30,8 @@ final class AccountSignIn: ObservableObject {
     }
     #endif
 
-    func start(_ provider: AccountProvider, model: Controller, client: GoogleAccountClient? = nil) {
+    func start(_ provider: AccountProvider, model: Controller, client: GoogleAccountClient? = nil,
+               enableWrite: ConnectedAccount? = nil) {
         guard task == nil else { return }
         self.provider = provider
         error = nil
@@ -45,12 +48,15 @@ final class AccountSignIn: ObservableObject {
                 startTimeout()
                 try await waitForWorkspace(model.privacy)
                 let connection = try model.connection()
-                guard let callback = try await authorize(provider, connection: connection, client: client) else { return }
+                guard let callback = try await authorize(provider, connection: connection, client: client,
+                                                         enableWrite: enableWrite) else { return }
                 let connections = try await finish(provider, callback: callback, connection: connection, privacy: model.privacy)
                 try? await model.refreshStatus()
                 try Task.checkCancellation()
                 if provider == .google && ["gmail", "calendar"].contains(where: { connections[$0] != "connected" }) {
                     error = AccountSignInError.googlePermissions.localizedDescription
+                } else if enableWrite != nil {
+                    confirmation = String(localized: "Write access enabled.")
                 } else {
                     confirmation = provider == .google ? "Gmail and Google Calendar connected." : "TickTick connected."
                 }
@@ -61,23 +67,42 @@ final class AccountSignIn: ObservableObject {
     }
 
     func disconnect(_ provider: AccountProvider, model: Controller) {
+        update(model: model, disconnecting: provider) { connection in
+            try await connection.disconnectAccount(provider)
+            return provider == .google ? String(localized: "Gmail and Google Calendar disconnected.")
+                : String(localized: "TickTick disconnected.")
+        }
+    }
+
+    func updateWriteAccess(_ account: ConnectedAccount, mode: AccountWriteMode, model: Controller) {
+        update(model: model) { connection in
+            try await connection.updateAccountWriteAccess(account, mode: mode)
+            return nil
+        }
+    }
+
+    func clearSetupWriteAccount() { setupWriteAccount = nil }
+
+    private func update(model: Controller, disconnecting: AccountProvider? = nil,
+                        operation: @escaping (NexAPI) async throws -> String?) {
         guard task == nil else { return }
-        disconnecting = provider
+        self.disconnecting = disconnecting
+        changingWriteAccess = disconnecting == nil
         error = nil
         confirmation = nil
         task = Task {
             defer {
                 task = nil
-                disconnecting = nil
+                self.disconnecting = nil
+                changingWriteAccess = false
             }
             do {
                 try await waitForWorkspace(model.privacy)
                 let connection = try model.connection()
-                try await connection.disconnectAccount(provider)
+                let result = try await operation(connection)
                 try? await model.refreshStatus()
                 try Task.checkCancellation()
-                confirmation = provider == .google ? String(localized: "Gmail and Google Calendar disconnected.")
-                    : String(localized: "TickTick disconnected.")
+                confirmation = result
             } catch {
                 if !Task.isCancelled { self.error = error.localizedDescription }
             }
@@ -91,6 +116,7 @@ final class AccountSignIn: ObservableObject {
         error = nil
         confirmation = nil
         showGoogleSetup = false
+        clearSetupWriteAccount()
         #if os(iOS)
         returnToSettings = false
         #endif
@@ -138,21 +164,22 @@ final class AccountSignIn: ObservableObject {
     }
 
     private func authorize(_ provider: AccountProvider, connection: NexAPI,
-                           client: GoogleAccountClient?) async throws -> URL? {
+                           client: GoogleAccountClient?, enableWrite: ConnectedAccount?) async throws -> URL? {
         if provider == .google {
             if let client { try await connection.saveGoogleClient(client) }
             let options = try await connection.googleClientOptions()
             #if os(macOS)
             if options.googleDesktop && (client?.desktop == true || !options.googleNative) {
-                return try await authorizeDesktop(using: connection)
+                return try await authorizeDesktop(using: connection, enableWrite: enableWrite)
             }
             #endif
             if !options.googleNative {
+                setupWriteAccount = enableWrite
                 showGoogleSetup = true
                 return nil
             }
         }
-        let attempt = try await connection.startAccountSignIn(provider)
+        let attempt = try await connection.startAccountSignIn(provider, enableWrite: enableWrite)
         guard let scheme = attempt.redirect.scheme,
               provider == .google ? scheme.hasPrefix("com.googleusercontent.apps.") : scheme == "com.ardaberktin.nex.oauth" else {
             throw AccountSignInError.invalidProvider
@@ -161,12 +188,12 @@ final class AccountSignIn: ObservableObject {
     }
 
     #if os(macOS)
-    private func authorizeDesktop(using connection: NexAPI) async throws -> URL {
+    private func authorizeDesktop(using connection: NexAPI, enableWrite: ConnectedAccount?) async throws -> URL {
         let listener = try AccountLoopback()
         defer { listener.close() }
         var events = listener.events.makeAsyncIterator()
         guard case .ready(let port) = try await events.next() else { throw AccountSignInError.localCallback }
-        let attempt = try await connection.startAccountSignIn(.google, port: port)
+        let attempt = try await connection.startAccountSignIn(.google, port: port, enableWrite: enableWrite)
         listener.expect(state: attempt.state)
         try Task.checkCancellation()
         guard NSWorkspace.shared.open(attempt.url) else { throw AccountSignInError.localCallback }

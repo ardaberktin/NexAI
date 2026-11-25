@@ -114,6 +114,18 @@ journalctl --user -u nex.service -n 30
 
 See [Live voice and optional integrations](deploy/README.md) for the second service and account configuration.
 
+## Allow writes to a connected account
+
+In Nex on Mac or iPhone, unlock the workspace and open **Settings → Connected Accounts**. Expand a connected
+account, turn on **Allow write access**, and approve the requested permission in your browser. Gmail can send a
+plain-text message to one recipient, Google Calendar can create events on your primary calendar, and TickTick can
+create tasks and complete an exact task match in the Inbox or a named list.
+
+Existing connections start read-only. Enable **Allow writes in scheduled goals** for each account you want goals to
+write to. Nex checks that the request authorizes the change and makes at most one write attempt per connected account
+per request or scheduled run. Turning off write access in Nex stops further writes
+through that connection. To remove the provider's grant, revoke Nex in your Google or TickTick account settings.
+
 ## Connect an MCP server
 
 On Mac or iPhone, unlock Nex and open **Settings → MCP Servers → Add MCP Server**. Enter a name and the server's

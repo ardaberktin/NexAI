@@ -11,6 +11,16 @@ enum AccountProvider: String, Encodable {
     }
 }
 
+enum ConnectedAccount: String, Encodable {
+    case gmail, calendar, ticktick
+
+    var provider: AccountProvider { self == .ticktick ? .ticktick : .google }
+}
+
+enum AccountWriteMode: String, Encodable {
+    case off, interactive, scheduled
+}
+
 struct GoogleClientOptions: Decodable {
     let googleNative: Bool
     let googleDesktop: Bool
@@ -92,13 +102,20 @@ extension NexAPI {
         let _: GoogleClientOptions = try await send("/v1/accounts/setup", method: "PUT", body: client)
     }
 
-    func startAccountSignIn(_ provider: AccountProvider, port: UInt16? = nil) async throws -> AccountAuthorization {
+    func startAccountSignIn(_ provider: AccountProvider, port: UInt16? = nil,
+                            enableWrite: ConnectedAccount? = nil) async throws -> AccountAuthorization {
         struct Start: Encodable {
             let provider: AccountProvider
             let port: UInt16?
+            let enableWrite: ConnectedAccount?
+
+            enum CodingKeys: String, CodingKey {
+                case provider, port
+                case enableWrite = "enable_write"
+            }
         }
         let attempt: AccountAuthorization = try await send(
-            "/v1/accounts/start", body: Start(provider: provider, port: port), timeout: 20
+            "/v1/accounts/start", body: Start(provider: provider, port: port, enableWrite: enableWrite), timeout: 20
         )
         guard attempt.url.scheme == "https", attempt.url.host == provider.signInHost,
               attempt.url.user == nil, attempt.url.password == nil else {
@@ -120,5 +137,16 @@ extension NexAPI {
 
     func disconnectAccount(_ provider: AccountProvider) async throws {
         let _: AccountConnections = try await send("/v1/accounts/disconnect", body: ["provider": provider])
+    }
+
+    func updateAccountWriteAccess(_ account: ConnectedAccount, mode: AccountWriteMode) async throws {
+        struct Change: Encodable {
+            let account: ConnectedAccount
+            let mode: AccountWriteMode
+        }
+        struct Access: Decodable {
+            let accountWriteAccess: [String: Bool]
+        }
+        let _: Access = try await send("/v1/accounts/access", method: "PUT", body: Change(account: account, mode: mode))
     }
 }

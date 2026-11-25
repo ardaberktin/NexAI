@@ -14,8 +14,12 @@ PROJECTS_URL = "https://api.ticktick.com/open/v1/project"
 
 
 class TickTick:
-    def __init__(self, vault):
-        self.token = vault.token("ticktick", {TICK_TASKS})
+    def __init__(self, token):
+        self.token = token
+
+    @classmethod
+    def authorized(cls, vault):
+        return cls(vault.token("ticktick", {TICK_TASKS}))
 
     def projects(self):
         result, _ = request(PROJECTS_URL, token=self.token)
@@ -87,7 +91,7 @@ def matching_tasks(rows, topic, start, end):
 
 
 def ticktick_items(vault, intent, start, end):
-    client = TickTick(vault)
+    client = TickTick.authorized(vault)
     projects = [item for item in client.projects() if not item.get("closed")]
     if intent.lists:
         names = [clean(item.get("name"), 130) for item in projects]

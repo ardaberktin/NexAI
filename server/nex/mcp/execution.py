@@ -1,5 +1,6 @@
 """Recheck MCP tool metadata and workspace permissions at dispatch."""
 
+from ..accounts import write_tools
 from . import MCPError, client
 from .client import MODERN
 from .connections import discovered_tool, listed, redact
@@ -15,9 +16,26 @@ def current_tool(db, alias, *, scheduled=False):
 
 
 def call_profile(store, alias, *, scheduled=False):
+    if entry := write_tools.ACTIONS.get(alias):
+        return write_tools.profile(store.root, entry, scheduled=scheduled)
     with store.connect() as db:
         connection, tool = current_tool(db, alias, scheduled=scheduled)
         return connection.name, tool, connection.permission(tool).access
+
+
+def review_arguments(call):
+    arguments = call["arguments"]
+    if entry := write_tools.ACTIONS.get(call["name"]):
+        return write_tools.validated_arguments(entry.tool, arguments)
+    return arguments
+
+
+def account_write_already_attempted(alias, attempts):
+    entry = write_tools.ACTIONS.get(alias)
+    return entry is not None and any(
+        (previous := write_tools.ACTIONS.get(name)) is not None and previous.account == entry.account
+        for name in attempts
+    )
 
 
 def live_tool(client, advertised, secrets):
@@ -35,6 +53,8 @@ def live_tool(client, advertised, secrets):
 def execute(store, call, *, scheduled=False, approval=None, write_run=None):
     validate_call(call)
     alias, arguments = call["name"], call["arguments"]
+    if entry := write_tools.ACTIONS.get(alias):
+        return write_tools.execute(store.root, entry, call, scheduled=scheduled, approval=approval, write_run=write_run)
     with store.connect() as db:
         connection, advertised = current_tool(db, alias, scheduled=scheduled)
     if not advertised.read_only:

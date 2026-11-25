@@ -337,7 +337,8 @@ class API(BaseHTTPRequestHandler):
         if path in {"/v1/context", "/v1/context/screen"}:
             self.context_request(method, path, device, query)
             return
-        if path in {"/v1/accounts/setup", "/v1/accounts/start", "/v1/accounts/finish", "/v1/accounts/disconnect"}:
+        if path in {"/v1/accounts/setup", "/v1/accounts/start", "/v1/accounts/finish", "/v1/accounts/disconnect",
+                    "/v1/accounts/access"}:
             self.account_request(method, path, device)
             return
         if method == "GET":
@@ -354,7 +355,9 @@ class API(BaseHTTPRequestHandler):
                 if device == "console" or self.headers.get("X-Nex-Workspace"):
                     if device != "console":
                         require_session(self.privacy, self.client_identity, self.headers["X-Nex-Workspace"])
-                    status["connections"] = Credentials(store.root).status()
+                    vault = Credentials(store.root)
+                    status["connections"] = vault.status()
+                    status["account_write_access"] = vault.write_access()
                 self.send(status)
                 return
             if path in {"/v1/daybook", "/v1/daybook/conversation"}:
@@ -432,12 +435,14 @@ class API(BaseHTTPRequestHandler):
                 result = sign_in.set_google_client(self.object(3000), device)
             elif (method, path) == ("POST", "/v1/accounts/start"):
                 body = self.object(1000)
-                result = sign_in.start(body.get("provider"), body.get("port"), device)
+                result = sign_in.start(body.get("provider"), body.get("port"), device, enable_write=body.get("enable_write"))
             elif (method, path) == ("POST", "/v1/accounts/finish"):
                 body = self.object(12000)
                 result = sign_in.finish(body.get("provider"), body.get("callback"), device)
             elif (method, path) == ("POST", "/v1/accounts/disconnect"):
                 result = sign_in.disconnect(self.object(1000).get("provider"))
+            elif (method, path) == ("PUT", "/v1/accounts/access"):
+                result = sign_in.update_access(self.object(1000))
             else:
                 raise Problem(405, "This connected account operation is unavailable.")
         except AccountError as error:

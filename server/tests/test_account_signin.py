@@ -7,7 +7,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from nex.accounts.app_signin import AppSignIn
-from nex.accounts.credentials import GMAIL, SCOPES, TICK_TASKS
+from nex.accounts.credentials import EVENTS, GMAIL, SCOPES, TICK_TASKS, WRITE_SCOPES
 from nex.accounts.http import AccountError
 from nex.accounts.setup import TICK_REDIRECT
 
@@ -85,6 +85,47 @@ class AppSignInTests(unittest.TestCase):
         with self.assertRaises(AccountError):
             self.sign_in.finish("google", callback(attempt, error="access_denied"), "mac")
         self.assertEqual(self.sign_in.vault.status()["gmail"], "disconnected")
+
+    def test_google_write_consent_is_scoped_and_read_consent_is_preserved(self):
+        self.sign_in.set_google_client({"client_id": GOOGLE_ID, "desktop": False}, "iphone")
+        vault = self.sign_in.vault
+        with vault.locked("google"):
+            legacy = vault.accept("google", {"client_id": GOOGLE_ID}, {"access_token": "old-token"})
+            vault.write("google", legacy)
+        attempt = self.sign_in.start("google", None, "iphone", enable_write="calendar")
+        scopes = SCOPES["google"] | {WRITE_SCOPES["calendar"]}
+        self.assertEqual(set(parse_qs(urlsplit(attempt["url"]).query)["scope"][0].split()), scopes)
+        partial = {"access_token": "partial-token", "scope": " ".join(SCOPES["google"])}
+        with patch("nex.accounts.setup.request", return_value=(partial, {})), self.assertRaisesRegex(AccountError, "all requested"):
+            self.sign_in.finish("google", callback(attempt), "iphone")
+        self.assertEqual(vault.read("google"), legacy)
+        retry = self.sign_in.start("google", None, "iphone", enable_write="calendar")
+        accepted = {"access_token": "new-token", "scope": " ".join(scopes)}
+        with patch("nex.accounts.setup.request", return_value=(accepted, {})):
+            self.sign_in.finish("google", callback(retry), "iphone")
+        self.assertEqual(vault.write_access(), {"calendar": False})
+        self.assertEqual(vault.status()["calendar"], "connected")
+        self.assertEqual(vault.token("google", {EVENTS}), "new-token")
+
+    def test_ticktick_write_consent_and_revocation_invalidate_pending_sign_in(self):
+        with patch("nex.accounts.app_signin.ticktick_client", return_value={"client_id": "nex-write"}) as register:
+            attempt = self.sign_in.start("ticktick", None, "iphone", enable_write="ticktick")
+        register.assert_called_once_with(TICK_REDIRECT, write=True)
+        scopes = {TICK_TASKS, WRITE_SCOPES["ticktick"]}
+        self.assertEqual(set(parse_qs(urlsplit(attempt["url"]).query)["scope"][0].split()), scopes)
+        with patch("nex.accounts.setup.request", return_value=({"access_token": "write-token"}, {})):
+            self.sign_in.finish("ticktick", callback(attempt), "iphone")
+        self.assertEqual(self.sign_in.vault.write_access(), {"ticktick": False})
+        self.sign_in.update_access({"account": "ticktick", "mode": "scheduled"})
+        self.assertEqual(self.sign_in.vault.write_access(), {"ticktick": True})
+        pending = self.sign_in.start("ticktick", None, "mac")
+        self.sign_in.update_access({"account": "ticktick", "mode": "off"})
+        self.assertEqual(self.sign_in.vault.write_access(), {})
+        self.assertEqual(self.sign_in.vault.token("ticktick", {TICK_TASKS}), "write-token")
+        with self.assertRaisesRegex(AccountError, "expired"):
+            self.sign_in.finish("ticktick", callback(pending), "mac")
+        with self.assertRaisesRegex(AccountError, "Authorize write access"):
+            self.sign_in.update_access({"account": "ticktick", "mode": "scheduled"})
 
     def test_disconnect_preserves_legacy_google_setup_and_invalidates_pending_callbacks(self):
         vault = self.sign_in.vault

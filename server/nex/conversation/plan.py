@@ -323,6 +323,8 @@ async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
     if direct_mcp:
         instructions += ("\nThe request requires the selected MCP source. The connected server name identifies "
                          "the provider. Use the specific values in the request and history to fill its arguments. "
+                         "Changes require the connected write tool. The built-in gmail, calendar and ticktick tools "
+                         "only retrieve existing data. Omit optional arguments that the user did not supply or use JSON null. "
                          "Use an empty tools array only when an essential argument is missing.")
     if label == "mixed":
         instructions += "\nUse a built-in tool only for another independent part of the request."
@@ -337,6 +339,12 @@ async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
     plan = await generate_plan(turn, generate, plan_messages(turn, instructions, data, names, schema),
                                available=names if route.tools else None,
                                required_mcp=direct_mcp)
+    if plan.error and direct_mcp and label == "mixed":
+        names = turn.mcp_tools.keys()
+        repair = planning_instructions(names, selected=True)
+        repair += "\nUse the connected tool for the user's explicit request. Omit optional fields or use JSON null."
+        plan = await generate_plan(turn, generate, plan_messages(turn, repair, data, names, plan_schema(names)),
+                                   available=names)
     if direct_mcp and not plan.tools and not plan.error:
         return Plan((), clarify=True)
     names = {tool["name"] for tool in plan.tools}

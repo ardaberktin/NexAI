@@ -23,8 +23,9 @@ def prepare_account(root, intent, query, zone, reference=None):
         return label, [], f"{action} {label} under Connected accounts in Nex Settings."
     try:
         if intent.access_check:
-            TickTick(vault).projects()
-            return label, [], "Yes, Nex has read-only access to your TickTick tasks and lists."
+            TickTick.authorized(vault).projects()
+            access = "read_write" if intent.provider in vault.write_access() else "read_only"
+            return label, [{"account": label, "status": "connected", "access": access}], ""
         if intent.provider == "gmail":
             rows = detailed_inbox(vault, intent) if intent.include_body else gmail_messages(vault, intent)
         else:

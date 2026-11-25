@@ -29,6 +29,8 @@ final class NexAPI {
     var disconnectStatus = 200
     private(set) var callbacks: [String] = []
     private(set) var disconnects: [String] = []
+    private(set) var writeRequests: [String] = []
+    private(set) var writeChanges: [[String: String]] = []
 
     func get<T: Decodable>(_ path: String) async throws -> T {
         precondition(path == "/v1/accounts/setup")
@@ -39,6 +41,8 @@ final class NexAPI {
                                                body: Body, timeout: Double = 12) async throws -> T {
         switch path {
         case "/v1/accounts/start":
+            let payload = try JSONDecoder().decode([String: String].self, from: JSONEncoder().encode(body))
+            if let account = payload["enable_write"] { writeRequests.append(account) }
             return try decode(["url": "https://accounts.google.com/authorize", "redirect": Self.redirect, "state": "fixture"])
         case "/v1/accounts/finish":
             let payload = try JSONDecoder().decode([String: String].self, from: JSONEncoder().encode(body))
@@ -52,6 +56,11 @@ final class NexAPI {
             disconnects.append(payload["provider"]!)
             if disconnectStatus != 200 { throw NexError.api(disconnectStatus, "Disconnect failed.") }
             return try decode(["connections": ["gmail": "disconnected", "calendar": "disconnected"]])
+        case "/v1/accounts/access":
+            precondition(method == "PUT")
+            let payload = try JSONDecoder().decode([String: String].self, from: JSONEncoder().encode(body))
+            writeChanges.append(payload)
+            return try decode(["account_write_access": ["calendar": true]])
         default: preconditionFailure("Unexpected account request")
         }
     }
@@ -139,6 +148,22 @@ enum AccountSignInCheck {
         try await waitUntil { !signIn.busy }
         precondition(model.api.disconnects == ["google", "ticktick"])
         print("Disconnect used the selected provider, waited for unlock, refreshed status after success, and handled failure and cancellation.")
+
+        AccountBrowser.onAuthorize = {}
+        model.privacy.connected = true
+        signIn.start(.google, model: model, enableWrite: .calendar)
+        try await waitUntil { !signIn.busy }
+        precondition(model.api.writeRequests == ["calendar"] && signIn.error == nil && model.refreshes == 2)
+
+        model.privacy.lock()
+        signIn.updateWriteAccess(.calendar, mode: .scheduled, model: model)
+        try await waitUntil { signIn.awaitingUnlock }
+        precondition(signIn.busy && model.api.writeChanges.isEmpty)
+        model.privacy.connected = true
+        try await waitUntil { !signIn.busy }
+        precondition(model.api.writeChanges == [["account": "calendar", "mode": "scheduled"]])
+        precondition(signIn.error == nil && model.refreshes == 3)
+        print("Write consent carried the selected account, and changing goal access waited for workspace unlock.")
     }
 
     @MainActor

@@ -3,11 +3,11 @@
 import json
 import re
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
-from .credentials import SCOPES, Credentials
+from .credentials import PROVIDERS, SCOPES, Credentials, write_settings
 from .http import TOKEN, AccountError
 from .setup import TICK_REDIRECT, Authorization, ticktick_client
 
@@ -15,6 +15,7 @@ GOOGLE_ID = re.compile(r"[a-zA-Z0-9_-]{1,120}\.apps\.googleusercontent\.com")
 GOOGLE_NATIVE = "google-native-client"
 GOOGLE_DESKTOP = "google-desktop-client"
 TICK_CLIENT = "ticktick-native-client"
+TICK_WRITE_CLIENT = "ticktick-native-write-client"
 DEADLINE_SECONDS = 600
 
 
@@ -88,23 +89,32 @@ class AppSignIn:
         scheme = ".".join(reversed(client["client_id"].split(".")))
         return Authorization("google", client, scheme + ":/oauth2redirect")
 
-    def start(self, provider, port, device):
-        if provider == "google":
-            flow = self.google_flow(port, device)
-        elif provider == "ticktick" and port is None:
-            with self.vault.locked(TICK_CLIENT):
-                client = self.read_client(TICK_CLIENT)
-                if not client:
-                    client = ticktick_client(TICK_REDIRECT)
-                    self.vault.write(TICK_CLIENT, client)
-            flow = Authorization("ticktick", client, TICK_REDIRECT)
-        else:
-            raise AccountError("Choose Google or TickTick.")
+    def start(self, provider, port, device, *, enable_write=None):
+        if not isinstance(provider, str) or provider not in SCOPES or (enable_write is not None and (
+                not isinstance(enable_write, str) or PROVIDERS.get(enable_write) != provider)):
+            raise AccountError("Choose a connected account for sign-in.")
         with self.lock:
             if provider in self.finishing:
                 raise AccountError("Nex is finishing another sign-in for this account.")
+            flow = self.flow(provider, port, device, enable_write)
             self.pending[provider, device] = PendingSignIn(flow, monotonic() + DEADLINE_SECONDS)
         return {"url": flow.url(), "state": flow.state, "redirect": flow.redirect}
+
+    def flow(self, provider, port, device, enable_write):
+        writes = write_settings(self.vault.read(provider), provider)
+        if enable_write:
+            writes.setdefault(enable_write, False)
+        if provider == "google":
+            return replace(self.google_flow(port, device), writes=writes)
+        if port is not None:
+            raise AccountError("TickTick sign-in uses the Nex callback.")
+        name = TICK_WRITE_CLIENT if writes else TICK_CLIENT
+        with self.vault.locked(name):
+            client = self.read_client(name)
+            if not client:
+                client = ticktick_client(TICK_REDIRECT, write=True) if writes else ticktick_client(TICK_REDIRECT)
+                self.vault.write(name, client)
+        return Authorization("ticktick", client, TICK_REDIRECT, writes=writes)
 
     def finish(self, provider, callback, device):
         if provider not in ("google", "ticktick") or not isinstance(callback, str) or len(callback) > 10000:
@@ -132,6 +142,8 @@ class AppSignIn:
             if "error" in values or len(codes) != 1 or not TOKEN.fullmatch(codes[0]):
                 raise AccountError("The provider did not complete sign-in.")
             flow.save(self.vault, codes[0])
+            with self.lock:
+                self.clear_pending(provider)
             return {"connections": self.vault.status()}
         finally:
             with self.lock:
@@ -147,10 +159,34 @@ class AppSignIn:
                 if provider == "google":
                     self.preserve_google_desktop()
                 self.vault.remove(provider)
-            for key in list(self.pending):
-                if key[0] == provider:
-                    del self.pending[key]
+            self.clear_pending(provider)
             return {"connections": self.vault.status()}
+
+    def clear_pending(self, provider):
+        for key in list(self.pending):
+            if key[0] == provider:
+                del self.pending[key]
+
+    def update_access(self, data):
+        key, mode = data.get("account"), data.get("mode")
+        if not isinstance(key, str) or key not in PROVIDERS or mode not in ("off", "interactive", "scheduled"):
+            raise AccountError("Choose a connected account and a valid write setting.")
+        provider = PROVIDERS[key]
+        with self.lock, self.vault.locked(provider):
+            if provider in self.finishing:
+                raise AccountError("Nex is finishing sign-in for this account. Try again shortly.")
+            saved = self.vault.read(provider)
+            settings = write_settings(saved, provider)
+            if mode == "off":
+                settings.pop(key, None)
+            elif key in settings:
+                settings[key] = mode == "scheduled"
+            else:
+                raise AccountError("Authorize write access before changing how Nex uses it.")
+            if saved:
+                self.vault.write(provider, saved | {"write_settings": settings})
+            self.clear_pending(provider)
+        return {"account_write_access": self.vault.write_access()}
 
     def preserve_google_desktop(self):
         with self.vault.locked(GOOGLE_DESKTOP):
