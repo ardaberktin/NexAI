@@ -47,7 +47,7 @@ class AccountSettings:
             devices = [{"id": row["id"], "role": row["role"], "current": row["id"] == self.client.id}
                        for row in db.execute("SELECT id,role FROM devices WHERE user_id=? AND expires>? ORDER BY role",
                                              (actor["id"], time()))]
-            return user_summary(actor) | {"devices": devices}
+            return user_summary(actor) | {"devices": devices, "can_reset_data": True}
 
     def rename(self, body):
         name = username(body.get("username"))
@@ -61,17 +61,25 @@ class AccountSettings:
     def change_password(self, body):
         old = password_bytes(body.get("current_password"))
         with self.accounts.password_work(self.peer):
-            with self.authorized() as (_, actor):
-                expected = actor["password_hash"]
-                if not hmac.compare_digest(derive(old, actor["salt"]), expected):
-                    raise AccessDenied("The current password is incorrect.")
+            expected = self.verify_password(old)
             record = password_record(body.get("password"))
             with self.authorized(write=True) as (db, actor):
-                if actor["password_hash"] != expected:
-                    raise AccessDenied("The password changed. Try again with the current password.")
+                self.require_unchanged_password(actor, expected)
                 db.execute("UPDATE users SET salt=?,password_hash=? WHERE id=?", (*record, actor["id"]))
                 db.execute("DELETE FROM devices WHERE user_id=? AND id<>?", (actor["id"], self.client.id))
         return self.profile()
+
+    def verify_password(self, password):
+        with self.authorized() as (_, actor):
+            expected = actor["password_hash"]
+            if not hmac.compare_digest(derive(password, actor["salt"]), expected):
+                raise AccessDenied("The current password is incorrect.")
+            return expected
+
+    @staticmethod
+    def require_unchanged_password(actor, expected):
+        if actor["password_hash"] != expected:
+            raise AccessDenied("The password changed. Try again with the current password.")
 
     def revoke_device(self, body):
         identifier = body.get("device_id")
@@ -80,6 +88,19 @@ class AccountSettings:
         with self.authorized(write=True) as (db, actor):
             db.execute("DELETE FROM devices WHERE user_id=? AND id=?", (actor["id"], identifier))
         return self.profile()
+
+    def reset_data(self, body):
+        if body.keys() != {"current_password"}:
+            raise ValueError("Enter your current password to reset your data.")
+        password = password_bytes(body["current_password"])
+        with self.accounts.password_work(self.peer):
+            expected = self.verify_password(password)
+            with self.authorized(write=True) as (db, actor):
+                self.require_unchanged_password(actor, expected)
+                identifier = actor["id"]
+                db.execute("INSERT INTO account_resets VALUES (?)", (identifier,))
+                db.execute("DELETE FROM devices WHERE user_id=?", (identifier,))
+        return {"queued": True}
 
     def users(self):
         with self.authorized(admin=True) as (db, _):

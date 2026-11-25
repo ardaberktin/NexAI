@@ -25,10 +25,19 @@ struct Spool: Sendable {
     }
 
     func scoped(to scope: String) throws -> Spool {
+        try Spool(directory: accountDirectory(scope))
+    }
+
+    func eraseAccount(_ scope: String) throws {
+        let path = try accountDirectory(scope)
+        if fm.fileExists(atPath: path.path) { try fm.removeItem(at: path) }
+    }
+
+    private func accountDirectory(_ scope: String) throws -> URL {
         guard scope.utf8.count == 64, scope.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
             throw NexError.capture("The recording queue account is invalid.")
         }
-        return try Spool(directory: directory.appending(path: "accounts").appending(path: scope))
+        return directory.appending(path: "accounts").appending(path: scope)
     }
 
     func audio(_ id: String) -> URL { directory.appending(path: id + ".m4a") }

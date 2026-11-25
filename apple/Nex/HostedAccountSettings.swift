@@ -58,6 +58,12 @@ struct HostedAccountSettings: View {
             }
             Button("Sign Out", role: .destructive) { Task { await model.signOut() } }
                 .disabled(model.signingOut)
+            if privacy.connected, profile?.canResetData == true {
+                Button("Reset My Data", role: .destructive) {
+                    panel = .credentials(.resetData)
+                }
+                .disabled(model.signingOut)
+            }
             if loading { ProgressView("Loading account settings…") }
             if !privacy.connected { Text("Unlock the workspace to edit account settings.").foregroundStyle(.secondary) }
             if let issue {

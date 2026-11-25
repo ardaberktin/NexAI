@@ -36,6 +36,11 @@ final class NexNotificationPresenter: NSObject, UNUserNotificationCenterDelegate
 
 @MainActor
 enum GoalNotifications {
+    private static func cursorKey(accountScope: String) -> String { "nex.goalEmailAlertCursor." + accountScope }
+
+    static func eraseCursor(accountScope: String) {
+        UserDefaults.standard.removeObject(forKey: cursorKey(accountScope: accountScope))
+    }
 
     static func protectExistingAlerts() async {
         let center = UNUserNotificationCenter.current()
@@ -91,7 +96,7 @@ enum GoalNotifications {
         let authorization = await center.notificationSettings().authorizationStatus
         guard authorization == .authorized || authorization == .provisional else { return }
         let storage = UserDefaults.standard
-        let key = "nex.goalEmailAlertCursor." + profile.workspaceScope
+        let key = cursorKey(accountScope: profile.workspaceScope)
         let cursor = storage.integer(forKey: key)
         let query = [URLQueryItem(name: "after", value: String(cursor))]
         guard let response: ListResponse<GoalAlert> = try? await api.get("/v1/workspace/goal-alerts", query: query),

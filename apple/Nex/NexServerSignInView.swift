@@ -69,6 +69,9 @@ struct NexServerSignInFields: View {
                 .disabled(!available)
         }
         .disabled(submitting || model.signingOut)
+        .onAppear {
+            if link.isEmpty, let resetLink = model.resetSignInLink { link = resetLink }
+        }
     }
 
     private var creatingOwner: Bool { (try? NexServerLink(link))?.setup != nil }

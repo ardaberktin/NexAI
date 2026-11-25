@@ -38,6 +38,7 @@ struct HostedForm<Content: View>: View {
     let error: String?
     let saveTitle: String?
     let ready: Bool
+    var destructive = false
     let save: () -> Void
     @ViewBuilder let content: Content
     @Environment(\.dismiss) private var dismiss
@@ -56,7 +57,8 @@ struct HostedForm<Content: View>: View {
                 }
                 if let saveTitle {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button(saveTitle, action: save).disabled(pending || !ready)
+                        Button(saveTitle, role: destructive ? .destructive : nil, action: save)
+                            .disabled(pending || !ready)
                     }
                 }
             }

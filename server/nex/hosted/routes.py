@@ -21,6 +21,8 @@ def account_request(api, hosted, method, path, problem):
         return settings.change_password(api.object(8_000))
     if route == ("POST", "profile/revoke-device"):
         return settings.revoke_device(api.object(1_024))
+    if route == ("POST", "profile/reset-data"):
+        return settings.reset_data(api.object(8_000))
     if route == ("GET", "users"):
         return settings.users()
     if route == ("POST", "users"):

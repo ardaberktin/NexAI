@@ -21,14 +21,16 @@ struct HostedDevice: Decodable, Identifiable {
 struct HostedProfile: Decodable {
     let user: HostedUser
     let devices: [HostedDevice]
+    let canResetData: Bool
 
     init(from decoder: Decoder) throws {
         user = try HostedUser(from: decoder)
         let values = try decoder.container(keyedBy: CodingKeys.self)
         devices = try values.decode([HostedDevice].self, forKey: .devices)
+        canResetData = try values.decodeIfPresent(Bool.self, forKey: .canResetData) ?? false
     }
 
-    private enum CodingKeys: String, CodingKey { case devices }
+    private enum CodingKeys: String, CodingKey { case devices, canResetData }
 }
 
 struct HostedStorage: Decodable {
@@ -57,6 +59,12 @@ struct HostedAccountAPI {
 
     func revoke(_ id: String) async throws -> HostedProfile {
         try await api.send(root + "/profile/revoke-device", body: ["device_id": id])
+    }
+
+    func resetData(password: String) async throws {
+        struct Reset: Decodable { let queued: Bool }
+        let result: Reset = try await api.send(root + "/profile/reset-data", body: ["current_password": password])
+        guard result.queued else { throw NexError.connection("The server could not schedule the data reset.") }
     }
 
     func users() async throws -> [HostedUser] {

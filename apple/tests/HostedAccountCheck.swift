@@ -66,6 +66,13 @@ struct HostedAccountCheck {
         let unscoped = try base.gaps()
         precondition(restored.count == 1 && unrelated.isEmpty && unscoped.isEmpty)
         precondition((try? base.scoped(to: "../../other")) == nil)
+        try second.save(Gap(id: UUID().uuidString, started: "2026-01-01T00:00:00Z", text: "Bob only"))
+        try base.eraseAccount(scope)
+        try base.eraseAccount(scope)
+        precondition(!FileManager.default.fileExists(atPath: first.directory.path))
+        let bobGaps = try second.gaps()
+        precondition(bobGaps.count == 1)
+        precondition((try? base.eraseAccount("../../other")) == nil)
 
         let payload = Data("private workspace request".utf8)
         let envelope = WatchLink.envelope(payload, scope: scope)

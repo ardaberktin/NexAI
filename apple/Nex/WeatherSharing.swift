@@ -89,9 +89,16 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
         }
     }
 
-    func disconnect() {
-        turnOff()
-        retryClear()
+    func disconnect(eraseScope: String? = nil) {
+        if let eraseScope, preference?.pin == eraseScope {
+            clearing?.cancel()
+            sending?.cancel()
+            save(nil)
+            configureLocation()
+        } else {
+            turnOff()
+            retryClear()
+        }
         profile = nil
     }
 
