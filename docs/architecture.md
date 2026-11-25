@@ -43,6 +43,10 @@ Nex verifies that the request authorizes a write. For scheduled writes it saves 
 reserves each action before dispatch, then records the tool outcome to prevent replay after interruption.
 The Nex host supplies configured credentials directly to the endpoint.
 
+Built-in Gmail, Google Calendar, and TickTick writes use the same planner, private execution path, and scheduled-run
+receipts. Their credentials store the provider scopes and workspace write settings together. Adding a write scope
+requires OAuth consent. The execution path rechecks the account's write setting immediately before calling its API.
+
 ## Source boundaries
 
 The server ships its Python package, tests and deployment examples. The Apple source ships a single Xcode project for three apps with shared Swift sources, plus a local Swift package with upstream dependencies. They interoperate over documented-in-code HTTP and live protocols. Keep wire compatibility and coordinate releases when those interfaces change. Build each component in isolation to verify a new dependency has landed in the right archive.

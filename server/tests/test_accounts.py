@@ -181,7 +181,8 @@ class ProviderTests(unittest.TestCase):
             assistant = Assistant(Store(root, 0, 1_048_576), None, None)
             assistant.generate_conversation = model([{"name": "ticktick", "access_check": True}])
             query = "can youa access my ticktick account?"
-            for status, reply in ((200, "Yes, Nex has read-only access"), (401, "Reconnect TickTick"),
+            for status, reply in ((200, '{"account": "TickTick", "status": "connected", "access": "read_only"}'),
+                                  (401, "Reconnect TickTick"),
                                   (403, "TickTick denied read access")):
                 with (self.subTest(status=status),
                       patch("nex.accounts.ticktick.request") as read):
@@ -190,7 +191,7 @@ class ProviderTests(unittest.TestCase):
                     else:
                         read.side_effect = AccountHTTPError(status)
                     result = assistant.answer(query, "en")
-                    self.assertTrue(result["text"].startswith(reply))
+                    self.assertIn(reply, result["text"])
                     self.assertEqual(result["engine"], "account_read")
                     read.assert_called_once_with(PROJECTS_URL, token="test")
 

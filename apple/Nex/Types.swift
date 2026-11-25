@@ -186,6 +186,7 @@ struct ServerStatus: Decodable {
     let remainingBytes: Int
     let models: ModelStatus
     let connections: [String: String]?
+    let accountWriteAccess: [String: Bool]?
     let workspaceFeatures: WorkspaceFeatures?
 }
 

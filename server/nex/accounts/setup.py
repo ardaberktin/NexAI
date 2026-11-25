@@ -10,7 +10,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from time import monotonic
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from .credentials import SCOPES, TOKEN_URLS, Credentials
+from .credentials import (
+    SCOPES,
+    TOKEN_URLS,
+    WRITE_SCOPES,
+    Credentials,
+    has_scopes,
+)
 from .http import AccountError, request
 
 AUTHORIZE = {"google": "https://accounts.google.com/o/oauth2/v2/auth",
@@ -26,12 +32,17 @@ class Authorization:
     redirect: str
     state: str = field(default_factory=lambda: secrets.token_urlsafe(32))
     verifier: str = field(default_factory=lambda: secrets.token_urlsafe(48))
+    writes: dict = field(default_factory=dict)
+
+    @property
+    def scopes(self):
+        return SCOPES[self.provider] | {WRITE_SCOPES[key] for key in self.writes}
 
     def url(self):
         challenge = hashlib.sha256(self.verifier.encode()).digest()
         params = {
             "client_id": self.client["client_id"], "redirect_uri": self.redirect, "response_type": "code",
-            "scope": " ".join(sorted(SCOPES[self.provider])), "state": self.state,
+            "scope": " ".join(sorted(self.scopes)), "state": self.state,
             "code_challenge": base64.urlsafe_b64encode(challenge).decode().rstrip("="),
             "code_challenge_method": "S256",
         }
@@ -47,7 +58,10 @@ class Authorization:
         if self.provider == "ticktick":
             form["resource"] = TICK_RESOURCE
         raw, _ = request(TOKEN_URLS[self.provider], form=form)
-        record = vault.accept(self.provider, self.client, raw)
+        record = vault.accept(self.provider, self.client, raw, requested=self.scopes)
+        if self.writes and not has_scopes(record, SCOPES[self.provider] | {WRITE_SCOPES[key] for key in self.writes}):
+            raise AccountError("The provider did not grant all requested account permissions. The existing connection was kept.")
+        record["write_settings"] = self.writes
         with vault.locked(self.provider):
             vault.write(self.provider, record)
 
@@ -60,14 +74,14 @@ def google_client(path):
         raise AccountError("Pass the downloaded Google Desktop OAuth client JSON with --client.") from None
 
 
-def ticktick_client(redirect):
+def ticktick_client(redirect, *, write=False):
     response, _ = request("https://api.ticktick.com/oauth/register", payload={
         "client_name": "Nex",
         "redirect_uris": [redirect],
         "grant_types": ["authorization_code"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",
-        "scope": "tasks:read",
+        "scope": "tasks:read tasks:write" if write else "tasks:read",
     })
     if not isinstance(response.get("client_id"), str):
         raise AccountError("TickTick did not register the Nex OAuth client.")

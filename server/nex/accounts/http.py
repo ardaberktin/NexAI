@@ -27,7 +27,7 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def request(url, *, token=None, form=None, payload=None, headers=None):
+def request(url, *, token=None, form=None, payload=None, headers=None, method=None):
     parts = urlsplit(url)
     if parts.scheme != "https" or parts.netloc not in HOSTS:
         raise AccountError("The account endpoint is unavailable.")
@@ -47,7 +47,7 @@ def request(url, *, token=None, form=None, payload=None, headers=None):
         body = json.dumps(payload).encode()
         options["Content-Type"] = "application/json"
     opener = build_opener(ProxyHandler({}), NoRedirect())
-    outgoing = Request(url, data=body, headers=options, method="GET" if body is None else "POST")
+    outgoing = Request(url, data=body, headers=options, method=method or ("GET" if body is None else "POST"))
     try:
         with opener.open(outgoing, timeout=9) as response:
             kind = response.headers.get_content_type()
@@ -61,6 +61,8 @@ def request(url, *, token=None, form=None, payload=None, headers=None):
     except HTTPError as error:
         raise AccountHTTPError(error.code) from None
     except (OSError, UnicodeError, ValueError):
+        if token and outgoing.get_method() == "POST":
+            raise AccountError("The provider did not confirm the change. Check the account before retrying.") from None
         raise AccountError("The account service could not be read.") from None
 
 

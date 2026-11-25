@@ -43,13 +43,16 @@ def selected(raw, batch, catalog):
 WORKFLOWS = ("other", "general", "mixed", "schedule", "recurring", "document")
 CHOOSE_CONNECTED = """Does the latest message require account data or an action that a tool in
 mcp_candidates can supply? Decide this before choosing tool numbers. A shared topic is insufficient.
+For one requested change, choose only the tool whose operation matches. Creating a new item and completing
+an existing item are different operations. Select more than one write tool only for distinct requested changes.
 Questions about what a term means, how something works, or how to do a task use no MCP tools.
 If the user wants local text, a draft to submit themselves, or a reminder to act, omit tools that
 commit the external action. Use an external draft tool only if the user requests that provider's draft.
 Choose the workflow, up to four numeric tool numbers, and the reply language (en or tr):
 other = no connected data or action needed, an unclear reference, or an edit to an existing goal.
 general = look up private or provider-owned data or perform a supported action now.
-mixed = use a connected source and separately satisfy another explicitly requested source or task.
+mixed = use a connected tool plus a separate lookup or action explicitly requested in the same message.
+A title, address, date, list, message body, or other argument for a single action is part of that action, not mixed.
 schedule = set up a new single future run that uses connected data.
 recurring = set up a new repeating lookup or report using connected data, such as every week or every Friday.
 document = make or schedule a PDF that requires connected data.
@@ -58,6 +61,9 @@ For a candidate numbered 2 that reads supplier invoices:
 "Write an order draft so I can submit it myself" -> {"workflow":"other","tools":[],"language":"en"}
 "Read the total from the most recent supplier invoice" -> {"workflow":"general","tools":[2],"language":"en"}
 "Report the latest supplier invoice every Monday at 9" -> {"workflow":"recurring","tools":[2],"language":"en"}
+For a candidate numbered 3 that creates tasks in a task list:
+"Put Pick up supplies in my inbox, please" -> {"workflow":"general","tools":[3],"language":"en"}
+"Give me wording for a task called Pick up supplies that I'll add myself" -> {"workflow":"other","tools":[],"language":"en"}
 """ + PROMPT
 
 
