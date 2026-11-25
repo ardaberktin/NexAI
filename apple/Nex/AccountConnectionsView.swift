@@ -18,24 +18,34 @@ struct AccountConnectionsView: View {
             if model.serverProfile != nil {
                 HStack {
                     Button(googleButton, systemImage: "person.badge.key") { signIn.start(.google, model: model) }
-                    if signIn.provider == nil {
+                    if !signIn.busy {
                         Button("Google client setup") { signIn.showGoogleSetup = true }
                     }
                 }
                 .buttonStyle(.borderless)
-                .disabled(signIn.provider != nil)
+                .disabled(signIn.busy)
+                if hasGoogleGrant || signIn.disconnecting == .google {
+                    disconnectButton("Disconnect Google", provider: .google)
+                }
             }
 
             account("TickTick", key: "ticktick")
             if model.serverProfile != nil {
                 Button(tickTickButton, systemImage: "person.badge.key") { signIn.start(.ticktick, model: model) }
-                    .disabled(signIn.provider != nil)
+                    .disabled(signIn.busy)
+                if hasGrant("ticktick") || signIn.disconnecting == .ticktick {
+                    disconnectButton("Disconnect TickTick", provider: .ticktick)
+                }
+                if signIn.awaitingUnlock {
+                    let message: LocalizedStringKey = signIn.disconnecting == nil
+                        ? "Sign-in will continue when Nex connects to your unlocked workspace."
+                        : "Disconnect will continue when Nex connects to your unlocked workspace."
+                    Text(message).foregroundStyle(.secondary)
+                }
                 if signIn.provider != nil {
-                    if signIn.awaitingUnlock {
-                        Text("Sign-in will continue when Nex connects to your unlocked workspace.")
-                            .foregroundStyle(.secondary)
-                    }
                     Button("Cancel sign-in", action: signIn.cancel)
+                } else if signIn.awaitingUnlock {
+                    Button("Cancel disconnect", action: signIn.cancel)
                 }
                 Button(refreshing ? "Refreshing…" : "Refresh connection status", systemImage: "arrow.clockwise") {
                     Task { await refresh() }
@@ -59,15 +69,25 @@ struct AccountConnectionsView: View {
 
     private var googleButton: LocalizedStringKey {
         if signIn.provider == .google { return "Connecting Google…" }
-        return needsReconnect("gmail") || needsReconnect("calendar") ? "Reconnect Google" : "Connect Google"
+        return hasGoogleGrant ? "Reconnect Google" : "Connect Google"
     }
 
     private var tickTickButton: LocalizedStringKey {
         if signIn.provider == .ticktick { return "Connecting TickTick…" }
-        return needsReconnect("ticktick") ? "Reconnect TickTick" : "Connect TickTick"
+        return hasGrant("ticktick") ? "Reconnect TickTick" : "Connect TickTick"
     }
 
-    private func needsReconnect(_ key: String) -> Bool {
+    private var hasGoogleGrant: Bool { hasGrant("gmail") || hasGrant("calendar") }
+
+    private func disconnectButton(_ label: LocalizedStringKey, provider: AccountProvider) -> some View {
+        Button(signIn.disconnecting == provider ? "Disconnecting…" : label,
+               systemImage: "minus.circle", role: .destructive) {
+            signIn.disconnect(provider, model: model)
+        }
+        .disabled(signIn.busy)
+    }
+
+    private func hasGrant(_ key: String) -> Bool {
         guard !model.statusUnavailable, let state = model.status?.connections?[key] else { return false }
         return state == "connected" || state == "reconnect"
     }

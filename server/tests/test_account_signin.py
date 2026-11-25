@@ -7,7 +7,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from nex.accounts.app_signin import AppSignIn
-from nex.accounts.credentials import SCOPES, TICK_TASKS
+from nex.accounts.credentials import GMAIL, SCOPES, TICK_TASKS
 from nex.accounts.http import AccountError
 from nex.accounts.setup import TICK_REDIRECT
 
@@ -85,3 +85,45 @@ class AppSignInTests(unittest.TestCase):
         with self.assertRaises(AccountError):
             self.sign_in.finish("google", callback(attempt, error="access_denied"), "mac")
         self.assertEqual(self.sign_in.vault.status()["gmail"], "disconnected")
+
+    def test_disconnect_preserves_legacy_google_setup_and_invalidates_pending_callbacks(self):
+        vault = self.sign_in.vault
+        client = {"client_id": GOOGLE_ID, "client_secret": "desktop-secret"}
+        expired = {"access_token": "expired-google-token", "expires_in": -60}
+        with vault.locked("google"):
+            vault.write("google", vault.accept("google", client, expired))
+        desktop = self.sign_in.start("google", 49719, "mac")
+        self.sign_in.set_google_client({"client_id": GOOGLE_ID, "desktop": False}, "iphone")
+        native = self.sign_in.start("google", None, "iphone")
+        self.assertEqual(vault.status()["gmail"], "reconnect")
+
+        result = self.sign_in.disconnect("google")
+        self.assertEqual(result["connections"], dict.fromkeys(("gmail", "calendar", "ticktick"), "disconnected"))
+        self.assertFalse((self.accounts / "google.json").exists())
+        self.assertEqual(self.sign_in.read_client("google-desktop-client"), client)
+        self.assertTrue(self.sign_in.options("iphone")["google_native"])
+        with self.assertRaises(AccountError):
+            vault.token("google", {GMAIL})
+        for device, attempt in (("mac", desktop), ("iphone", native)):
+            with self.assertRaisesRegex(AccountError, "expired"):
+                self.sign_in.finish("google", callback(attempt), device)
+
+        fresh = self.sign_in.start("google", 49719, "mac")
+        with patch("nex.accounts.setup.request", return_value=({"access_token": "new-token"}, {})):
+            self.assertEqual(self.sign_in.finish("google", callback(fresh), "mac")["connections"]["gmail"], "connected")
+
+    def test_disconnect_can_retry_after_a_sign_in_finishes(self):
+        with patch("nex.accounts.app_signin.ticktick_client", return_value={"client_id": "nex"}):
+            attempt = self.sign_in.start("ticktick", None, "iphone")
+
+        def exchange(*_args, **_kwargs):
+            with self.assertRaisesRegex(AccountError, "finishing another sign-in"):
+                self.sign_in.disconnect("ticktick")
+            return {"access_token": "ticktick-token"}, {}
+
+        with patch("nex.accounts.setup.request", side_effect=exchange):
+            self.assertEqual(self.sign_in.finish("ticktick", callback(attempt), "iphone")["connections"]["ticktick"],
+                             "connected")
+        self.assertEqual(self.sign_in.disconnect("ticktick")["connections"]["ticktick"], "disconnected")
+        self.assertFalse((self.accounts / "ticktick.json").exists())
+        self.assertEqual(self.sign_in.read_client("ticktick-native-client"), {"client_id": "nex"})

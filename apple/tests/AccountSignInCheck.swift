@@ -26,7 +26,9 @@ final class Controller {
 final class NexAPI {
     static let redirect = "com.googleusercontent.apps.fixture:/oauth2redirect"
     var finishStatuses = [200]
+    var disconnectStatus = 200
     private(set) var callbacks: [String] = []
+    private(set) var disconnects: [String] = []
 
     func get<T: Decodable>(_ path: String) async throws -> T {
         precondition(path == "/v1/accounts/setup")
@@ -44,6 +46,12 @@ final class NexAPI {
             let status = finishStatuses.removeFirst()
             if status != 200 { throw NexError.api(status, "Unlock the Nex workspace with biometrics.") }
             return try decode(["connections": ["gmail": "connected", "calendar": "connected"]])
+        case "/v1/accounts/disconnect":
+            precondition(method == "POST")
+            let payload = try JSONDecoder().decode([String: String].self, from: JSONEncoder().encode(body))
+            disconnects.append(payload["provider"]!)
+            if disconnectStatus != 200 { throw NexError.api(disconnectStatus, "Disconnect failed.") }
+            return try decode(["connections": ["gmail": "disconnected", "calendar": "disconnected"]])
         default: preconditionFailure("Unexpected account request")
         }
     }
@@ -107,6 +115,30 @@ enum AccountSignInCheck {
         try await waitUntil { signIn.provider == nil }
         precondition(signIn.error == AccountSignInError.browserClosed.localizedDescription)
         print("Google sign-in waited for workspace unlock, retried a revoked session, and handled cancellation.")
+
+        model.privacy.lock()
+        signIn.disconnect(.google, model: model)
+        try await waitUntil { signIn.awaitingUnlock }
+        precondition(signIn.busy && model.api.disconnects.isEmpty && signIn.error == nil)
+        signIn.start(.ticktick, model: model)
+        precondition(signIn.provider == nil)
+        model.privacy.connected = true
+        try await waitUntil { !signIn.busy }
+        precondition(signIn.confirmation != nil && signIn.error == nil && model.refreshes == 1)
+
+        model.api.disconnectStatus = 422
+        signIn.disconnect(.ticktick, model: model)
+        try await waitUntil { !signIn.busy }
+        precondition(signIn.confirmation == nil && signIn.error != nil && model.refreshes == 1)
+        precondition(model.api.disconnects == ["google", "ticktick"])
+
+        model.privacy.lock()
+        signIn.disconnect(.ticktick, model: model)
+        try await waitUntil { signIn.awaitingUnlock }
+        signIn.cancel()
+        try await waitUntil { !signIn.busy }
+        precondition(model.api.disconnects == ["google", "ticktick"])
+        print("Disconnect used the selected provider, waited for unlock, refreshed status after success, and handled failure and cancellation.")
     }
 
     @MainActor
