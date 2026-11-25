@@ -15,7 +15,7 @@ Nex is a self-hosted AI assistant and audio journal for Mac, iPhone, and Apple W
 | Nex Server | Linux with Python 3.12 and Tailscale | `nex-server-source.tar.gz` | [Server setup](server/README.md) |
 | Nex for Apple devices | macOS, iOS, and watchOS | `nex-apple-source.zip` | [Apple build and sign-in](apple/README.md) |
 
-Download either asset from the repository’s **Releases** page when a release is available, or clone this repository for both. The assets contain source. Build the Apple apps with Xcode and sign in to an existing Nex server. Install the server first if you’re setting up both. Live conversation and archive transcription have separate model and runtime requirements.
+Download either asset from the repository’s **Releases** page when a release is available, or clone this repository for both. The assets contain source. If you’re setting up both components, install the server first and [create the first owner account in your browser](server/README.md#create-the-first-owner-account). Build the Apple apps with Xcode and sign in with your Nex account. Live conversation and archive transcription have separate model and runtime requirements.
 
 ## Repository guide
 

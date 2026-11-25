@@ -13,6 +13,7 @@ from .accounts.credentials import Credentials
 from .accounts.http import AccountError
 from .accounts.setup import authorize
 from .hosted import cli as account_cli
+from .hosted.browser_setup import BrowserSetupServer
 from .hosted.workspaces import HostedWorkspaces
 from .http_api import Server
 from .initialize import initialize
@@ -53,6 +54,8 @@ def serve(root, runtime, ssd_audio=None):
     ingress = Server((endpoint.address, CLIENT_PORT), hosted.owner, tls=context, interface=TAILSCALE_INTERFACE,
                      allow_peer=lambda addr: ipaddress.IPv4Address(addr) in TAILNET, hosted=hosted)
     console = Server(("127.0.0.1", 8766), hosted.owner, admin=True, hosted=hosted)
+    setup = BrowserSetupServer(runtime, hosted, endpoint.server_link())
+    servers = (ingress, console, setup)
 
     def stop(*_):
         ending.set()
@@ -60,12 +63,13 @@ def serve(root, runtime, ssd_audio=None):
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     hosted.start()
-    for server in (ingress, console):
+    for server in servers:
         threading.Thread(target=server.serve_forever, daemon=True).start()
     report_ready()
     logger.info("Nex is serving its archive on Tailscale, with a loopback console.")
+    logger.info("Browser setup is available over SSH at %s.", setup.path)
     ending.wait()
-    for server in (ingress, console):
+    for server in servers:
         server.shutdown()
         server.server_close()
     hosted.close()

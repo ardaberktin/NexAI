@@ -25,6 +25,23 @@ python3 -m nex --data "$NEX_DATA" serve --runtime "$NEX_RUNTIME"
 
 Initialization generates the loopback console key. Running it again preserves the existing access file and storage limits. The archive service creates its SQLite schemas and working directories when it starts.
 
+## Create the first owner account
+
+The Nex service logs the path to its private `setup.sock` when it starts. On your Mac, use SSH to open the setup page. Replace the socket path with the one from the service output and connect as the user running Nex. The example uses a systemd user service with UID 1000.
+
+```bash
+ssh -N -o ExitOnForwardFailure=yes \
+  -L 127.0.0.1:8768:/run/user/1000/nex/setup.sock user@your-linux-host
+```
+
+1. Open <http://127.0.0.1:8768> and click **Getting Started**.
+2. Choose a username and password, then click **Create Owner Account**.
+3. Click **Copy Server Link**. On a Mac or iPhone connected to the server’s tailnet, open Nex, paste the link, and sign in with the account you just created. Confirm with Touch ID or Face ID. You can reuse this link on other devices and close the SSH tunnel when setup is complete.
+
+The same setup page shows the reusable server link after the owner has been created. The first owner uses the archive already on the server. If you already have an account, use your existing credentials.
+
+## Open the admin console
+
 From the client Mac, open an SSH tunnel to the server’s loopback console. Replace the SSH target with your user and server address.
 
 ```bash
@@ -64,17 +81,9 @@ goal also appears in that goal's **Artifacts**. The renderer provides single-col
 newspapers with embedded fonts for English and Turkish. It checks page geometry, text, and rasterized output
 before publishing a file.
 
-## Create accounts and connect the Apple clients
+## Manage accounts and devices
 
-On a fresh host, run this command as the Nex service user to print a private, single-use setup link:
-
-```bash
-python3 -m nex --data "$NEX_DATA" account setup-link
-```
-
-Paste the link into Nex on a Mac or iPhone connected to the tailnet. Choose the owner's username and password and finish Touch ID or Face ID registration. The setup link expires in 30 minutes. Once signed in, open **Settings → Nex Account** to share the reusable server link. Use **Manage Users** there to add other accounts. Give each user their own credentials through a trusted channel.
-
-The first owner uses the archive already on the server. After upgrading a server with archived recordings, sign in with that account and re-enable Apple Watch on iPhone if needed. Current account credentials and account-scoped queues carry through the upgrade.
+Open **Settings → Nex Account** to share the reusable server link. Use **Manage Users** to add other accounts. Give each user their own credentials through a trusted channel.
 
 **Nex Account** lets users rename themselves, change their password and sign out other devices. The owner can appoint administrators. Administrators can create and rename member accounts, reset member passwords, disable or restore access, and set audio limits. Disabling an account signs its devices out and preserves its archive. Additional accounts keep separate archives under `$NEX_DATA/users/` and use server-side models. The host console continues to manage the original archive and shared model configuration.
 
@@ -86,6 +95,8 @@ python3 -m nex --data "$NEX_DATA" account server-link
 python3 -m nex --data "$NEX_DATA" account list
 python3 -m nex --data "$NEX_DATA" account reset-password alice
 ```
+
+As an alternative to browser setup, run `python3 -m nex --data "$NEX_DATA" account setup-link` as the server user. That private, single-use link lets you create the owner directly in the Nex app and expires after 30 minutes.
 
 ## Run as user services
 
