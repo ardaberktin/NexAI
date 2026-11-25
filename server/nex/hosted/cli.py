@@ -1,13 +1,10 @@
 """Host-only account administration."""
 
-import base64
-import hashlib
 import json
-import ssl
 import sys
 from getpass import getpass
 
-from ..network import CLIENT_PORT, TailnetEndpoint
+from ..network import TailnetEndpoint
 from .auth import Accounts
 from .setup import setup_secret
 
@@ -28,11 +25,9 @@ def run(root, args):
     if not (root / "access.json").is_file():
         raise ValueError("Initialize the Nex archive first.")
     if args.operation in {"server-link", "setup-link"}:
-        endpoint = TailnetEndpoint.current(root)
-        der = ssl.PEM_cert_to_DER_cert(endpoint.certificate.read_text())
-        pin = base64.urlsafe_b64encode(hashlib.sha256(der).digest()).decode().rstrip("=")
+        link = TailnetEndpoint.current(root).server_link()
         query = "?setup=" + setup_secret(Accounts(root)) if args.operation == "setup-link" else ""
-        print(f"nex://{endpoint.address}:{CLIENT_PORT}/{pin}{query}")
+        print(link + query)
         return
     accounts = Accounts(root)
     if args.operation == "list":

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Set up Nex</title>
+  <link href="/nex.css" rel="stylesheet">
+  <script src="/setup.js" defer></script>
+</head>
+<body class="setup-page">
+  <header><h1>Nex</h1></header>
+  <main>
+    <section id="welcome" hidden>
+      <h2>Set up your Nex server</h2>
+      <button type="button" id="start">Getting Started</button>
+    </section>
+    <section id="create" hidden>
+      <h2 id="owner-heading" tabindex="-1">Create your owner account</h2>
+      <form id="owner">
+        <label for="username">Username</label>
+        <input id="username" autocomplete="username" autocapitalize="none" spellcheck="false"
+               minlength="3" maxlength="64" pattern="[a-zA-Z0-9][a-zA-Z0-9._\-]{2,63}" required
+               aria-describedby="username-help">
+        <small id="username-help">3–64 letters, numbers, periods, underscores or hyphens. Start with a letter or number.</small>
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="new-password" minlength="12" maxlength="512" required>
+        <small>Use at least 12 characters.</small>
+        <label for="confirmation">Confirm password</label>
+        <input id="confirmation" type="password" autocomplete="new-password" required>
+        <button>Create Owner Account</button>
+      </form>
+    </section>
+    <section id="connect" hidden>
+      <h2 id="connect-heading" tabindex="-1">Sign in to Nex</h2>
+      <p id="created" role="status" hidden>Owner account created.</p>
+      <p>Connect your Mac or iPhone to the server’s Tailscale network. Paste this link into Nex and sign in with your account.</p>
+      <label for="link">Server link</label>
+      <div class="setup-link">
+        <input id="link" type="text" readonly>
+        <button type="button" id="copy">Copy Server Link</button>
+      </div>
+    </section>
+    <p id="notice" role="status">Checking the server…</p>
+    <button type="button" id="retry" hidden>Try Again</button>
+    <noscript>Enable JavaScript to set up Nex.</noscript>
+  </main>
+</body>
+</html>

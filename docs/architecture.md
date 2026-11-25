@@ -9,6 +9,7 @@ Mac and iPhone ── pinned HTTPS :8765 ── Nex archive API ── SQLite / 
               └── pinned live :8767 ── Nex voice service ── local model and speech runtimes
 Apple Watch ── WatchConnectivity ── iPhone
 Admin browser ── SSH tunnel ── server loopback console :8766
+Setup browser ── SSH tunnel ── private server setup.sock
 ```
 
 The production app listeners bind to the Tailscale IPv4 address and Linux interface. The server link supplies the certificate fingerprint. Account sign-in issues a revocable device credential, and a separate biometric challenge-response unlocks private workspace routes. Recorded voice identification supplies a speaker label. Optional integration calls go to their providers when tools run.
@@ -27,7 +28,7 @@ The shared conversation code lives in `server/nex/conversation/`. `catalog.py` a
 
 ## Storage and privacy
 
-- The account registry stores salted scrypt password verifiers and hashes of random device credentials. Both listeners resolve the credential before choosing an archive. Biometric challenges and workspace sessions are scoped to the authenticated device credential. Account settings require that workspace session. The archive owner can delegate member administration. The account registry rechecks roles and the acting device before each write. A single-use host setup link establishes the first owner.
+- The account registry stores salted scrypt password verifiers and hashes of random device credentials. Both client listeners resolve the credential before choosing an archive. Biometric challenges and workspace sessions are scoped to the authenticated device credential. Account settings require that workspace session. The archive owner can delegate member administration. The account registry rechecks roles and the acting device before each write. The host operator creates the first owner in a browser through a private Unix socket forwarded over SSH. The setup listener only exposes the account creation page and the reusable server link. A single-use host-issued link also supports first-owner setup in the native app.
 - The host holds shared model settings and assets. The original owner archive stays at the root, and each additional account has a separate archive keyed by an opaque account ID. Each archive owns its SQLite databases, search index, transcripts, recordings, PDFs, integrations, context and scheduled jobs. The local model receives context selected inside that archive. Only the original owner can use the optional host-side Mac relay.
 - Clients stage recordings in account-scoped queues until durable upload acknowledgement. Watch transfers carry the account scope through the iPhone relay. Review upload, recording, and sync behavior together when changing IDs or migrations.
 - The admin console is bound to server loopback. The archive’s private permissions and backup process apply to both the database and the audio store.
