@@ -30,7 +30,7 @@ private struct WatchSetup {
     var error: String?
 
     init() {
-        do { services = WatchServices(spool: try Spool()) }
+        do { services = try WatchServices(spool: Spool()) }
         catch { self.error = error.localizedDescription }
     }
 }
@@ -42,9 +42,10 @@ final class WatchServices {
     let workspace: WatchWorkspace
     let live: WatchLiveConversation
 
-    init(spool: Spool) {
+    init(spool spoolRoot: Spool) throws {
+        let spool = try WatchSync.savedScope.map { try spoolRoot.scoped(to: $0) } ?? spoolRoot
         capture = WatchCapture(spool: spool)
-        sync = WatchSync(spool: spool)
+        sync = WatchSync(spoolRoot: spoolRoot, spool: spool)
         workspace = WatchWorkspace(link: sync)
         live = WatchLiveConversation(capture: capture, sync: sync, spool: spool)
         capture.clipReady = { [weak sync] in sync?.sync() }
@@ -52,18 +53,30 @@ final class WatchServices {
         sync.isRecording = { [weak capture] in capture?.isRecording ?? false }
         sync.isConversing = { [weak live] in live?.microphoneOpen == true }
         capture.setPlaybackStop { [weak workspace] in workspace?.stopPlayback() }
+        sync.accountChanged = { [weak workspace, weak capture, weak live] spool in
+            workspace?.lock()
+            live?.useSpool(spool)
+            capture?.useSpool(spool)
+        }
     }
 }
 
 private struct WatchHome: View {
     @Environment(\.scenePhase) private var phase
     let services: WatchServices
+    @ObservedObject private var sync: WatchSync
+
+    init(services: WatchServices) {
+        self.services = services
+        sync = services.sync
+    }
 
     var body: some View {
         NavigationStack {
             WatchRecordingView(capture: services.capture, sync: services.sync, workspace: services.workspace,
                                live: services.live)
         }
+        .id(sync.scope)
         .environmentObject(services.capture)
         .environmentObject(services.live)
         .environmentObject(services.workspace)

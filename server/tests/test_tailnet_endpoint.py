@@ -47,8 +47,8 @@ class ArchiveInitializationTests(unittest.TestCase):
             config = json.loads(first)
             self.assertEqual(config["audio_quota_bytes"], 48 * 2**30)
             self.assertEqual(config["min_free_bytes"], 2 * 2**30)
-            self.assertEqual(set(config["keys"]), {"admin", "mac", "iphone"})
-            self.assertEqual(len(set(config["keys"].values())), 3)
+            self.assertEqual(set(config["keys"]), {"admin"})
+            self.assertGreaterEqual(len(config["keys"]["admin"]), 40)
             for path in (root, root / "assets", access):
                 self.assertEqual(path.stat().st_mode & 0o077, 0)
             initialize(root, 72, 6)

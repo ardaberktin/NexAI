@@ -28,7 +28,7 @@ class PushQueue:
         self.provider = None
         self.signature = None
 
-    def register(self, installation, token, environment, enabled):
+    def register(self, installation, token, environment, enabled, *, device_id):
         try:
             if str(UUID(installation)) != installation or type(enabled) is not bool:
                 raise ValueError
@@ -44,11 +44,14 @@ class PushQueue:
             if enabled:
                 db.execute("INSERT OR REPLACE INTO iphone_push_registration VALUES(1,?,?,?)",
                            (installation, token, environment))
+                db.execute("INSERT OR REPLACE INTO iphone_push_session VALUES(1,?)", (device_id,))
                 db.execute("DELETE FROM goal_push_delivery WHERE token<>?", (token,))
             else:
                 db.execute("DELETE FROM goal_push_delivery WHERE token IN "
                            "(SELECT token FROM iphone_push_registration WHERE installation=?)", (installation,))
-                db.execute("DELETE FROM iphone_push_registration WHERE installation=?", (installation,))
+                removed = db.execute("DELETE FROM iphone_push_registration WHERE installation=?", (installation,))
+                if removed.rowcount:
+                    db.execute("DELETE FROM iphone_push_session")
         return {"active": enabled}
 
     def provider_for_delivery(self):
@@ -66,6 +69,8 @@ class PushQueue:
 
     def run(self, anchor=None, *, provider=None):
         now = int((anchor or datetime.now(UTC)).timestamp())
+        if not self.registration_current():
+            return
         with self.store.connect() as db:
             if not enabled(db, "goals"):
                 return
@@ -81,6 +86,8 @@ class PushQueue:
             return
         provider = provider or self.provider_for_delivery()
         for row in rows:
+            if not self.registration_current():
+                return
             with self.store.connect() as db:
                 if not enabled(db, "goals"):
                     return
@@ -94,6 +101,32 @@ class PushQueue:
             status, reason = provider.send(row["token"], row["id"], row["expires"], **options)
             self.finish(row, now, status, reason)
 
+    def registration_current(self):
+        accounts = getattr(self.store, "hosted_accounts", None)
+        if accounts is None:
+            return True
+        with self.store.connect() as db:
+            registration = db.execute(
+                """SELECT r.installation,r.token,s.device_id FROM iphone_push_registration r
+                   LEFT JOIN iphone_push_session s USING(singleton)"""
+            ).fetchone()
+            if registration is None:
+                return False
+            device_id = registration["device_id"]
+            current = device_id and accounts.device_active(device_id)
+            if current:
+                return True
+            # Only clear the registration we inspected. A fresh sign-in may already have registered.
+            db.execute("BEGIN IMMEDIATE")
+            removed = db.execute(
+                """DELETE FROM iphone_push_registration WHERE installation=? AND token=?
+                   AND (SELECT device_id FROM iphone_push_session WHERE singleton=1) IS ?""", tuple(registration)
+            )
+            if removed.rowcount:
+                db.execute("DELETE FROM iphone_push_session")
+                db.execute("DELETE FROM goal_push_delivery WHERE token=?", (registration["token"],))
+            return False
+
     def finish(self, row, now, status, reason):
         invalid = status == 410 or (status == 400 and reason in {"BadDeviceToken", "DeviceTokenNotForTopic"})
         retry = status in {403, 429} or 500 <= status < 600
@@ -104,7 +137,9 @@ class PushQueue:
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             if invalid:
-                db.execute("DELETE FROM iphone_push_registration WHERE token=?", (row["token"],))
+                removed = db.execute("DELETE FROM iphone_push_registration WHERE token=?", (row["token"],))
+                if removed.rowcount:
+                    db.execute("DELETE FROM iphone_push_session")
                 db.execute("DELETE FROM goal_push_delivery WHERE token=?", (row["token"],))
             elif retry:
                 delay = min(900, 5 * 2 ** min(row["attempts"], 8))

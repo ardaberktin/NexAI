@@ -17,6 +17,7 @@ from . import OUTPUT_RATE
 
 MAX_SECONDS = 120
 MAX_TEXT = 1800
+from .access import workspace_for
 
 
 def render_reply(speech, text, language):
@@ -47,7 +48,8 @@ def install_watch_reply_voice(app, authenticate):
     async def watch_reply_voice(identifier: UUID, request: Request):
         if authenticate(request) != "iphone":
             raise HTTPException(403)
-        row = await asyncio.to_thread(app.state.dialogue.memory.recording, str(identifier))
+        state = workspace_for(request)
+        row = await asyncio.to_thread(state.dialogue.memory.recording, str(identifier))
         if not row or row["device"] != "watch" or row["mode"] != "voice" or row["state"] != "ready":
             raise HTTPException(404)
         reply = row["reply"]
@@ -60,7 +62,7 @@ def install_watch_reply_voice(app, authenticate):
         async with slot:
             started = monotonic()
             try:
-                audio = await asyncio.to_thread(render_reply, app.state.speech, text, reply["language"])
+                audio = await asyncio.to_thread(render_reply, state.speech, text, reply["language"])
             except (RuntimeError, ValueError, OSError) as exc:
                 raise HTTPException(503, "Nex voice is unavailable.") from exc
         logging.getLogger("uvicorn.error").info("Watch reply voice rendered: bytes=%d seconds=%.2f",

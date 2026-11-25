@@ -15,7 +15,7 @@ struct AccountConnectionsView: View {
         Section {
             account("Gmail", key: "gmail")
             account("Google Calendar", key: "calendar")
-            if model.pairing != nil {
+            if model.serverProfile != nil {
                 HStack {
                     Button(googleButton, systemImage: "person.badge.key") { signIn.start(.google, model: model) }
                     if signIn.provider == nil {
@@ -27,7 +27,7 @@ struct AccountConnectionsView: View {
             }
 
             account("TickTick", key: "ticktick")
-            if model.pairing != nil {
+            if model.serverProfile != nil {
                 Button(tickTickButton, systemImage: "person.badge.key") { signIn.start(.ticktick, model: model) }
                     .disabled(signIn.provider != nil)
                 if signIn.provider != nil {
@@ -48,7 +48,7 @@ struct AccountConnectionsView: View {
             if let error = signIn.error { Text(error).foregroundStyle(.red) }
             if let confirmation = signIn.confirmation { Text(confirmation).foregroundStyle(.secondary) }
         }
-        .task(id: model.pairing?.url) { await refresh() }
+        .task(id: model.serverProfile?.url) { await refresh() }
         .sheet(isPresented: $signIn.showGoogleSetup, onDismiss: saveSelectedClient) {
             GoogleConnectionSetup { client in
                 clientToSave = client
@@ -77,7 +77,7 @@ struct AccountConnectionsView: View {
     }
 
     private func status(_ key: String) -> LocalizedStringKey {
-        guard model.pairing != nil else { return "Pair to connect" }
+        guard model.serverProfile != nil else { return "Pair to connect" }
         switch model.statusUnavailable ? nil : model.status?.connections?[key] {
         case "connected": return "Connected (read-only)"
         case "reconnect": return "Reconnect needed"
@@ -87,7 +87,7 @@ struct AccountConnectionsView: View {
     }
 
     private func refresh() async {
-        guard model.pairing != nil, !refreshing else { return }
+        guard model.serverProfile != nil, !refreshing else { return }
         refreshing = true
         defer { refreshing = false }
         try? await model.refreshStatus()

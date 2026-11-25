@@ -25,7 +25,7 @@ struct ArchiveView: View {
                 #if os(iOS)
                 if !mediaOnly { Text("Archive").font(.largeTitle.weight(.semibold)) }
                 #endif
-                if model.pairing != nil {
+                if model.serverProfile != nil {
                     #if os(iOS)
                     if !mediaOnly {
                         archivePicker
@@ -33,7 +33,7 @@ struct ArchiveView: View {
                     #endif
                     if browsingAudio { clipList } else { memoryList }
                 } else {
-                    Text("Pair with Excalibur to open the archive.").foregroundStyle(.secondary)
+                    Text("Sign in to open your archive.").foregroundStyle(.secondary)
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }
@@ -47,14 +47,14 @@ struct ArchiveView: View {
         }
         #if os(macOS)
         .toolbar {
-            if !mediaOnly && model.pairing != nil {
+            if !mediaOnly && model.serverProfile != nil {
                 ToolbarItem(placement: .primaryAction) { archivePicker.frame(width: 190) }
             }
         }
         #endif
         .task(id: browsingAudio) { await load() }
-        .onChange(of: model.pairing != nil) { _, paired in
-            if paired { Task { await load() } }
+        .onChange(of: model.serverProfile != nil) { _, connected in
+            if connected { Task { await load() } }
         }
         .sheet(item: $selection) { item in
             SourceSheet(item: item, model: model) {
@@ -144,7 +144,7 @@ struct ArchiveView: View {
     }
 
     private func load(older: Bool = false) async {
-        guard model.pairing != nil else { return }
+        guard model.serverProfile != nil else { return }
         let audio = browsingAudio
         error = nil
         loading = true

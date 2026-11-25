@@ -1,56 +1,40 @@
-import base64
 import json
-import subprocess
-import tempfile
-import unittest
 from concurrent.futures import ThreadPoolExecutor
-from http.client import HTTPConnection
-from pathlib import Path
-from threading import Barrier, Lock, Thread
-from types import SimpleNamespace
+from threading import Barrier
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from conversation_fixtures import model
 from nex.conversation_history import watch_dialogue
-from nex.http_api import Server, recorder_operation, recorder_receipt
+from nex.http_api import recorder_operation, recorder_receipt
 from nex.privacy import keys, public, requests
 from nex.privacy.chat_history import ChatFollowups
 from nex.privacy.policy import request_kind
 from nex.privacy.state import AccessDenied
-from nex.store import Store, now
+from nex.store import now
+from test_hosted_accounts import AUDIO, HostedAccountFixture, signature
 
 
-class OwnerPrivacyTests(unittest.TestCase):
+class OwnerPrivacyTests(HostedAccountFixture):
     def setUp(self):
-        folder = tempfile.TemporaryDirectory()
-        self.addCleanup(folder.cleanup)
-        self.root = Path(folder.name)
-        self.store = Store(self.root, 0, 2**20)
+        super().setUp()
+        self.store = self.host.owner.store
         self.state = self.store.privacy
-        self.phone, self.mac = self.root / "phone.pem", self.root / "mac.pem"
-        self.sessions = {}
-        for device, private in (("iphone", self.phone), ("mac", self.mac)):
-            subprocess.run(["openssl", "ecparam", "-name", "prime256v1", "-genkey", "-noout", "-out", str(private)],
-                           check=True, capture_output=True)
-            self.register(device, private)
+        self.phone, self.mac = self.key, self.user
+        self.tokens, self.devices, self.sessions = {}, {}, {}
+        self.register("iphone", self.phone)
+        self.register("mac", self.mac)
 
     def proof(self, device, key, purpose, subject=""):
-        challenge = keys.challenge(self.state, device, purpose, subject)
-        return self.sign(key, challenge)
+        challenge = keys.challenge(self.state, self.devices[device], purpose, subject)
+        return signature(key, challenge)
 
-    @staticmethod
-    def sign(key, challenge):
-        signature = subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(key)], input=challenge["message"].encode(),
-                                   capture_output=True, check=True).stdout
-        return {"nonce": challenge["nonce"], "signature": base64.b64encode(signature).decode()}
-
-    def register(self, device, key, *, setup=None):
-        public_key = subprocess.run(["openssl", "ec", "-in", str(key), "-pubout", "-outform", "DER"],
-                                    capture_output=True, check=True).stdout[-65:]
-        proof = self.proof(device, key, "unlock") | {"public": base64.b64encode(public_key).decode(),
-                "setup": keys.issue_setup(self.state, device) if setup is None else setup}
-        self.sessions[device] = keys.unlock(self.state, device, proof)["token"]
+    def register(self, device, key):
+        token = self.register_device(device, key)["token"]
+        self.tokens[device] = token
+        self.devices[device] = self.accounts.authenticate(token)
+        proof = self.proof(device, key, "unlock")
+        self.sessions[device] = keys.unlock(self.state, self.devices[device], proof)["token"]
 
     def pending(self, question="Read my calendar"):
         identifier = str(uuid4())
@@ -65,7 +49,7 @@ class OwnerPrivacyTests(unittest.TestCase):
             self.proof("mac", self.mac, "approve", item["subject"])
         wrong = self.proof("iphone", self.mac, "approve", item["subject"])
         with self.assertRaises(AccessDenied):
-            requests.approve(self.state, "iphone", item["id"], wrong, assistant)
+            requests.approve(self.state, self.devices["iphone"], item["id"], wrong, assistant)
         assistant.answer.assert_not_called()
         proof = self.proof("iphone", self.phone, "approve", item["subject"])
         barrier = Barrier(2)
@@ -73,7 +57,7 @@ class OwnerPrivacyTests(unittest.TestCase):
         def approve():
             barrier.wait(timeout=5)
             try:
-                requests.approve(self.state, "iphone", item["id"], proof, assistant)
+                requests.approve(self.state, self.devices["iphone"], item["id"], proof, assistant)
                 return True
             except AccessDenied:
                 return False
@@ -90,21 +74,21 @@ class OwnerPrivacyTests(unittest.TestCase):
         with self.state.transaction(write=True) as db:
             db.execute("UPDATE challenges SET expires=0 WHERE id=?", (proof["nonce"],))
         with self.assertRaises(AccessDenied):
-            requests.approve(self.state, "iphone", item["id"], proof, Mock())
+            requests.approve(self.state, self.devices["iphone"], item["id"], proof, Mock())
         proof = self.proof("iphone", self.phone, "approve", item["subject"])
         with self.state.transaction(write=True) as db:
             db.execute("DELETE FROM requests WHERE id=?", (item["id"],))
         requests.queue(self.state, item["id"], "mac", "Read my mail", "en", "UTC")
         with self.assertRaises(AccessDenied):
-            requests.approve(self.state, "iphone", item["id"], proof, Mock())
+            requests.approve(self.state, self.devices["iphone"], item["id"], proof, Mock())
         with self.assertRaises(AccessDenied):
-            self.register("iphone", self.mac, setup="unissued")
+            keys.unlock(self.state, self.devices["iphone"], self.proof("iphone", self.mac, "unlock"))
         with self.assertRaises(AccessDenied):
-            keys.require_session(self.state, "mac", self.sessions["iphone"])
+            keys.require_session(self.state, self.devices["mac"], self.sessions["iphone"])
         old = self.sessions["iphone"]
         self.register("iphone", self.mac)
         with self.assertRaises(AccessDenied):
-            keys.require_session(self.state, "iphone", old)
+            keys.require_session(self.state, self.devices["iphone"], old)
 
     def test_public_path_never_reads_owner_context(self):
         assistant = Mock(store=self.store)
@@ -207,7 +191,7 @@ class OwnerPrivacyTests(unittest.TestCase):
         self.assertNotIn("private", json.dumps(recorder_receipt(row)))
         self.assertIsNone(recorder_receipt(row)["reply"])
         with patch("nex.privacy.keys.time", return_value=10**11), self.assertRaises(AccessDenied):
-            keys.require_session(self.state, "iphone", self.sessions["iphone"])
+            keys.require_session(self.state, self.devices["iphone"], self.sessions["iphone"])
 
     def test_watch_question_retry_and_followup_scope(self):
         room = str(uuid4())
@@ -229,52 +213,23 @@ class OwnerPrivacyTests(unittest.TestCase):
                        (json.dumps({"text": "Review in Nex", "engine": "private_request"}), previous))
         self.assertEqual(watch_dialogue(self.store, turn), [])
 
-    def test_paired_apps_use_the_unlock_session_for_private_chat_and_voice(self):
+    def test_signed_in_apps_use_the_unlock_session_for_private_chat_and_voice(self):
         assistant = Mock(store=self.store)
         complete = self.enterContext(patch("nex.privacy.requests.approved_reply", return_value={"text": "Sample private event"}))
         assistant.generate_conversation = model([{"name": "calendar"}])
-        app = SimpleNamespace(store=self.store, assistant=assistant, chat_slot=Lock(), worker=Mock(),
-                              keys={"mac": "mac-test", "iphone": "iphone-test"})
-        server = Server(("127.0.0.1", 0), app)
-        self.addCleanup(server.server_close)
-        thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02})
-        thread.start()
-        self.addCleanup(thread.join)
-        self.addCleanup(server.shutdown)
-
+        self.host.owner.assistant = assistant
         clip = str(uuid4())
-        audio = b"\x00\x00\x00\x20ftyp" + b"\x00" * 24
-        headers = {"Content-Type": "audio/mp4", "X-Nex-Started": now(),
-                   "X-Nex-Duration": "1.000", "X-Nex-Mode": "ambient"}
         for device, status in (("mac", 403), ("iphone", 201), ("iphone", 200)):
             with self.subTest(watch_upload=device, expected=status):
-                connection = HTTPConnection(*server.server_address, timeout=4)
-                try:
-                    connection.request("PUT", "/v2/watch/recordings/" + clip, audio,
-                                       headers | {"Authorization": "Bearer " + app.keys[device]})
-                    result = connection.getresponse()
-                    receipt = json.load(result)
-                    self.assertEqual(result.status, status, receipt)
-                    if status < 300:
-                        self.assertEqual(receipt["id"], clip)
-                        self.assertNotIn("transcript", receipt)
-                finally:
-                    connection.close()
+                receipt = self.upload(self.tokens[device], clip, watch=True, status=status)
+                if status < 300:
+                    self.assertEqual(receipt["id"], clip)
+                    self.assertNotIn("transcript", receipt)
         self.assertEqual(self.store.recording(clip)["device"], "watch")
+
         def send(device, path, *, body=None, locked=False, status=200):
-            headers = {"Authorization": "Bearer " + app.keys[device], "Content-Type": "application/json"}
-            if not locked:
-                headers["X-Nex-Workspace"] = self.sessions[device]
-            connection = HTTPConnection(*server.server_address, timeout=4)
-            try:
-                connection.request("POST" if body is not None else "GET", "/v2/" + path,
-                                   json.dumps(body) if body is not None else None, headers)
-                response = connection.getresponse()
-                data = json.load(response)
-                self.assertEqual(response.status, status, data)
-                return data
-            finally:
-                connection.close()
+            return self.request("POST" if body is not None else "GET", path, self.tokens[device], body=body,
+                                workspace=None if locked else self.sessions[device], status=status)
 
         receipt_path = "watch/recordings/" + clip + "/receipt"
         send("mac", receipt_path, locked=True, status=403)
@@ -286,7 +241,7 @@ class OwnerPrivacyTests(unittest.TestCase):
                        (json.dumps({"text": "private reply", "engine": "archive"}), clip))
         self.assertIsNone(send("iphone", receipt_path, locked=True)["reply"])
         phone_clip = str(uuid4())
-        self.store.save_recording(phone_clip, "iphone", now(), 1, "voice", False, "en", audio)
+        self.store.save_recording(phone_clip, "iphone", now(), 1, "voice", False, "en", AUDIO)
         send("iphone", "watch/recordings/" + phone_clip + "/receipt", locked=True, status=404)
 
         question = {"id": str(uuid4()), "text": "Read my calendar", "language": "en"}
@@ -333,7 +288,7 @@ class OwnerPrivacyTests(unittest.TestCase):
         with self.assertRaises(AccessDenied):
             requests.finish(self.state, identifier, "Too early", "screen")
         assistant = Mock(store=self.store)
-        requests.approve(self.state, "iphone", identifier, self.proof("iphone", self.phone, "approve", item["subject"]), assistant)
+        requests.approve(self.state, self.devices["iphone"], identifier, self.proof("iphone", self.phone, "approve", item["subject"]), assistant)
         requests.finish(self.state, identifier, "A sample window", "screen")
         from nex.conversation.plan import validated
         plan = validated([{"name": "weather", "period": "current"}])
@@ -344,6 +299,6 @@ class OwnerPrivacyTests(unittest.TestCase):
         signed = self.proof("iphone", self.phone, "approve", local["subject"])
         with patch("nex.conversation.tools.Weather") as weather, patch("nex.conversation.tools.hourly", return_value="Sample forecast"):
             weather.return_value.locate.return_value = (object(), None)
-            requests.approve(self.state, "iphone", local["id"], signed | {"latitude": 40.12, "longitude": -70.34}, assistant)
+            requests.approve(self.state, self.devices["iphone"], local["id"], signed | {"latitude": 40.12, "longitude": -70.34}, assistant)
             self.assertEqual(weather.return_value.locate.call_args.kwargs["coordinates"].latitude, 40.12)
             self.assertEqual(requests.inbox(self.state)["items"][0]["answer"], "Sample forecast")

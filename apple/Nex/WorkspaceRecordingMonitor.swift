@@ -8,8 +8,8 @@ struct WorkspaceRecordingMonitor: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.recordingPresence, presence)
-            .task(id: scene != .background && model.pairing != nil) {
-                guard scene != .background, model.pairing != nil else {
+            .task(id: scene != .background && model.serverProfile != nil) {
+                guard scene != .background, model.serverProfile != nil else {
                     presence = RecordingPresence()
                     return
                 }

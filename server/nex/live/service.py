@@ -1,8 +1,6 @@
 """Local live voice ASGI service with the same trust boundary as the Nex client API."""
 
 import asyncio
-import hmac
-import ipaddress
 import logging
 import os
 import socket
@@ -13,19 +11,12 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from ..__main__ import read_access
-from ..activities.worker import ActivityWorker
 from ..daybook import DayContext
-from ..daybook_briefing import Briefings
-from ..live_memory import LiveMemory
-from ..network import TAILNET, TAILSCALE_INTERFACE, TailnetEndpoint
-from ..personal_files import PersonalFiles
-from ..personal_learning import PersonalLearning
-from ..privacy.recorded import speaker_socket
+from ..network import TAILSCALE_INTERFACE, TailnetEndpoint
 from ..recall_dates import time_zone
 from ..workspace_features import is_enabled, off_message
-from .attention import MAX_AUDIO, MAX_CONTEXT, MIN_AUDIO, Attention
-from .daybook_socket import daybook_socket
-from .dialogue import Dialogue
+from .access import LiveAccess, authenticate
+from .attention import MAX_AUDIO, MAX_CONTEXT, MIN_AUDIO
 from .followup_gate import FollowupGate
 from .model_api import install_model_api
 from .model_runtime import ModelRuntime
@@ -35,8 +26,8 @@ from .speech import Speech
 from .standby import install_standby
 from .verify import Verifier
 from .voice_enrollment import install_voice_enrollment
-from .voice_profiles import VoiceProfiles
 from .watch_reply_voice import install_watch_reply_voice
+from .workspaces import LiveWorkspaces
 
 PORT = 8767
 DATA = Path(os.environ.get("NEX_DATA", "/srv/data/shared/nex-private"))
@@ -53,57 +44,26 @@ async def lifespan(app):
             models = ModelRuntime(ASSETS, RUNTIME, DATA / "live-model")
             await stack.enter_async_context(models.running())
         app.state.models = models
-        await stack.enter_async_context(voice_services(app, models))
+        speech = await asyncio.to_thread(Speech, ASSETS)
+        room = await asyncio.to_thread(RoomContext.load, ASSETS)
+        assets = Path(os.environ.get("NEX_WHISPER_ASSETS", str(DATA / "assets")))
+        mac = None if TEST_LOOPBACK or models else RUNTIME.parent / "nex" / "mac-model.sock"
+        workspaces = LiveWorkspaces(
+            DATA, RUNTIME, read_access(DATA)["keys"]["admin"], speech, room, Verifier(assets, RUNTIME),
+            models.socket if models else RUNTIME / "model.sock", mac,
+        )
+        app.state.workspaces = workspaces
+        await stack.enter_async_context(workspaces.running())
         yield
 
 
-@asynccontextmanager
-async def voice_services(app, models):
-    app.state.keys = read_access(DATA)["keys"]
-    memory = LiveMemory(DATA)
-    with memory.connect() as db:
-        db.execute("SELECT 1 FROM live_turn_results LIMIT 1")
-    app.state.speech = await asyncio.to_thread(Speech, ASSETS)
-    mac = None if TEST_LOOPBACK or models else RUNTIME.parent / "nex" / "mac-model.sock"
-    dialogue = Dialogue(memory, models.socket if models else RUNTIME / "model.sock", mac)
-    await dialogue.wait_ready()
-    app.state.dialogue = dialogue
-    app.state.active = asyncio.Lock()
-    model_assets = Path(os.environ.get("NEX_WHISPER_ASSETS", str(DATA / "assets")))
-    app.state.verifier = Verifier(model_assets, RUNTIME)
-    app.state.room = await asyncio.to_thread(RoomContext.load, ASSETS)
-    app.state.voices = VoiceProfiles(memory.privacy, app.state.room, app.state.keys["admin"])
-    app.state.attention = Attention(app.state.speech, dialogue, app.state.verifier, room=app.state.room)
-    async with (daybook_socket(RUNTIME / "daybook.sock", dialogue),
-                speaker_socket(RUNTIME / "speaker.sock", app.state.voices)):
-        briefings = asyncio.create_task(Briefings(memory, dialogue.background_text).run())
-        activities = asyncio.create_task(ActivityWorker(memory, RUNTIME, app.state.room, dialogue).run())
-        learning = asyncio.create_task(PersonalLearning(memory, PersonalFiles(memory.root), dialogue.background_text).run())
-        try:
-            yield
-        finally:
-            briefings.cancel()
-            learning.cancel()
-            activities.cancel()
-            await asyncio.gather(briefings, learning, activities, return_exceptions=True)
-            await dialogue.close()
-
-
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-
-
-def authenticate(connection):
-    client_ip = ipaddress.ip_address(connection.client.host) if connection.client else None
-    if client_ip is None or (not TEST_LOOPBACK and client_ip not in TAILNET):
-        return None
-    token = connection.headers.get("authorization", "").removeprefix("Bearer ").encode()
-    return next((device for device in ("mac", "iphone")
-                 if hmac.compare_digest(token, app.state.keys[device].encode())), None)
+app.add_middleware(LiveAccess, workspaces=lambda: app.state.workspaces, loopback=TEST_LOOPBACK)
 
 
 install_model_api(app, authenticate)
 install_standby(app, authenticate)
-install_voice_enrollment(app, authenticate)
+install_voice_enrollment(app, lambda request: request.scope.get("nex.client"))
 install_watch_reply_voice(app, authenticate)
 
 
@@ -120,6 +80,7 @@ async def privacy_version(request: Request):
 async def attention(request: Request):
     if not (device := authenticate(request)):
         raise HTTPException(status_code=401)
+    state = request.scope["nex.workspace"]
     language = request.headers.get("x-nex-language", "auto")
     if language not in {"auto", "en", "tr"}:
         raise HTTPException(status_code=400)
@@ -129,7 +90,7 @@ async def attention(request: Request):
     context_bytes = int(context_header)
     if context_bytes > MAX_CONTEXT or context_bytes % 2:
         raise HTTPException(status_code=400)
-    if app.state.active.locked() or app.state.attention.busy.locked():
+    if state.active.locked() or state.attention.busy.locked():
         return {"ticket": None}
     audio = bytearray()
     try:
@@ -142,8 +103,8 @@ async def attention(request: Request):
         raise HTTPException(status_code=408) from None
     if len(audio) - context_bytes < MIN_AUDIO or len(audio) % 2:
         return {"ticket": None}
-    ticket = await app.state.attention.check(
-        device, language, bytes(audio[context_bytes:]), app.state.active, context=bytes(audio[:context_bytes]),
+    ticket = await state.attention.check(
+        device, language, bytes(audio[context_bytes:]), state.active, context=bytes(audio[:context_bytes]),
     )
     return {"ticket": ticket}
 
@@ -152,7 +113,7 @@ async def attention(request: Request):
 async def decline_attention(ticket: str, request: Request):
     if not (device := authenticate(request)):
         raise HTTPException(status_code=401)
-    app.state.attention.tickets.decline(device, ticket)
+    request.scope["nex.workspace"].attention.tickets.decline(device, ticket)
     return {"ok": True}
 
 
@@ -193,14 +154,15 @@ async def watch_live(ws: WebSocket):
 
 
 async def serve_live(ws: WebSocket, device):
-    if not device or app.state.active.locked():
+    state = ws.scope.get("nex.workspace")
+    if not device or state.active.locked():
         await ws.close(code=1008)
         return
-    async with app.state.active:
+    async with state.active:
         await ws.accept()
         session = None
         close_reason = "interrupted"
-        dialogue = app.state.dialogue
+        dialogue = state.dialogue
         try:
             start = await asyncio.wait_for(ws.receive_json(), 5)
             language = start.get("language")
@@ -215,18 +177,18 @@ async def serve_live(ws: WebSocket, device):
             journal = DayContext.parse(day, zone, start.get("daybook_source"), start.get("daybook_focus")) if day is not None else None
             initial_question = None
             if "attention_ticket" in start:
-                initial_question = app.state.attention.tickets.claim(device, start["attention_ticket"])
+                initial_question = state.attention.tickets.claim(device, start["attention_ticket"])
                 if not initial_question:
                     raise ValueError("Automatic voice approval expired")
             session = Session(ws, device, language, zone, start.get("wake") is True,
-                              app.state.speech, dialogue, app.state.verifier, journal=journal,
+                              state.speech, dialogue, state.verifier, journal=journal,
                               local_chime=start.get("local_chime") is True,
                               opening_chimed=(initial_question is not None or start.get("wake") is True)
                                              and start.get("opening_chimed") is True,
                               archive_progress=start.get("archive_progress") is True,
-                              gate=(FollowupGate(app.state.attention)
+                              gate=(FollowupGate(state.attention)
                                     if initial_question and start.get("selective_followups") is True else None))
-            session.voices = app.state.voices
+            session.voices = state.voices
             session.weather_location_supported = start.get("weather_location_supported") is True
             session.clock_supported = start.get("clock_supported") is True
             await session.listening.prime_vad()

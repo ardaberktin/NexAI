@@ -10,7 +10,7 @@ struct PhoneWatchSettings: View {
                 get: { relay.enabled },
                 set: { relay.setEnabled($0) }
             ))
-            .disabled(model.pairing == nil)
+            .disabled(model.serverProfile == nil)
             if let error = relay.syncError {
                 Text(error).foregroundStyle(.red)
             }

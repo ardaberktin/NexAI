@@ -8,6 +8,7 @@ from threading import Lock
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from nex.hosted.auth import Account, Device
 from nex.privacy import keys
 from nex.privacy.state import PrivacyState
 
@@ -28,14 +29,14 @@ class VoiceEnrollmentTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(folder.cleanup)
         self.state = PrivacyState(Path(folder.name))
         self.signers = {}
+        self.devices = {}
         self.room = Mock(lock=Lock())
         self.room.speakers.process.return_value.sort_by_start_time.return_value = [SimpleNamespace(speaker=0, start=0, end=3)]
         self.room.has_media.return_value = False
         self.room.voice.return_value = np.array([1., 0.])
         app = FastAPI()
         self.voices = app.state.voices = VoiceProfiles(self.state, self.room, "test-only-secret")
-        devices = {"Bearer test-mac": "mac", "Bearer test-iphone": "iphone"}
-        install_voice_enrollment(app, lambda r: devices.get(r.headers.get("authorization")))
+        install_voice_enrollment(app, lambda request: self.devices.get(request.headers.get("Authorization")))
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test",
                                         headers=self.unlock_device("mac"))
         self.addAsyncCleanup(self.client.aclose)
@@ -49,17 +50,17 @@ class VoiceEnrollmentTests(unittest.IsolatedAsyncioTestCase):
         signer = ec.generate_private_key(ec.SECP256R1())
         self.signers[device] = signer
         public = signer.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
-        unlock = self.proof("unlock", device=device) | {
-            "public": base64.b64encode(public).decode(), "setup": keys.issue_setup(self.state, device),
-        }
-        session = keys.unlock(self.state, device, unlock)["token"]
-        return {"Authorization": f"Bearer test-{device}", "X-Nex-Workspace": session}
+        header = f"Bearer test-{device}"
+        self.devices[header] = client = Device(Account("fixture-owner", "owner", True), f"{device}-id", device, public)
+        unlock = self.proof("unlock", device=device)
+        session = keys.unlock(self.state, client, unlock)["token"]
+        return {"Authorization": header, "X-Nex-Workspace": session}
 
     def proof(self, purpose, subject="", *, device="mac"):
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import ec
 
-        challenge = keys.challenge(self.state, device, purpose, subject)
+        challenge = keys.challenge(self.state, self.devices[f"Bearer test-{device}"], purpose, subject)
         sig = self.signers[device].sign(challenge["message"].encode(), ec.ECDSA(hashes.SHA256()))
         return {"nonce": challenge["nonce"], "signature": base64.b64encode(sig).decode()}
 
@@ -77,7 +78,7 @@ class VoiceEnrollmentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json(), {"enrolled": True, "shared_enrolled": True, "available": True})
 
-    async def test_paired_devices_share_status_and_manage_their_own_samples(self):
+    async def test_signed_in_devices_share_status_and_manage_their_own_samples(self):
         phone = self.unlock_device("iphone")
         empty = {"enrolled": False, "shared_enrolled": False, "available": True}
         shared_only = empty | {"shared_enrolled": True}

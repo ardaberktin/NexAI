@@ -14,7 +14,7 @@ struct PersonalContextView: View {
                 #if os(iOS)
                 Text("Memory").font(.largeTitle.weight(.semibold))
                 #endif
-                if model.pairing == nil {
+                if model.serverProfile == nil {
                     ContentUnavailableView("Pair with Excalibur", systemImage: "externaldrive",
                                            description: Text("Pair in Settings to open your personal files."))
                 } else {
@@ -46,10 +46,10 @@ struct PersonalContextView: View {
         }
         #endif
         .refreshable { await load() }
-        .task(id: model.pairing?.url) {
+        .task(id: model.serverProfile?.url) {
             context = nil
             error = nil
-            guard model.pairing != nil else { return }
+            guard model.serverProfile != nil else { return }
             while !Task.isCancelled {
                 if scenePhase == .active { await load() }
                 do { try await Task.sleep(for: .seconds(15)) }

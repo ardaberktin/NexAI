@@ -8,7 +8,7 @@ enum PhoneWatchTransfers {
     }
 
     static func deliver(_ clip: Clip, inbox: PhoneWatchInbox, session: WCSession, connection: NexAPI,
-                        voice: PhoneWatchReplyVoice, isCurrent: () -> Bool) async throws -> Bool {
+                        voice: PhoneWatchReplyVoice, scope: String, isCurrent: () -> Bool) async throws -> Bool {
         let question = clip.watchConversation != nil
         var row: Recording
         if question, inbox.submitted(clip) {
@@ -31,7 +31,8 @@ enum PhoneWatchTransfers {
         guard let answer = WatchQuestionResult(row), isCurrent(), !Task.isCancelled,
               session.activationState == .activated else { return false }
         if session.isReachable, answer.text != nil { voice.prepare(clip.id, connection: connection) }
-        let message = [WatchLink.questionResult: try JSONEncoder().encode(answer)]
+        var message: [String: Any] = [WatchLink.questionResult: try JSONEncoder().encode(answer)]
+        message[WatchLink.accountScope] = scope
         session.transferUserInfo(message)
         if session.isReachable { session.sendMessage(message, replyHandler: nil, errorHandler: nil) }
         return true

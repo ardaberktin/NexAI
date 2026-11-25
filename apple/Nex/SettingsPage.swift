@@ -11,26 +11,28 @@ struct SettingsPage: View {
                 WorkspaceFeatureSettings(model: model)
             case .speech:
                 SpeechRecordingSettings(model: model)
-                if model.pairing != nil {
+                if model.serverProfile != nil {
                     VoiceEnrollment(model: model, privacy: model.privacy)
                 }
             case .notifications:
                 NexNotificationSettings(model: model)
             case .privacy:
                 AuthenticationSettings(autoLock: model.privacy.autoLock, lock: model.lockWorkspace)
-                if model.pairing != nil {
+                if model.serverProfile != nil {
                     WeatherSharingSettings(model: model, sharing: model.weatherSharing)
                 }
+            case .nexAccount:
+                HostedAccountSettings(model: model)
             case .accounts:
                 AccountConnectionsView(model: model)
             case .excalibur:
-                ExcaliburPairingSettings(model: model)
+                NexServerSettings(model: model)
             case .models:
-                if model.pairing != nil {
+                if model.serverProfile != nil {
                     ExcaliburModelSettings(model: model)
                 } else {
                     Section("Excalibur language model") {
-                        Text("Pair with Excalibur to manage its language model.")
+                        Text("Sign in to Nex to manage its language model.")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -82,12 +84,12 @@ private struct NexNotificationSettings: View {
     var body: some View {
         Section {
             #if os(iOS)
-            if #available(iOS 26, *), model.pairing != nil, model.workspaceFeatureEnabled(.goals) {
+            if #available(iOS 26, *), model.serverProfile != nil, model.workspaceFeatureEnabled(.goals) {
                 IPhoneNativeAlarmSetting()
             }
             #endif
             RecordingNotificationPermission(onEnable: { await GoalNotifications.enable(using: model) }) {
-                if model.pairing != nil && model.workspaceFeatureEnabled(.goals) {
+                if model.serverProfile != nil && model.workspaceFeatureEnabled(.goals) {
                     #if os(iOS)
                     switch push.state {
                     case .registered: Text("Apple Push Notifications registered")

@@ -3,6 +3,7 @@ import Foundation
 enum WatchLink {
     static let request = "nex.watch.request.v1"
     static let response = "nex.watch.response.v1"
+    static let accountScope = "nex.watch.account-scope.v1"
     static let enabled = "nex.watch.enabled.v1"
     static let clip = "nex.watch.clip.v1"
     static let acknowledgements = "nex.watch.saved.v1"
@@ -19,6 +20,19 @@ enum WatchLink {
     static let maximumAudioBytes = 4_194_304
     static let responseChunkSize = 32_000
     static let maximumResponseBytes = 12_000_000
+
+    static func envelope(_ data: Data, scope: String) -> Data {
+        return header(scope) + data
+    }
+
+    static func payload(_ data: Data, scope: String?) -> Data? {
+        guard let scope else { return nil }
+        let prefix = header(scope)
+        guard data.starts(with: prefix) else { return nil }
+        return Data(data.dropFirst(prefix.count))
+    }
+
+    private static func header(_ scope: String) -> Data { Data(("nex.account." + scope + "\n").utf8) }
 
     static func isClipID(_ value: String) -> Bool {
         UUID(uuidString: value)?.uuidString.lowercased() == value
@@ -71,8 +85,10 @@ struct WatchRelayState: Sendable {
     let enabled: Bool
     let error: String?
     let supportsQuestions: Bool?
+    let scope: String?
 
     init(_ context: [String: Any]) {
+        scope = context[WatchLink.accountScope] as? String
         enabled = context[WatchLink.enabled] as? Bool ?? false
         error = context[WatchLink.syncError] as? String
         supportsQuestions = context[WatchLink.enabled] == nil ? nil : context[WatchLink.questionDelivery] as? Bool ?? false

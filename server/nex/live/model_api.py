@@ -3,6 +3,8 @@
 from fastapi import HTTPException, Request
 from pydantic import BaseModel
 
+from .access import workspace_for
+
 
 class Selection(BaseModel):
     model: str
@@ -25,7 +27,10 @@ def install_model_api(app, authenticate):
     @app.put("/v1/live-model")
     async def switch_model(request: Request, selection: Selection):
         models = runtime(request)
-        state = app.state
+        client = request.scope.get("nex.client")
+        if not client or not client.account.owner:
+            raise HTTPException(403)
+        state = workspace_for(request)
         if state.active.locked():
             raise HTTPException(409, "End the active conversation or wait for the current switch to finish.")
         if models.status()["active"] == selection.model and not models.lock.locked():

@@ -19,7 +19,7 @@ struct PrivateInbox: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if model.pairing != nil && !privacy.connected {
+            if model.serverProfile != nil && !privacy.connected {
                 Text(privacy.error ?? "Unlock your connection to Excalibur to view private answers.")
                     .font(.callout)
                 Button("Connect private workspace") { Task { await privacy.unlock(model) } }
@@ -43,7 +43,7 @@ struct PrivateInbox: View {
             }
             if privacy.connected, let error = privacy.error { Text(error).font(.caption).foregroundStyle(.secondary) }
         }
-        .padding(inboxItems.isEmpty && privacy.error == nil && (model.pairing == nil || privacy.connected) ? 0 : 12)
+        .padding(inboxItems.isEmpty && privacy.error == nil && (model.serverProfile == nil || privacy.connected) ? 0 : 12)
         .sheet(item: $source) { item in SourceSheet(item: item, model: model) }
     }
 

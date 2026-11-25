@@ -48,6 +48,13 @@ jobs:
             apple/tests/WorkspaceChatSyncCheck.swift \
             apple/Nex/{WorkspaceChat,WorkspaceAPI,Types,PrivateChat,WebLookup,ClockAlert,ChatSpeech}.swift
           .build/chat-sync-check
+      - name: Check account links and recording isolation
+        if: matrix.scheme == 'Nex macOS'
+        run: |
+          xcrun swiftc -warnings-as-errors -o .build/hosted-account-check \
+            apple/tests/HostedAccountCheck.swift apple/Nex/{HostedAccount,Connection,Types,Spool}.swift \
+            apple/WatchSupport/WatchLink.swift
+          .build/hosted-account-check
   source-archives:
     runs-on: ubuntu-24.04
     steps:

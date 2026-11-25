@@ -121,15 +121,15 @@ def inbox_item(row):
             "sources": json.loads(row["sources"]) if row["sources"] else [], "goal_id": row["goal_id"]}
 
 
-def approve(state, device, identifier, proof, assistant):
-    if device != "iphone":
+def approve(state, client, identifier, proof, assistant):
+    if client.role != "iphone":
         raise AccessDenied("Face ID on the paired iPhone is required.")
     with state.transaction(write=True) as db:
         row = db.execute("SELECT * FROM requests WHERE id=? AND state='pending' AND created>?",
                          (identifier, time() - PENDING_SECONDS)).fetchone()
         if not row:
             raise AccessDenied("This approval has expired or was already used.")
-        consume(db, device, "approve", approval_subject(row), proof)
+        consume(db, client, "approve", approval_subject(row), proof)
         data = json.loads(row["payload"])
         coordinates = Coordinates.from_reply(proof) if data.get("needs_location") else None
         work = begin(db, identifier, row["device"], row["created"], data)

@@ -14,7 +14,7 @@ struct SettingsView: View {
 
     init(model: Controller) {
         self.model = model
-        _selection = State(initialValue: model.pairing == nil ? .excalibur : .workspace)
+        _selection = State(initialValue: model.serverProfile == nil ? .excalibur : .workspace)
     }
     #endif
 
@@ -68,6 +68,7 @@ enum SettingsCategory: CaseIterable, Hashable {
     case speech
     case notifications
     case privacy
+    case nexAccount
     case accounts
     case excalibur
     case models
@@ -81,6 +82,7 @@ enum SettingsCategory: CaseIterable, Hashable {
         case .speech: "Voice & Recording"
         case .notifications: "Notifications"
         case .privacy: "Privacy & Security"
+        case .nexAccount: "Nex Account"
         case .accounts: "Connected Accounts"
         case .excalibur: "Excalibur"
         case .models: "Language Models"
@@ -96,7 +98,8 @@ enum SettingsCategory: CaseIterable, Hashable {
         case .speech: "waveform"
         case .notifications: "bell"
         case .privacy: "lock.shield"
-        case .accounts: "person.crop.circle"
+        case .nexAccount: "person.crop.circle"
+        case .accounts: "link"
         case .excalibur: "externaldrive.connected.to.line.below"
         case .models: "cpu"
         #if os(iOS)

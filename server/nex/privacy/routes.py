@@ -1,4 +1,4 @@
-"""Owner-only workspace routes for the paired native apps."""
+"""Owner-only workspace routes for native app accounts."""
 
 from ..live.weather_location import Coordinates
 from .keys import challenge, require_session, unlock
@@ -7,18 +7,19 @@ from .state import AccessDenied, digest
 
 
 def route(api, method, path, device, problem):
-    state = api.server.privacy
+    state = api.privacy
+    client = api.client_identity
     token = api.headers.get("X-Nex-Workspace", "")
     if method == "GET" and path == "version":
         return {"version": 1}
     if method == "POST" and path == "challenge":
         data = api.object(1500)
         if data.get("purpose") != "unlock":
-            require_session(state, device, token)
-        return challenge(state, device, data.get("purpose"), data.get("subject", ""))
+            require_session(state, client, token)
+        return challenge(state, client, data.get("purpose"), data.get("subject", ""))
     if method == "POST" and path == "unlock":
-        return unlock(state, device, api.object(3000))
-    require_session(state, device, token)
+        return unlock(state, client, api.object(3000))
+    require_session(state, client, token)
     if method == "GET" and path == "inbox":
         return inbox(state, api.app.store)
     if method == "POST" and path in {"approve", "resolve"}:
@@ -29,7 +30,7 @@ def route(api, method, path, device, problem):
             if path == "resolve":
                 resolve(state, device, token, data.get("id"), api.app.assistant, Coordinates.from_reply(data))
             else:
-                approve(state, device, data.get("id"), data, api.app.assistant)
+                approve(state, client, data.get("id"), data, api.app.assistant)
         finally:
             api.app.chat_slot.release()
     elif method == "POST" and path == "screen" and device == "mac":

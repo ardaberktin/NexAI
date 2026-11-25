@@ -124,7 +124,7 @@ final class WatchWorkspace: ObservableObject {
                 issue = result.error
                 lock()
             }
-            if let error = result.error { throw NexError.pairing(error) }
+            if let error = result.error { throw NexError.connection(error) }
             guard let data = result.data, all.count + data.count <= WatchLink.maximumResponseBytes,
                   result.remainder == nil || !data.isEmpty else {
                 throw NexError.capture("The iPhone returned an incomplete response.")

@@ -87,21 +87,15 @@ final class IPhonePush: ObservableObject {
         log.error("iOS could not register Nex for remote notifications.")
     }
 
-    func unpair(_ pairing: Pairing) {
+    func signedOut() {
         state = .local
         token = nil
         nextAttempt = .distantPast
         UIApplication.shared.unregisterForRemoteNotifications()
-        guard environment != nil, let api = try? NexAPI(pairing) else { return }
-        Task { await disable(using: api, updateState: false) }
     }
 
-    private func disable(using api: NexAPI, updateState: Bool = true) async {
-        if updateState {
-            state = .local
-            token = nil
-            UIApplication.shared.unregisterForRemoteNotifications()
-        }
+    private func disable(using api: NexAPI) async {
+        signedOut()
         let request = PushRegistration(installation: installation, token: nil, environment: nil, enabled: false)
         let _: PushStatus? = try? await api.send("/v1/workspace/push", method: "PUT", body: request)
     }

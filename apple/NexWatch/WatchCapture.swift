@@ -17,7 +17,7 @@ final class WatchCapture: ObservableObject {
     var recordingChanged: (() -> Void)?
     var isForeground = false
     var isRecording: Bool { started != nil }
-    private let spool: Spool
+    private(set) var spool: Spool
     private var engine: AVAudioEngine?
     private var writer: WatchMicWriter?
     private var microphone: WatchMicrophoneInput?
@@ -33,6 +33,25 @@ final class WatchCapture: ObservableObject {
 
     init(spool: Spool) {
         self.spool = spool
+        prepare()
+        observe(.interruption) { [weak self] in self?.interrupt("Recording was interrupted. Tap Resume recording.") }
+        observe(AVAudioSession.mediaServicesWereLostNotification) { [weak self] in
+            self?.interrupt("The microphone became unavailable.")
+        }
+        observe(AVAudioSession.mediaServicesWereResetNotification) { [weak self] in
+            self?.interrupt("The microphone restarted. Tap Resume recording.")
+        }
+        observe(.AVAudioEngineConfigurationChange) { [weak self] in self?.checkEngine() }
+    }
+
+    func useSpool(_ next: Spool) {
+        pause()
+        spool = next
+        prepare()
+    }
+
+    private func prepare() {
+        let spool = self.spool
         preparation = Task.detached(priority: .utility) {
             do {
                 var issue: String?
@@ -44,16 +63,10 @@ final class WatchCapture: ObservableObject {
                 return issue
             } catch { return error.localizedDescription }
         }
-        observe(.interruption) { [weak self] in self?.interrupt("Recording was interrupted. Tap Resume recording.") }
-        observe(AVAudioSession.mediaServicesWereLostNotification) { [weak self] in
-            self?.interrupt("The microphone became unavailable. Tap Resume recording.")
-        }
-        observe(AVAudioSession.mediaServicesWereResetNotification) { [weak self] in
-            self?.interrupt("The microphone restarted. Tap Resume recording.")
-        }
-        observe(.AVAudioEngineConfigurationChange) { [weak self] in self?.checkEngine() }
         Task {
-            issue = await preparation?.value
+            let result = await preparation?.value
+            guard self.spool.directory == spool.directory else { return }
+            issue = result
             clipReady?()
         }
     }
@@ -98,12 +111,13 @@ final class WatchCapture: ObservableObject {
         guard isForeground, engine == nil, writer == nil, !busy, !Task.isCancelled else { return }
         busy = true
         defer { busy = false }
+        let spool = self.spool
         _ = await preparation?.value
         guard await AVAudioApplication.requestRecordPermission() else {
             issue = "Allow microphone access for Nex in Watch Settings."
             return
         }
-        guard isForeground, !Task.isCancelled else { return }
+        guard self.spool.directory == spool.directory, isForeground, !Task.isCancelled else { return }
         playback?()
         do {
             try spool.verifySpace()

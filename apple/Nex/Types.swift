@@ -1,14 +1,14 @@
 import Foundation
 
 enum NexError: LocalizedError {
-    case pairing(String)
+    case connection(String)
     case api(Int, String)
     case capture(String)
     case offlineSpeech
 
     var errorDescription: String? {
         switch self {
-        case .pairing(let message), .api(_, let message), .capture(let message): message
+        case .connection(let message), .api(_, let message), .capture(let message): message
         case .offlineSpeech: "An on-device speech recognizer is unavailable for this language."
         }
     }
