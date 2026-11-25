@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class Controller: ObservableObject {
     @Published var serverProfile: ServerProfile?
+    private(set) var resetSignInLink: String?
     @Published private(set) var signingOut = false
     @Published private(set) var signOutError: String?
     @Published var status: ServerStatus?
@@ -143,6 +144,7 @@ final class Controller: ObservableObject {
             #endif
         }
         setConnection(connection, featureCacheScope: profile.workspaceScope)
+        resetSignInLink = nil
         serverProfile = profile
         #if os(iOS)
         PhoneWatchRelay.shared.accountChanged()
@@ -155,15 +157,28 @@ final class Controller: ObservableObject {
     func signOut(revoke: Bool = true) async {
         guard !signingOut, let profile = serverProfile else { return }
         signingOut = true
-        signOutError = nil
         defer { signingOut = false }
+        await finishSignOut(profile, revoke: revoke)
+    }
+
+    func resetAccountData(password: String) async throws {
+        guard !signingOut, let profile = serverProfile, privacy.connected else { throw CancellationError() }
+        signingOut = true
+        defer { signingOut = false }
+        try await HostedAccountAPI(connection()).resetData(password: password)
+        resetSignInLink = profile.serverLink
+        await finishSignOut(profile, revoke: false, eraseLocalData: true)
+    }
+
+    private func finishSignOut(_ profile: ServerProfile, revoke: Bool, eraseLocalData: Bool = false) async {
+        signOutError = nil
         do { try ServerProfileKeychain.clear() }
         catch {
             signOutError = error.localizedDescription
             privacy.lock()
             return
         }
-        weatherSharing.disconnect()
+        weatherSharing.disconnect(eraseScope: eraseLocalData ? profile.workspaceScope : nil)
         #if os(iOS)
         IPhonePush.shared.signedOut()
         PhoneWatchRelay.shared.setEnabled(false)
@@ -178,6 +193,12 @@ final class Controller: ObservableObject {
         capture.useSpool(spoolRoot)
         spool = spoolRoot
         resetConnectionStatus()
+        if eraseLocalData {
+            saved.removeObject(forKey: "nex.workspaceFeatures." + profile.workspaceScope)
+            GoalNotifications.eraseCursor(accountScope: profile.workspaceScope)
+            do { try spoolRoot.eraseAccount(profile.workspaceScope) }
+            catch { message = error.localizedDescription }
+        }
         await GoalNotifications.removeAll()
         await ClockNotifications.clear()
         OwnerKey.discard(profile.biometricSlot)

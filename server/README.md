@@ -87,6 +87,8 @@ Open **Settings → Nex Account** to share the reusable server link. Use **Manag
 
 **Nex Account** lets users rename themselves, change their password and sign out other devices. The owner can appoint administrators. Administrators can create and rename member accounts, reset member passwords, disable or restore access, and set audio limits. Disabling an account signs its devices out and preserves its archive. Additional accounts keep separate archives under `$NEX_DATA/users/` and use server-side models. The host console continues to manage the original archive and shared model configuration.
 
+Use **Settings → Nex Account → Reset My Data** and confirm with your current password to permanently erase your personal server archive and saved connections. Nex clears your pending recording queue on the Mac or iPhone that submitted the reset and signs this account out on every device. The archive and live voice services briefly restart. Sign back in with the same account to open the empty workspace. Queued recordings from before the reset stay out of the new workspace.
+
 An account can have one active Mac session and one active iPhone session. Signing in on another device of the same type revokes the previous session. Device sessions expire after 90 days. Apple Watch follows its iPhone's account. The service user can also manage accounts from the Linux terminal for host-side setup and recovery:
 
 ```bash
