@@ -57,7 +57,7 @@ from .goal_plans import (
     MCP_GOAL_PLAN,
     GoalPlanError,
     choose_goal_target,
-    connected_frequency,
+    connected_schedule,
     review_goal_plan,
     validate_goal_action,
 )
@@ -426,10 +426,11 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
     names = SCHEDULE_TOOLS | {tool["name"] for tool in tools}
     frequency = None
     if connected and "edit_target" not in context:
-        frequency = await connected_frequency(context, generate)
+        frequency, weekday = await connected_schedule(context, generate)
         if frequency is None:
             return Plan((), clarify=True)
         context["mcp_frequency"] = frequency
+        context["mcp_weekday"] = weekday
         context["mcp_sources"] = sorted({server for server, _ in turn.mcp_tools.values()})
         selected_type = "recurring" if frequency else "schedule"
         names, instructions = {"goal"}, MCP_GOAL_PLAN
