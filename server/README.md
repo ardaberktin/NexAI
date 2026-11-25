@@ -114,6 +114,28 @@ journalctl --user -u nex.service -n 30
 
 See [Live voice and optional integrations](deploy/README.md) for the second service and account configuration.
 
+## Connect an MCP server
+
+On Mac or iPhone, unlock Nex and open **Settings → MCP Servers → Add MCP Server**. Enter a name and the server's
+MCP endpoint URL. Choose **Streamable HTTP** or **Legacy HTTP with SSE** according to the server's documentation.
+If it requires authentication, enter a bearer token or add the provider's HTTP headers. **Connect** discovers
+the available tools and shares the connection with your other signed-in device. Use **Refresh Tools** after
+the provider changes its catalog. Pause a connection with **Enabled**, or remove it to delete its saved settings.
+
+Ask Nex to use the connection in Chat or voice, for example, “How many monitors are in stock at the West
+warehouse? Use Warehouse.” For a scheduled report, turn on **Allow read-only tools in goals** for that
+connection, then ask Nex to save the report as a goal. Nex checks the server's read-only tool annotations
+again when the goal runs. Successful calls can return text and structured data to Nex.
+
+The Nex server makes requests to the configured endpoint. Direct connections support public HTTPS and
+operator-configured loopback endpoints. For an MCP server that runs as a local command over stdio, run a
+stdio-to-HTTP bridge on the Nex host under a separate service identity. Bind it to `127.0.0.1` or `::1`.
+The host operator can authorize its exact endpoint by placing `mcp-loopback.json` in the intended account's
+private archive directory. Its contents are a JSON array of URLs, for example
+`["http://127.0.0.1:8123/mcp"]`. Add that same URL in Settings. The owner archive lives at the data root.
+Member archives live under `users/<account-id>/`. Use provider-issued credentials or an authenticated bridge
+for services that require OAuth sign-in.
+
 ## Maintain and verify
 
 - Back up the entire private archive with Nex stopped or take a consistent filesystem snapshot. Include any externally configured SSD audio directory. Include `accounts.sqlite` and the account archives under `users/`. Keep backups and account credentials outside the source checkout.

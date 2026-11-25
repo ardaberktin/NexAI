@@ -72,8 +72,8 @@ def routable(value):
     return address.is_global and not (address.is_multicast or address.is_reserved or address.is_loopback)
 
 
-def resolve_public(host):
-    records = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+def resolve_public(host, port=443):
+    records = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     addresses = list(dict.fromkeys(record[4][0] for record in records))
     if not addresses or not all(routable(address) for address in addresses):
         raise WebReadError("That address points to a private or reserved network.")
@@ -81,12 +81,12 @@ def resolve_public(host):
 
 
 class PinnedHTTPS(http.client.HTTPSConnection):
-    def __init__(self, host, address, timeout):
-        super().__init__(host, port=443, timeout=timeout, context=TLS)
+    def __init__(self, host, address, timeout, *, port=443):
+        super().__init__(host, port=port, timeout=timeout, context=TLS)
         self.address = address
 
     def connect(self):
-        raw = socket.create_connection((self.address, 443), self.timeout)
+        raw = socket.create_connection((self.address, self.port), self.timeout)
         try:
             self.sock = TLS.wrap_socket(raw, server_hostname=self.host)
         except BaseException:

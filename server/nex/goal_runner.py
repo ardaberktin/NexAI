@@ -24,6 +24,10 @@ from .goal_writing import (
     prioritize_mail,
     yes_no,
 )
+from .mcp import MCPError
+from .mcp.connections import catalog
+from .mcp.connections import execute as execute_mcp
+from .mcp.tool import is_alias
 from .news_sources import news_date
 from .pdf.document import PDFError
 from .pdf.render import ValidatedPDF
@@ -111,6 +115,11 @@ def web_evidence(goal, anchor, tool):
 
 def evidence_for(store, goal, anchor, tool):
     name, query = tool["name"], tool.get("query", "").strip()
+    if is_alias(name):
+        outcome = execute_mcp(store, tool, scheduled=True)
+        if outcome["status"] != "ok":
+            raise MCPError(f'The MCP tool {outcome["tool"]} could not supply data for this goal.')
+        return outcome
     if name in ("calendar", "ticktick", "gmail"):
         return account_evidence(store, goal, anchor, name, query, tool)
     if name == "agenda":
@@ -156,7 +165,7 @@ def run_prompt(store, row, anchor, generate, classify):
     data = {"goal": goal["prompt"], "original_request": goal.get("original_request") or goal["prompt"],
             "language": goal.get("reply_language"), "time_zone": goal["zone"],
             "local_time": anchor.astimezone(time_zone(goal["zone"])).isoformat()}
-    tools = plan_for(generate, data)
+    tools = plan_for(generate, data, catalog(store, scheduled=True))
     pdf_tool = next((tool for tool in tools or () if tool["name"] == "create_pdf"), None)
     pdf_copy = goal.get("pdf_instruction")
     if pdf_copy:

@@ -69,8 +69,9 @@ class LiveClockTests(unittest.IsolatedAsyncioTestCase):
                                 language="en", zone=HOME, started=datetime.fromisoformat("2026-11-23T06:00:00+00:00"),
                                 journal=None, coordinates=None)
         generate = model([], compose="Your device shows 12:45 PM.")
+        store = Store(self.enterContext(tempfile.TemporaryDirectory()), 0, 2**20)
         dialogue = SimpleNamespace(complete=AsyncMock(side_effect=lambda _, messages, *args, **kwargs: generate(messages)),
-                                   local=object(), memory=None)
+                                   local=object(), memory=store)
         read_clock = AsyncMock(side_effect=lambda _: pending.reply.result())
         output = Mock()
         result = await public_reply(dialogue, voice, [], output, read_clock=read_clock)

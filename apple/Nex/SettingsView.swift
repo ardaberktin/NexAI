@@ -70,6 +70,7 @@ enum SettingsCategory: CaseIterable, Hashable {
     case privacy
     case nexAccount
     case accounts
+    case mcp
     case excalibur
     case models
     #if os(iOS)
@@ -84,6 +85,7 @@ enum SettingsCategory: CaseIterable, Hashable {
         case .privacy: "Privacy & Security"
         case .nexAccount: "Nex Account"
         case .accounts: "Connected Accounts"
+        case .mcp: "MCP Servers"
         case .excalibur: "Excalibur"
         case .models: "Language Models"
         #if os(iOS)
@@ -100,6 +102,7 @@ enum SettingsCategory: CaseIterable, Hashable {
         case .privacy: "lock.shield"
         case .nexAccount: "person.crop.circle"
         case .accounts: "link"
+        case .mcp: "point.3.connected.trianglepath.dotted"
         case .excalibur: "externaldrive.connected.to.line.below"
         case .models: "cpu"
         #if os(iOS)

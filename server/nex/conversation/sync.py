@@ -2,6 +2,7 @@
 import asyncio
 from datetime import UTC, datetime
 
+from ..mcp.connections import catalog
 from .plan import Turn, choose
 from .reply import run
 
@@ -22,6 +23,8 @@ def generator(assistant, turn):
 
 
 def select(assistant, turn, *, recall=None):
+    if not turn.journal:
+        turn.mcp_tools = catalog(assistant.store)
     return asyncio.run(choose(turn, generator(assistant, turn), recall=recall))
 
 

@@ -1,5 +1,6 @@
 """Shape a model plan before validating the proposed operation in application code."""
 
+from ..mcp.tool import is_alias
 from .catalog import OPTIONS
 from .goal_management_prompts import OPERATIONS
 
@@ -37,6 +38,9 @@ def argument_schema(name, field):
 
 
 def tool_object(name, scheduled, goal_type):
+    if is_alias(name):
+        return {"type": "object", "properties": {"name": {"const": name}, "arguments": {"type": "object",
+                "additionalProperties": True}}, "required": ["name", "arguments"], "additionalProperties": False}
     options = SCHEDULED_FIELDS if scheduled and name in SCHEDULED_FIELDS else OPTIONS
     fields = set(options.get(name, ())) - {"watch_provider"}
     if name not in {"clock", "manage_goal", "screen", "past_questions"}:

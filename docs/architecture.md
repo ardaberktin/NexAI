@@ -35,6 +35,12 @@ The shared conversation code lives in `server/nex/conversation/`. `catalog.py` a
 - The admin console is bound to server loopback. The archive’s private permissions and backup process apply to both the database and the audio store.
 - Speech, screen capture, location sharing, account access, and notifications have independent permissions. Detailed Mac screen observations stay on the Mac. Enabled integrations can transmit their permitted request data to external providers.
 
+MCP connections and discovered tool schemas live in the account's archive database. The shared assistant
+planner offers enabled tools and checks the current connection before dispatching calls from an unlocked
+workspace or approved voice request. Scheduled runs have a separate per-connection opt-in and use tools
+that the server marks read-only. The Nex host establishes each transport connection and supplies any
+configured credentials directly to that endpoint.
+
 ## Source boundaries
 
 The server ships its Python package, tests and deployment examples. The Apple source ships a single Xcode project for three apps with shared Swift sources, plus a local Swift package with upstream dependencies. They interoperate over documented-in-code HTTP and live protocols. Keep wire compatibility and coordinate releases when those interfaces change. Build each component in isolation to verify a new dependency has landed in the right archive.

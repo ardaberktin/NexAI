@@ -4,6 +4,8 @@ import logging
 from dataclasses import dataclass
 
 from ..goal_writing import json_object, model_messages
+from ..mcp.tool import PROMPT as MCP_PROMPT
+from ..mcp.tool import catalog_menu
 
 LOG = logging.getLogger(__name__)
 GENERAL_CAPABILITIES = {
@@ -125,6 +127,16 @@ Examples:
 Use tr for a Turkish request or when requested explicitly. Use en for an English request."""
 ROUTE = ROUTE_HEADER + ROUTE_CAPABILITIES + ROUTE_EXAMPLES
 VOICE_ROUTE = ROUTE + "\nUse clarify for unfinished or garbled speech. Social speech addressed to Nex can use answer."
+MCP_ROUTE = """Resolve the requested source before choosing a capability. The mcp_tools input maps capability
+identifiers to [connected server name, tool name, purpose]. For a lookup of data supplied by a connected MCP
+tool, copy that capability identifier into capabilities. An inventory, ticket, or other private provider
+lookup uses the matching connected tool. Web searches public sources. Python handles computation and code.
+Use the named connected tool for a request directed at that connection, including informal references in context.
+General explanations about a domain can use answer without looking up the user's actual data.
+For a future lookup, choose schedule for one run or recurring for a fixed cadence such as every Friday.
+For a report with a PDF attachment, choose document. Use the tool itself when the user wants its result now.
+"""
+
 CHAT_ROUTE = ROUTE_HEADER + OFFER_RECALL + ROUTE_CAPABILITIES + ROUTE_EXAMPLES
 RECALLED_CHAT_ROUTE = ROUTE_HEADER + USE_RECALL + "\n" + ROUTE_CAPABILITIES
 
@@ -135,6 +147,16 @@ class Route:
     tools: frozenset = frozenset()
     recall_query: str | None = None
     exchange: int | None = None
+
+
+def route_schema(schema, general):
+    ordinary = schema["anyOf"][0] if schema is RECALL_ROUTE_SCHEMA else schema
+    props = ordinary["properties"]
+    dedicated, tools = props["capabilities"]["anyOf"]
+    updated = ordinary | {"properties": props | {"capabilities": {"anyOf": [
+        dedicated, tools | {"items": {"enum": sorted(general)}},
+    ]}}}
+    return {"anyOf": [updated, schema["anyOf"][1]]} if schema is RECALL_ROUTE_SCHEMA else updated
 
 
 async def route_turn(turn, generate, data, *, allow_recall=False):
@@ -150,6 +172,13 @@ async def route_turn(turn, generate, data, *, allow_recall=False):
         instructions = RECALLED_CHAT_ROUTE
         request["recalled_chat"] = data["recalled_chat"]
         schema = RECALLED_ROUTE_SCHEMA
+    general = GENERAL_CAPABILITIES
+    if turn.mcp_tools:
+        general = general | turn.mcp_tools.keys()
+        schema = route_schema(schema, general)
+        request["mcp_tools"] = catalog_menu(turn.mcp_tools)
+        instructions = ROUTE_HEADER + MCP_ROUTE + MCP_PROMPT + instructions.removeprefix(ROUTE_HEADER)
+        limit += 75
     raw = await generate(model_messages(instructions, request, schema=schema), limit)
     raw = raw if isinstance(raw, str) else ""
     decision = json_object(raw)
@@ -170,7 +199,7 @@ async def route_turn(turn, generate, data, *, allow_recall=False):
             return Route(next(iter(selected)), exchange=exchange)
         if selected & GOAL_MANAGEMENT and selected <= GOAL_MANAGEMENT | {"schedule", "recurring", "check_in"}:
             return Route("manage", exchange=exchange)
-        if selected and selected <= GENERAL_CAPABILITIES:
+        if 1 <= len(selected) <= 4 and selected <= general:
             return Route("general", selected, exchange=exchange)
     label = raw.strip().lower().rstrip(".")
     label = {"social": "answer", "unclear": "clarify"}.get(label, label)
