@@ -44,3 +44,10 @@ dialog { width: min(42rem, calc(100% - 2rem)); color: inherit; background: #111a
 dialog::backdrop { background: rgb(5 12 13 / .76); }
 #transcript-draft { flex-basis: 100%; }
 #transcript-history p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.setup-page { max-width: 36rem; }
+.setup-page form { display: grid; gap: .6rem; }
+.setup-page form input { width: 100%; }
+.setup-page form small { margin-bottom: .35rem; }
+.setup-page form button { justify-self: start; margin-top: .5rem; }
+.setup-link { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .45rem; }
+.setup-link input { flex: 1 1 15rem; }

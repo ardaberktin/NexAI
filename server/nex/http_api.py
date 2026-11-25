@@ -112,6 +112,7 @@ def chat_message(data):
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 24
+    handler = None
 
     def __init__(self, address, app, *, hosted, tls=None, admin=False, allow_peer=None, interface=None):
         if not admin and tls is None:
@@ -120,7 +121,7 @@ class Server(ThreadingHTTPServer):
         self.hosted = hosted
         self.allow_peer, self.interface = allow_peer, interface
         self.slots = threading.BoundedSemaphore(22)
-        super().__init__(address, API)
+        super().__init__(address, self.handler or API)
 
     def server_bind(self):
         if self.interface:

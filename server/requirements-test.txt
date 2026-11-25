@@ -1,5 +1,6 @@
 -r requirements-pdf.txt
 cryptography>=44
+fastapi==0.165.0
 httpx==0.28.1
 pipecat-ai==1.16.0
 ruff==0.17.6

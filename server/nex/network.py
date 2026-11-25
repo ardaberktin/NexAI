@@ -1,5 +1,8 @@
+import base64
 import fcntl
+import hashlib
 import ipaddress
+import ssl
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -31,6 +34,11 @@ class TailnetEndpoint:
     @property
     def key(self):
         return self.identity / "tls.key"
+
+    def server_link(self):
+        der = ssl.PEM_cert_to_DER_cert(self.certificate.read_text())
+        pin = base64.urlsafe_b64encode(hashlib.sha256(der).digest()).decode().rstrip("=")
+        return f"nex://{self.address}:{CLIENT_PORT}/{pin}"
 
     def provision(self):
         self.identity.mkdir(mode=0o700, parents=True, exist_ok=True)
