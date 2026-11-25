@@ -2,13 +2,14 @@
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from urllib.parse import unquote, urlsplit
 
-from . import MCPError
-from .client import MODERN, TRANSPORTS, connect
+from . import MCPError, client, permissions
+from .client import TRANSPORTS
 from .endpoint import endpoint_parts, headers_for
-from .tool import Tool, validate_arguments, validate_call
+from .goal_writes import SCHEMA as GOAL_WRITES_SCHEMA
+from .tool import AvailableTool, Tool
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS mcp_connections (
@@ -16,7 +17,7 @@ CREATE TABLE IF NOT EXISTS mcp_connections (
     transport TEXT NOT NULL, tools TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
     allow_goals INTEGER NOT NULL DEFAULT 0
 );
-"""
+""" + permissions.SCHEMA + GOAL_WRITES_SCHEMA
 MAX_CONNECTIONS = 20
 MAX_WORKSPACE_TOOLS = 128
 ID = re.compile(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")
@@ -32,12 +33,24 @@ class Connection:
     tools: tuple[Tool, ...]
     enabled: bool
     allow_goals: bool
+    grants: dict = field(default_factory=dict)
+
+    def permission(self, tool):
+        return self.grants.get(tool.name) or permissions.Permission.default(tool)
+
+    def permits(self, tool, *, scheduled):
+        return self.enabled and self.permission(tool).permits(tool, scheduled=scheduled, allow_goal_reads=self.allow_goals)
+
+    def display_tool(self, tool):
+        permission = self.permission(tool)
+        return {"name": tool.name, "read_only": tool.read_only, "access": permission.access,
+                "allow_goal_writes": permission.allow_goal_writes}
 
     def display(self):
         return {
             "id": self.id, "name": self.name, "host": urlsplit(self.url).hostname, "transport": self.transport,
             "enabled": self.enabled, "allow_goals": self.allow_goals, "has_credentials": bool(self.headers),
-            "tools": [{"name": tool.name, "read_only": tool.read_only} for tool in self.tools],
+            "tools": [self.display_tool(tool) for tool in self.tools],
         }
 
     def redactions(self):
@@ -48,28 +61,35 @@ class Connection:
         return sorted({secret for secret in candidates if secret}, key=len, reverse=True)
 
 
-def from_row(row):
+def from_row(db, row):
     return Connection(row["id"], row["name"], row["url"], json.loads(row["headers"]), row["transport"],
                       tuple(Tool(**tool) for tool in json.loads(row["tools"])),
-                      bool(row["enabled"]), bool(row["allow_goals"]))
+                      bool(row["enabled"]), bool(row["allow_goals"]), permissions.configured(db, row["id"]))
 
 
 def list_connections(store):
     with store.connect() as db:
-        return [from_row(row) for row in db.execute("SELECT * FROM mcp_connections ORDER BY name COLLATE NOCASE,id")]
+        return listed(db)
+
+
+def listed(db):
+    return [from_row(db, row) for row in db.execute("SELECT * FROM mcp_connections ORDER BY name COLLATE NOCASE,id")]
 
 
 def catalog(store, *, scheduled=False):
-    return {tool.alias(connection.id): (connection.name, tool)
-            for connection in list_connections(store) if connection.enabled and (not scheduled or connection.allow_goals)
-            for tool in connection.tools if not scheduled or tool.read_only}
+    return {tool.alias(connection.id): (
+                connection.name, AvailableTool(tool.name, tool.description, tool.schema, tool.read_only,
+                                               connection.permission(tool).access.allows_read),
+            )
+            for connection in list_connections(store)
+            for tool in connection.tools if connection.permits(tool, scheduled=scheduled)}
 
 
 def lookup(db, identifier):
     row = db.execute("SELECT * FROM mcp_connections WHERE id=?", (identifier,)).fetchone()
     if not row:
         raise MCPError("The MCP connection is no longer available.")
-    return from_row(row)
+    return from_row(db, row)
 
 
 def check_capacity(db, identifier, tools):
@@ -97,14 +117,14 @@ def add(store, data):
     with store.connect() as db:
         existing = db.execute("SELECT * FROM mcp_connections WHERE id=?", (identifier,)).fetchone()
         if existing:
-            return check_same(from_row(existing), new)
+            return check_same(from_row(db, existing), new)
         check_capacity(db, identifier, ())
     tools = discover(store, new)
     with store.connect() as db:
         db.execute("BEGIN IMMEDIATE")
         existing = db.execute("SELECT * FROM mcp_connections WHERE id=?", (identifier,)).fetchone()
         if existing:
-            return check_same(from_row(existing), new)
+            return check_same(from_row(db, existing), new)
         check_capacity(db, identifier, tools)
         db.execute("INSERT INTO mcp_connections(id,name,url,headers,transport,tools) VALUES(?,?,?,?,?,?)",
                    (identifier, new.name, url, json.dumps(headers), transport, encode_tools(tools)))
@@ -132,9 +152,24 @@ def update(store, identifier, data):
         return lookup(db, identifier).display()
 
 
+def update_permission(store, identifier, data):
+    if data.keys() - {"tool", "access", "allow_goal_writes"} or not data.keys() & {"access", "allow_goal_writes"}:
+        raise MCPError("Choose a tool and the access to update.")
+    with store.connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        connection = lookup(db, identifier)
+        tool = next((item for item in connection.tools if item.name == data.get("tool")), None)
+        if tool is None:
+            raise MCPError("This MCP tool is no longer available.")
+        grant = connection.permission(tool).changed(data, tool)
+        permissions.save(db, identifier, tool.name, grant)
+        return lookup(db, identifier).display()
+
+
 def remove(store, identifier):
     with store.connect() as db:
         db.execute("DELETE FROM mcp_connections WHERE id=?", (identifier,))
+        db.execute("DELETE FROM mcp_tool_permissions WHERE connection_id=?", (identifier,))
     return {"removed": True}
 
 
@@ -148,7 +183,10 @@ def refresh(store, identifier):
         if current.tools != connection.tools:
             return current.display()
         check_capacity(db, identifier, tools)
-        db.execute("UPDATE mcp_connections SET tools=? WHERE id=?", (encode_tools(tools), identifier))
+        encoded = encode_tools(tools)
+        db.execute("UPDATE mcp_connections SET tools=? WHERE id=?", (encoded, identifier))
+        db.execute("DELETE FROM mcp_tool_permissions WHERE connection_id=? AND access!='off' AND tool_name NOT IN "
+                   "(SELECT json_extract(value,'$.name') FROM json_each(?))", (identifier, encoded))
         return lookup(db, identifier).display()
 
 
@@ -168,11 +206,10 @@ def redact(value, secrets, depth=0):
 
 
 def discover(store, connection):
-    with connect(store.root, connection.url, connection.headers, connection.transport) as client:
-        raw = client.list_tools()
+    with client.connect(store.root, connection.url, connection.headers, connection.transport) as session:
+        raw = session.list_tools()
     secrets = connection.redactions()
-    tools = [Tool.discovered(value | {"description": redact(value.get("description"), secrets),
-                                      "inputSchema": redact(value.get("inputSchema"), secrets)}) for value in raw]
+    tools = [discovered_tool(value, secrets) for value in raw]
     if len({tool.name for tool in tools}) != len(tools):
         raise MCPError("The MCP server listed a tool name more than once.")
     if any(redact(tool.name, secrets) != tool.name for tool in tools):
@@ -180,49 +217,6 @@ def discover(store, connection):
     return tools
 
 
-def current_tool(store, alias, *, scheduled):
-    for connection in list_connections(store):
-        if not connection.enabled or (scheduled and not connection.allow_goals):
-            continue
-        for tool in connection.tools:
-            if alias == tool.alias(connection.id) and (not scheduled or tool.read_only):
-                return connection, tool
-    raise MCPError("This MCP tool is disabled, has changed, or is no longer available.")
-
-
-def execute(store, call, *, scheduled=False):
-    validate_call(call)
-    alias, arguments = call["name"], call["arguments"]
-    connection, advertised = current_tool(store, alias, scheduled=scheduled)
-    tool = advertised
-    with connect(store.root, connection.url, connection.headers, connection.transport) as client:
-        if scheduled:
-            current = next((item for item in client.list_tools() if item.get("name") == tool.name), None)
-            if not current or not (tool := Tool.discovered(current)).read_only:
-                raise MCPError("The MCP server no longer advertises this tool as read-only.")
-        _, saved_tool = current_tool(store, alias, scheduled=scheduled)
-        if saved_tool != advertised:
-            raise MCPError("The MCP tool changed before it could run.")
-        validate_arguments(tool, arguments)
-        headers = tool.argument_headers(arguments) if client.version == MODERN else {}
-        result = client.call("tools/call", {"name": tool.name, "arguments": arguments}, argument_headers=headers)
-    return outcome(connection, tool, result)
-
-
-def outcome(connection, tool, result):
-    text = []
-    blocks = result.get("content")
-    for block in blocks if isinstance(blocks, list) else ():
-        if not isinstance(block, dict):
-            continue
-        item = block.get("resource") if block.get("type") == "resource" else block
-        if isinstance(item, dict) and isinstance(item.get("text"), str):
-            text.append(item["text"])
-    data = {"server": connection.name, "tool": tool.name,
-            "status": "error" if result.get("isError") is True else "ok",
-            "text": "\n".join(text)[:12_000]}
-    if result.get("structuredContent") is not None:
-        data["structured_content"] = result["structuredContent"]
-    if data["status"] == "ok" and not text and "structured_content" not in data and blocks:
-        data["status"] = "unsupported_content"
-    return redact(data, connection.redactions())
+def discovered_tool(value, secrets):
+    return Tool.discovered(value | {"description": redact(value.get("description"), secrets),
+                                    "inputSchema": redact(value.get("inputSchema"), secrets)})

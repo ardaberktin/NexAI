@@ -8,7 +8,7 @@ from .tool import PROMPT, catalog_menu
 MENU_BYTES = 4_000
 SHORTLIST = PROMPT + """
 Identify the MCP tools that could help with the attached request. Each entry lists a server,
-a tool name, and a short description. Use context to resolve references and respect named sources.
+a tool name, a short description, and whether it may write. Use context to resolve references and respect named sources.
 Return a JSON object with tools containing at most four listed identifiers. Return an empty array
 if none are relevant. This step selects candidates only and does not execute or schedule a tool.
 """
@@ -44,6 +44,8 @@ WORKFLOWS = ("other", "general", "mixed", "schedule", "recurring", "document")
 CHOOSE_CONNECTED = """Does the latest message require account data or an action that a tool in
 mcp_candidates can supply? Decide this before choosing tool numbers. A shared topic is insufficient.
 Questions about what a term means, how something works, or how to do a task use no MCP tools.
+If the user wants local text, a draft to submit themselves, or a reminder to act, omit tools that
+commit the external action. Use an external draft tool only if the user requests that provider's draft.
 Choose the workflow, up to four numeric tool numbers, and the reply language (en or tr):
 other = no connected data or action needed, an unclear reference, or an edit to an existing goal.
 general = look up private or provider-owned data or perform a supported action now.
@@ -53,6 +55,7 @@ recurring = set up a new repeating lookup or report using connected data, such a
 document = make or schedule a PDF that requires connected data.
 For a candidate numbered 2 that reads supplier invoices:
 "What is a supplier invoice?" -> {"workflow":"other","tools":[],"language":"en"}
+"Write an order draft so I can submit it myself" -> {"workflow":"other","tools":[],"language":"en"}
 "Read the total from the most recent supplier invoice" -> {"workflow":"general","tools":[2],"language":"en"}
 "Report the latest supplier invoice every Monday at 9" -> {"workflow":"recurring","tools":[2],"language":"en"}
 """ + PROMPT
@@ -65,7 +68,7 @@ async def choose_connected(generate, catalog, question, history):
     for batch in batches:
         index = dict(enumerate(batch, 1))
         candidates = [{"number": number, "server": batch[alias][0], "tool": batch[alias][1],
-                       "purpose": batch[alias][2]} for number, alias in index.items()]
+                       "purpose": batch[alias][2], "capability": batch[alias][3]} for number, alias in index.items()]
         data = {"latest_message": question, "history": history[-2:], "mcp_candidates": candidates}
         schema = {
             "type": "object", "required": ["workflow", "tools", "language"], "additionalProperties": False,

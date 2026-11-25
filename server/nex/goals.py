@@ -1,5 +1,7 @@
 """Manage scheduled and on-demand AI goals."""
 
+import fcntl
+import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -176,6 +178,7 @@ class Goals:
                 db.execute("DELETE FROM goal_update_pdfs WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM pdf_artifacts WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_seen WHERE goal_id=?", (identifier,))
+                db.execute("DELETE FROM mcp_goal_runs WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_mail_review WHERE goal_id=?", (identifier,))
                 goal_follow_ups.delete(db, identifier)
                 db.execute("DELETE FROM goals WHERE id=?", (identifier,))
@@ -208,7 +211,16 @@ class Goals:
             return summary(self.find(db, identifier))
 
     def run(self, anchor=None):
-        anchor = anchor or datetime.now(UTC)
+        # Keep a second worker from finishing an occurrence while its first worker is still dispatching.
+        descriptor = os.open(self.store.root / "goal-runs.lock", os.O_RDWR | os.O_CREAT, 0o600)
+        with os.fdopen(descriptor, "r+b") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return
+            self._run_due(anchor or datetime.now(UTC))
+
+    def _run_due(self, anchor):
         with self.store.connect() as db:
             epoch = feature_revision(db, "goals")
             if epoch is None:
@@ -224,5 +236,5 @@ class Goals:
                 current = self.find(db, row["id"], required=False)
                 if current is None or (current["revision"], current["next_run"]) != (row["revision"], row["next_run"]):
                     continue
-            result = run_prompt(self.store, row, anchor, self.generate, self.classify)
+            result = run_prompt(self.store, row, anchor, self.generate, self.classify, epoch=epoch)
             finish_prompt(self, row, result, anchor, epoch)

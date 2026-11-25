@@ -50,7 +50,7 @@ struct MCPSettings: View {
         } header: {
             Text("MCP Servers")
         } footer: {
-            Text("Nex can use connected tools in Chat and approved voice requests. Tool inputs are sent to the connected server.")
+            Text("Choose which tools Nex can use. Tool inputs are sent to the connected server.")
         }
         .task(id: scope) { await load() }
         .onChange(of: scope) {
@@ -91,17 +91,32 @@ struct MCPSettings: View {
         LabeledContent("Authentication") { Text(item.hasCredentials ? "Configured" : "None") }
         Toggle("Enabled", isOn: setting(item.enabled, item: item, key: "enabled"))
         Toggle("Allow read-only tools in goals", isOn: setting(item.allowGoals, item: item, key: "allow_goals"))
-            .disabled(!item.enabled || (item.readTools.isEmpty && !item.allowGoals))
+            .disabled(!item.enabled || (!item.hasReadTools && !item.allowGoals))
+        if item.tools.contains(where: { $0.access == nil }) {
+            Text("Update the Nex server to manage access for individual tools.")
+                .foregroundStyle(.secondary)
+        }
         ForEach(item.tools) { tool in
-            LabeledContent(tool.name) {
-                Text(tool.readOnly ? "Read only" : "May make changes")
-                    .foregroundStyle(.secondary)
+            if tool.access != nil {
+                toolAccess(tool, on: item)
+            } else {
+                LabeledContent(tool.name) { Text(tool.readOnly ? "Read only" : "May make changes") }
             }
         }
         Button("Refresh Tools", systemImage: "arrow.clockwise") {
             Task { await perform { replacing(try await model.refreshMCPConnection(item)) } }
         }
         Button("Remove Server", role: .destructive) { removing = item }
+    }
+
+    private func toolAccess(_ tool: MCPConnection.Tool, on item: MCPConnection) -> some View {
+        MCPToolAccessRow(tool: tool) { access in
+            Task { await perform { replacing(try await model.updateMCPTool(item, tool: tool, access: access)) } }
+        } setGoalWrites: { allowed in
+            Task {
+                await perform { replacing(try await model.updateMCPTool(item, tool: tool, allowGoalWrites: allowed)) }
+            }
+        }
     }
 
     private func setting(_ value: Bool, item: MCPConnection, key: String) -> Binding<Bool> {
@@ -139,5 +154,37 @@ struct MCPSettings: View {
             guard !Task.isCancelled, scope == self.scope, generation == privacy.generation else { return }
             self.error = error.localizedDescription
         }
+    }
+}
+
+private struct MCPToolAccessRow: View {
+    let tool: MCPConnection.Tool
+    let setAccess: (MCPToolAccess) -> Void
+    let setGoalWrites: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker(selection: Binding(get: { tool.selectedAccess }, set: setAccess)) {
+                ForEach(MCPToolAccess.allCases) { access in
+                    Text(access.title).tag(access)
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tool.name)
+                    Text(capability).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if !tool.readOnly && tool.selectedAccess.allowsWrite {
+                Toggle("Allow writes in goals", isOn: Binding(get: { tool.allowGoalWrites == true }, set: setGoalWrites))
+                    .accessibilityLabel("Allow writes in goals for \(tool.name)")
+            }
+        }
+    }
+
+    private var capability: LocalizedStringKey {
+        if tool.readOnly {
+            return tool.selectedAccess == .write ? "Requires read access" : "Server marks this tool read-only"
+        }
+        return tool.selectedAccess == .read ? "Requires write access" : "Can change external data"
     }
 }

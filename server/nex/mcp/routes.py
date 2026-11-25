@@ -6,6 +6,7 @@ from . import connections
 
 ROOT = "/v1/workspace/mcp"
 ACTION = re.compile(ROOT + r"/(" + connections.ID.pattern + r")/(refresh|remove)$")
+PERMISSION = re.compile(ROOT + r"/(" + connections.ID.pattern + r")/tool-access$")
 ITEM = re.compile(ROOT + r"/(" + connections.ID.pattern + r")$")
 
 
@@ -18,6 +19,8 @@ def request(api, method, path, device, problem):
             return {"items": [item.display() for item in connections.list_connections(store)]}
         if method == "POST":
             return connections.add(store, api.object(64_000))
+    if method == "PUT" and (match := PERMISSION.fullmatch(path)):
+        return connections.update_permission(store, match[1], api.object(1024))
     if method == "PUT" and (match := ITEM.fullmatch(path)):
         return connections.update(store, match[1], api.object(256))
     if method == "POST" and (match := ACTION.fullmatch(path)):

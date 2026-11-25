@@ -36,10 +36,12 @@ The shared conversation code lives in `server/nex/conversation/`. `catalog.py` a
 - Speech, screen capture, location sharing, account access, and notifications have independent permissions. Detailed Mac screen observations stay on the Mac. Enabled integrations can transmit their permitted request data to external providers.
 
 MCP connections and discovered tool schemas live in the account's archive database. The shared assistant
-planner offers enabled tools and checks the current connection before dispatching calls from an unlocked
-workspace or approved voice request. Scheduled runs have a separate per-connection opt-in and use tools
-that the server marks read-only. The Nex host establishes each transport connection and supplies any
-configured credentials directly to that endpoint.
+planner offers tools allowed by the account’s per-tool permissions. The server checks those permissions
+and current MCP tool metadata before dispatching calls from an unlocked workspace or approved voice
+request. Scheduled runs have a connection-level opt-in for reads and a tool-level opt-in for writes.
+Nex verifies that the request authorizes a write. For scheduled writes it saves the run’s plan and
+reserves each action before dispatch, then records the tool outcome to prevent replay after interruption.
+The Nex host supplies configured credentials directly to the endpoint.
 
 ## Source boundaries
 

@@ -13,8 +13,6 @@ from ..conversation_history import recent_dialogue
 from ..conversation_recall import recent_question_reply, selected_questions
 from ..daybook import Daybook, DayContext
 from ..goal_writing import mail_context
-from ..mcp.connections import execute as execute_mcp
-from ..mcp.tool import is_alias
 from ..news_sources import news_date
 from ..passages import matching_passage
 from ..personal_age import age_reply
@@ -198,8 +196,6 @@ def fetch(store, turn, tool, *, private, coordinates):
         if name == "weather":
             return weather_result(store, turn, tool, coordinates)
         if private:
-            if is_alias(name):
-                return Evidence(execute_mcp(store, tool), engine="local_model")
             return PRIVATE_TOOLS[name](store, turn, tool)
         raise PermissionError("This tool requires an unlocked workspace.")
     except (WebReadError, AccountError, FeatureDisabled, ValueError, LookupError, TypeError, OSError, http.client.HTTPException) as exc:

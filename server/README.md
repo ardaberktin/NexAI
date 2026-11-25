@@ -122,10 +122,16 @@ If it requires authentication, enter a bearer token or add the provider's HTTP h
 the available tools and shares the connection with your other signed-in device. Use **Refresh Tools** after
 the provider changes its catalog. Pause a connection with **Enabled**, or remove it to delete its saved settings.
 
-Ask Nex to use the connection in Chat or voice, for example, “How many monitors are in stock at the West
-warehouse? Use Warehouse.” For a scheduled report, turn on **Allow read-only tools in goals** for that
-connection, then ask Nex to save the report as a goal. Nex checks the server's read-only tool annotations
-again when the goal runs. Successful calls can return text and structured data to Nex.
+Open a connection to set access for each tool. **Read only** permits calls to tools the server marks
+read-only. **Write only** permits explicitly requested changes through tools that may write. **Read & write**
+grants both permissions, and **Off** disables the tool. Tools marked read-only start with read access.
+Tools that may write require opt-in, including for existing connections. Nex checks the server's tool
+metadata again before each call. The server ultimately controls how a tool behaves.
+
+To use read tools in a scheduled goal, turn on **Allow read-only tools in goals** for the connection.
+To let a goal make changes, grant write access to the relevant tool, then turn on **Allow writes in goals**
+for that tool. Describe the change in the goal. Nex records attempted scheduled writes in the goal’s
+activity and keeps a receipt so it can avoid replaying the same run after an interruption.
 
 The Nex server makes requests to the configured endpoint. Direct connections support public HTTPS and
 operator-configured loopback endpoints. For an MCP server that runs as a local command over stdio, run a

@@ -128,7 +128,7 @@ Use tr for a Turkish request or when requested explicitly. Use en for an English
 ROUTE = ROUTE_HEADER + ROUTE_CAPABILITIES + ROUTE_EXAMPLES
 VOICE_ROUTE = ROUTE + "\nUse clarify for unfinished or garbled speech. Social speech addressed to Nex can use answer."
 MCP_ROUTE = """Resolve the requested source before choosing a capability. The mcp_tools input maps capability
-identifiers to [connected server name, tool name, purpose]. For a lookup of data supplied by a connected MCP
+identifiers to [connected server name, tool name, purpose, capability]. For a lookup of data supplied by a connected MCP
 tool, copy that capability identifier into capabilities. An inventory, ticket, or other private provider
 lookup uses the matching connected tool. Web searches public sources. Python handles computation and code.
 Use the named connected tool for a request directed at that connection, including informal references in context.

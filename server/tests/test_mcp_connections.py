@@ -13,7 +13,8 @@ from nex.goal_runner import run_prompt
 from nex.hosted.auth import insert_user, issue_device
 from nex.live.public_reply import public_reply
 from nex.mcp import MCPError
-from nex.mcp.connections import catalog, execute
+from nex.mcp.connections import catalog
+from nex.mcp.execution import execute
 from nex.mcp.planning import shortlist_goal
 from nex.mcp.tool import Tool
 from nex.privacy.public import answer
@@ -28,13 +29,13 @@ READ = {"name": "inventory", "description": "Read available stock for a warehous
 WRITE = {"name": "place_order", "description": "Create an order", "inputSchema": {"type": "object"}}
 
 
-class MCPConnectionsTests(HostedAccountFixture):
+class MCPFixture(HostedAccountFixture):
     def setUp(self):
         super().setUp()
         self.store = self.host.owner.store
         self.device = self.register_device("mac")
         self.session = self.unlock(self.device)
-        self.client = self.enterContext(patch("nex.mcp.connections.connect")).return_value.__enter__.return_value
+        self.client = self.enterContext(patch("nex.mcp.client.connect")).return_value.__enter__.return_value
         self.client.list_tools.return_value = [READ, WRITE]
         self.client.call.return_value = {
             "content": [{"type": "text", "text": "There are 23 monitors in the warehouse."}],
@@ -52,6 +53,12 @@ class MCPConnectionsTests(HostedAccountFixture):
         self.assertEqual(self.settings("POST", body=data), result)
         return result
 
+    def permission(self, item, tool, *, status=200, locked=False, **changes):
+        return self.settings("PUT", "/" + item["id"] + "/tool-access", body={"tool": tool["name"], **changes},
+                             status=status, locked=locked)
+
+
+class MCPConnectionsTests(MCPFixture):
     def test_management_requires_unlock_and_is_shared_within_one_account(self):
         self.settings(locked=True, status=403)
         self.settings("POST", body={}, locked=True, status=403)
@@ -59,8 +66,10 @@ class MCPConnectionsTests(HostedAccountFixture):
         other_device = self.register_device("iphone")
         self.assertEqual(self.settings(device=other_device, session=self.unlock(other_device))["items"], [item])
         self.assertNotIn(SECRET, json.dumps(item))
-        self.assertEqual(item["tools"], [{"name": "inventory", "read_only": True},
-                                         {"name": "place_order", "read_only": False}])
+        self.assertEqual(item["tools"], [
+            {"name": "inventory", "read_only": True, "access": "read", "allow_goal_writes": False},
+            {"name": "place_order", "read_only": False, "access": "off", "allow_goal_writes": False},
+        ])
         with self.accounts.connect(write=True) as db:
             other_id = insert_user(db, "different-account", (bytes(16), bytes(32)), owner=False)
             other = issue_device(db, other_id, "different-account", False, "mac",
@@ -158,11 +167,12 @@ class MCPConnectionsTests(HostedAccountFixture):
 
         result = run_prompt(self.store, goal, NOW, generate, None)
         self.assertEqual(result.text, "West has 23 monitors.")
-        write_alias = next(name for name, (_, tool) in catalog(self.store).items() if tool.name == WRITE["name"])
+        self.permission(item, WRITE, access="write")
+        write_alias = Tool.discovered(WRITE).alias(item["id"])
         with self.assertRaises(MCPError):
             execute(self.store, {"name": write_alias, "arguments": {}}, scheduled=True)
         self.client.list_tools.return_value = [READ | {"annotations": {"readOnlyHint": False}}]
-        self.assertIn("no longer advertises", run_prompt(self.store, goal, NOW, generate, None).error)
+        self.assertIn("changed this tool’s read/write capabilities", run_prompt(self.store, goal, NOW, generate, None).error)
         self.assertEqual(self.client.call.call_count, 1)
 
     def test_pausing_during_session_setup_blocks_the_tool_call(self):

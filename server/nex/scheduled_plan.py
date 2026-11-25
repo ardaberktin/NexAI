@@ -76,10 +76,11 @@ def plan_for(generate, data, mcp_tools=None):
             choices[0], choices[1] | {"items": {"enum": sorted(available)}},
         ]}}}
         instructions = (
-            "The mcp_tools input maps source identifiers to [connected server name, tool name, purpose]. "
+            "The mcp_tools input maps source identifiers to [connected server name, tool name, purpose, capability]. "
             "For current data owned by a named connection or covered by an MCP tool's purpose, put that exact "
             "identifier in sources. Archive searches local recordings. Web searches public information. "
-            "Use the source from the current goal.\n" + MCP_PROMPT + PLAN
+            "Use the source from the current goal. For an explicitly requested external change, choose the corresponding "
+            "authorized MCP action. Use a read tool for reports and lookups.\n" + MCP_PROMPT + PLAN
         )
         budget = 500
     plan = json_object(ask(generate, instructions, data, budget, schema=schema))
