@@ -63,6 +63,8 @@ def tool_object(name, scheduled, goal_type, goal_frequency):
         properties.pop("target", None)
         required.extend(("query", "frequency"))
     if name == "goal" and goal_frequency is not None:
+        properties.pop("target", None)
+        properties.pop("check_in", None)
         properties["frequency"] = {"const": goal_frequency}
     return {"type": "object", "properties": properties, "required": ["name", *required],
             "additionalProperties": False}

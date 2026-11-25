@@ -26,7 +26,7 @@ class ConnectedGoalPlanningTests(unittest.IsolatedAsyncioTestCase):
                 return '{"workflow":"schedule","tools":[1],"language":"en"}'
             if messages[0]["content"] == MCP_CADENCE:
                 self.assertEqual(data["question"], latest)
-                return '{"frequency":10080}'
+                return '{"cadence":"weekly"}'
             if "proposal" not in data or data["proposal"] is None:
                 self.assertEqual(data["mcp_sources"], ["Warehouse"])
                 self.assertEqual(data["mcp_frequency"], 10080)
@@ -53,7 +53,7 @@ class ConnectedGoalPlanningTests(unittest.IsolatedAsyncioTestCase):
             if "mcp_candidates" in data:
                 return '{"workflow":"recurring","tools":[1],"language":"en"}'
             if messages[0]["content"] == MCP_CADENCE:
-                return '{"frequency":1440}'
+                return '{"cadence":"daily"}'
             self.assertEqual(data["mcp_sources"], ["Warehouse"])
             return json.dumps({"tools": [{"name": "goal", "query": "Report available inventory",
                                          "start": due, "frequency": 1440}]})
