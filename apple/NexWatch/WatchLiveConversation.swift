@@ -12,7 +12,7 @@ final class WatchLiveConversation: ObservableObject {
 
     private let input: WatchConversationInput
     private let sync: WatchSync
-    private let ticketURL: URL
+    private var ticketURL: URL
     private let playback = WatchSpokenReply()
     private var ticket: WatchQuestionTicket?
     private var conversation: String?
@@ -27,18 +27,28 @@ final class WatchLiveConversation: ObservableObject {
     private var backgroundedAt: ContinuousClock.Instant?
 
     init(capture: WatchCapture, sync: WatchSync, spool: Spool) {
-        input = WatchConversationInput(capture: capture, spool: spool)
+        input = WatchConversationInput(capture: capture)
         self.sync = sync
         ticketURL = spool.directory.appending(path: "watch-question.json")
-        ticket = WatchQuestionTicket.restore(from: ticketURL)
-        if let ticket {
-            conversation = ticket.conversation
-            reply = ticket.result?.text
-            issue = ticket.result?.error
-            state = ticket.result == nil ? .waiting : .answered
-        }
+        restoreTicket()
         sync.questionReceived = { [weak self] answer in self?.receive(answer) }
         capture.liveInterrupted = { [weak self] message in self?.interrupted(message) }
+    }
+
+    func useSpool(_ spool: Spool) {
+        reset()
+        ticketURL = spool.directory.appending(path: "watch-question.json")
+        restoreTicket()
+        if state == .waiting { monitorProgress() }
+    }
+
+    private func restoreTicket() {
+        guard let saved = WatchQuestionTicket.restore(from: ticketURL) else { return }
+        ticket = saved
+        conversation = saved.conversation
+        reply = saved.result?.text
+        issue = saved.result?.error
+        state = saved.result == nil ? .waiting : .answered
     }
 
     func start(language: NexLanguage) {
@@ -188,17 +198,23 @@ final class WatchLiveConversation: ObservableObject {
     }
 
     func stop(_ reason: String? = nil) {
+        reset()
+        if FileManager.default.fileExists(atPath: ticketURL.path) { try? FileManager.default.removeItem(at: ticketURL) }
+        issue = reason
+        sync.sync()
+    }
+
+    private func reset() {
         conversation = nil
         releaseMicrophone()
         monitor?.cancel()
         monitor = nil
         playback.stop()
         ticket = nil
-        if FileManager.default.fileExists(atPath: ticketURL.path) { try? FileManager.default.removeItem(at: ticketURL) }
         reply = nil
-        issue = reason
+        issue = nil
         state = nil
-        sync.sync()
+        autoSpeak = false
     }
 
     private func interrupted(_ message: String) {

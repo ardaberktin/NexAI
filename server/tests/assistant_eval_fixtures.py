@@ -4,7 +4,7 @@ import tempfile
 from contextlib import ExitStack, contextmanager
 from datetime import timedelta
 from unittest.mock import patch
-from uuid import uuid4
+from uuid import UUID, uuid4, uuid5
 
 from conversation_fixtures import unlock
 from nex.clock_alerts import ClockAlerts
@@ -20,6 +20,30 @@ from nex.workspace_content import artifacts
 
 PUBLIC_PAGE = Page("Observatory eclipse notice", "https://example.org/eclipse",
                    "The observatory announced a solar eclipse viewing session at 10 a.m. on Monday.")
+CARD_ARRIVAL = "Ask whether the new Walmart card arrived"
+AMBIGUOUS_REMOVAL = "PDF removal with shared subject"
+REMOVAL_FOLLOWUPS = {"PDF removal after clarification", AMBIGUOUS_REMOVAL}
+REMOVAL_GROUPS = {"PDF removal by subject", *REMOVAL_FOLLOWUPS}
+CARD_BALANCE = "Check the balance on my Walmart card"
+REMOVAL_TITLES = ("Morning report", CARD_ARRIVAL, "Remind me about school assignments")
+
+
+def removal_goal_id(turn, title):
+    return str(uuid5(UUID(turn.id), title))
+
+
+def removal_titles(group):
+    return (*REMOVAL_TITLES, CARD_BALANCE) if group == AMBIGUOUS_REMOVAL else REMOVAL_TITLES
+
+
+def removal_clarification(turn, group):
+    titles = removal_titles(group)
+    return (
+        {"kind": "question", "text": "Stop sending a PDF with my check."},
+        {"kind": "answer", "private": True, "text": "Which goal do you mean: " + ", ".join(titles) + "?",
+         "selected_tools": ["manage_goal"], "selected": '[{"name":"manage_goal","operation":"remove_pdf"}]',
+         "goal_choices": [removal_goal_id(turn, title) for title in titles]},
+    )
 
 
 def account_fixture(_root, intent, *_args):
@@ -43,6 +67,18 @@ def seed(store, turn, group):
         Goals(store).save(str(uuid4()), {"title": "Plant-watering reminder", "prompt": "Remind me to water the plants.",
                                         "zone": "UTC", "scheduled_at": (turn.started + timedelta(days=5)).isoformat()},
                           anchor=turn.started)
+    if group == "PDF format edit":
+        Goals(store).save(str(uuid4()), {"title": "Garden report", "prompt": "Report on garden opening hours.",
+                                        "zone": "UTC", "frequency_minutes": 1440,
+                                        "scheduled_at": (turn.started + timedelta(days=1)).isoformat()},
+                          anchor=turn.started)
+    if group in REMOVAL_GROUPS:
+        goals = Goals(store)
+        for title in removal_titles(group):
+            data = {"title": title, "prompt": title, "zone": "UTC",
+                    "scheduled_at": (turn.started + timedelta(days=1)).isoformat()}
+            goal = goals.save(removal_goal_id(turn, title), data, anchor=turn.started)
+            goals.set_pdf_format(goal["id"], goal["revision"], "Attach a PDF to every update.")
     if group == "clock":
         ClockAlerts(store).create(str(uuid4()), "timer", "Kitchen timer", "UTC",
                                   lambda now: now + timedelta(minutes=40))
@@ -77,9 +113,30 @@ async def execute(turn, group, plan, generate):
                   session=unlock(store), plan=plan, screen=True)
             item, = inbox(store.privacy)["items"]
             return {"passed": item["state"] == "screen" and item["answer"] is None, "engine": item["state"]}
+        goals = Goals(store)
+        before = goals.overview() if group == "PDF format edit" or group in REMOVAL_GROUPS else []
         result = await run(store, turn, plan, generate, private=plan.private)
         names = {tool["name"] for tool in plan.tools}
         saved = ("create_pdf" not in names or bool(artifacts(store))) and ("goal" not in names or bool(result.get("goal_id")))
+        if group == "PDF format edit":
+            old, = before
+            current, = goals.overview()
+            saved = (result.get("goal_id") == old["id"] and bool(current.get("pdf_instruction"))
+                     and all(current[key] == old[key] for key in ("prompt", "next_run", "frequency_minutes")))
+        if group == AMBIGUOUS_REMOVAL:
+            eligible = {goal["id"] for goal in before if goal["title"] in (CARD_ARRIVAL, CARD_BALANCE)}
+            saved = (goals.overview() == before and not result.get("goal_id")
+                     and set(result.get("goal_choices", ())) == eligible)
+        elif group in REMOVAL_GROUPS:
+            target, = [item for item in before if item["title"] == CARD_ARRIVAL]
+            del target["pdf_instruction"]
+            target["revision"] += 1
+            expected = {goal["id"]: goal for goal in before}
+            saved = (result.get("goal_id") == target["id"]
+                     and {goal["id"]: goal for goal in goals.overview()} == expected
+                     and CARD_ARRIVAL.casefold() in result["text"].casefold())
+        if group == "recurring PDF" and saved:
+            saved = bool(goals.detail(result["goal_id"])["frequency_minutes"])
         return {"passed": bool(result["text"]) and saved, "engine": result["engine"], "text": result["text"]}
 
 

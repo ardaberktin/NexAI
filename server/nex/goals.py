@@ -106,19 +106,25 @@ class Goals:
             return result
 
     def set_pdf_format(self, identifier, revision, instruction):
-        instruction = field({"pdf_instruction": instruction}, "pdf_instruction", 420)
-        if not instruction:
-            raise ValueError("Specify the PDF output format.")
+        if instruction is not None:
+            instruction = field({"pdf_instruction": instruction}, "pdf_instruction", 420)
+            if not instruction:
+                raise ValueError("Specify the PDF output format.")
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             require(db, "goals")
             goal = self.find(db, identifier)
             self.check_revision(goal, revision)
+            if instruction is None:
+                db.execute("DELETE FROM goal_update_pdfs WHERE goal_id=?", (identifier,))
+                db.execute("UPDATE goal_follow_ups SET pdf_instruction=NULL, pdf_retry_at=NULL "
+                           "WHERE goal_id=? AND pdf_retry_at IS NOT NULL", (identifier,))
             if instruction != goal["pdf_instruction"]:
                 now = stamp(datetime.now(UTC))
                 db.execute("UPDATE goals SET pdf_instruction=?,updated=?,revision=revision+1 WHERE id=?",
                            (instruction, now, identifier))
-                self.record(db, identifier, now, "Goal format updated", instruction)
+                title = "Goal PDF disabled" if instruction is None else "Goal format updated"
+                self.record(db, identifier, now, title, instruction or "")
                 goal = self.find(db, identifier)
             return summary(goal)
 
@@ -167,6 +173,7 @@ class Goals:
                     (identifier,),
                 )
                 db.execute("DELETE FROM goal_activity WHERE goal_id=?", (identifier,))
+                db.execute("DELETE FROM goal_update_pdfs WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM pdf_artifacts WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_seen WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_mail_review WHERE goal_id=?", (identifier,))

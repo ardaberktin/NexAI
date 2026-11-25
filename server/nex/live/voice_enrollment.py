@@ -1,4 +1,4 @@
-"""Enroll directly from short-lived in-memory samples sent by an unlocked paired app."""
+"""Enroll directly from short-lived in-memory samples sent by an unlocked native app."""
 
 import asyncio
 import base64
@@ -8,6 +8,7 @@ from fastapi import HTTPException, Request
 
 from ..privacy.keys import consume, require_session
 from ..privacy.state import AccessDenied
+from .access import workspace_for
 from .voice_profiles import ENROLLMENT_BYTES, enrollment_subject
 
 ENCODED_AUDIO_BYTES = 4 * ((ENROLLMENT_BYTES + 2) // 3)
@@ -21,12 +22,13 @@ def install_voice_enrollment(app, authenticate):
     @app.api_route("/v2/voice/profile", methods=["GET", "POST"])
     @app.api_route("/v1/voice/profile", methods=["GET", "POST"])
     async def profile(request: Request):
-        device = authenticate(request)
-        if not device:
+        client = authenticate(request)
+        if not client:
             raise HTTPException(401)
-        voices = app.state.voices
+        voices = workspace_for(request).voices
+        device = client.role
         try:
-            require_session(voices.state, device, request.headers.get("X-Nex-Workspace", ""))
+            require_session(voices.state, client, request.headers.get("X-Nex-Workspace", ""))
             if request.method == "GET":
                 with voices.state.transaction() as db:
                     return profile_status(db, device, available=voices.room is not None)
@@ -37,7 +39,7 @@ def install_voice_enrollment(app, authenticate):
             raw = b"" if removing else enrollment_audio(body.get("audio"))
             subject = "delete" if removing else enrollment_subject(raw)
             with voices.state.transaction(write=True) as db:
-                consume(db, device, "voice", subject, body)
+                consume(db, client, "voice", subject, body)
                 db.execute("INSERT INTO voice_changes VALUES(?,?) ON CONFLICT(device) DO UPDATE SET nonce=excluded.nonce",
                            (device, body["nonce"]))
                 if removing:

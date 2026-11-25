@@ -3,12 +3,15 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from ..goal_definition import field
-from ..goal_writing import json_object, model_messages
+from ..goal_writing import json_object, model_messages, yes_no
+from ..store import excerpt
 from .calendar_scope import scope_prompt, weekday_selector, with_weekday
 from .goal_context import clarification_exchange
 from .goal_lookup import describe
-from .goal_management_prompts import EDIT_GOAL
+from .goal_management_prompts import (
+    EDIT_GOAL,
+    VERIFY_PDF_FORMAT_SOURCE,
+)
 from .goal_plans import goal_start
 from .goal_tools import goal_data
 from .plan import validated
@@ -60,13 +63,10 @@ def changes_for(turn, goal, changes):
 async def plan_edit(turn, goal, context, generate):
     data = {key: value for key, value in context.items() if key != "goals"}
     data["selected_goal"] = describe(goal, 1, None) | {"task": goal["prompt"]}
+    if data.get("format_only"):
+        return await plan_pdf_format(turn, data, generate)
     data["upcoming_days"] = scope_prompt(turn.text, turn.zone, turn.started, "")["upcoming_days"]
     instructions = EDIT_GOAL
-    format_only = data.get("format_only", False)
-    if format_only:
-        instructions += ('\nThis is a format-only change. Return exactly {"format_instruction":"..."} with '
-                         "the PDF and any requested layout or delivery details in up to 420 characters. "
-                         "If the latest message supplies a target, use the earlier request for the output change.")
     for _ in range(2):
         changes = json_object(await generate(model_messages(instructions, data), 260) or "")
         if changes.keys() == {"question"}:
@@ -74,12 +74,6 @@ async def plan_edit(turn, goal, context, generate):
             if isinstance(question, str) and 0 < len(question.strip()) <= 480 and question.strip().endswith("?"):
                 return question.strip()
         try:
-            if format_only:
-                if changes.keys() != {"format_instruction"} or not (
-                    instruction := field(changes, "format_instruction", 420)
-                ):
-                    raise ValueError("Only a nonempty format_instruction may change for this request.")
-                return {"format_instruction": instruction}, None
             if (isinstance(start := changes.get("start"), str) and len(start) > 10
                     and (weekday := weekday_selector({"query": changes.get("timing")}))):
                 day = with_weekday({}, weekday, turn.zone, turn.started)["start_date"]
@@ -88,3 +82,15 @@ async def plan_edit(turn, goal, context, generate):
         except ValueError as error:
             instructions = f"{instructions}\nCorrect the previous edit {changes!r}. {error}"
     return None
+
+
+async def plan_pdf_format(turn, data, generate):
+    instruction = turn.text
+    if earlier := data.get("clarification"):
+        verify = model_messages(VERIFY_PDF_FORMAT_SOURCE, {"latest_message": turn.text})
+        adds_detail = yes_no(await generate(verify, 8))
+        if adds_detail is None:
+            return None
+        if not adds_detail:
+            instruction = earlier[0]["content"]
+    return {"format_instruction": excerpt(instruction.strip(), 419)}, None

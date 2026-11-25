@@ -65,6 +65,7 @@ class PromptResult:
     error: str | None = None
     watches: dict = field(default_factory=dict)
     pdf: ValidatedPDF | None = None
+    pdf_copy: str | None = None
 
 
 def account_evidence(store, goal, anchor, name, query, tool):
@@ -157,8 +158,9 @@ def run_prompt(store, row, anchor, generate, classify):
             "local_time": anchor.astimezone(time_zone(goal["zone"])).isoformat()}
     tools = plan_for(generate, data)
     pdf_tool = next((tool for tool in tools or () if tool["name"] == "create_pdf"), None)
-    if instruction := goal.get("pdf_instruction"):
-        pdf_tool = {"query": instruction}
+    pdf_copy = goal.get("pdf_instruction")
+    if pdf_copy:
+        pdf_tool = None
     if goal.get("watch_provider") == "gmail":
         watch = next((tool for tool in tools or () if tool["name"] == "new_mail"), {"name": "new_mail"})
         tools = [watch]
@@ -205,6 +207,8 @@ def run_prompt(store, row, anchor, generate, classify):
     if update and evidence.get("web") and not verify_web_update(generate, data, evidence, update):
         return PromptResult(error="Nex couldn’t verify the web findings for this goal. It will retry.")
     result.text = update
+    if update and pdf_copy:
+        result.pdf_copy = pdf_copy
     if pdf_tool:
         if not update:
             skip = yes_no(ask(generate, VERIFY_SKIP_PDF, context, 8))

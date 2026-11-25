@@ -59,7 +59,7 @@ struct VoiceEnrollment: View {
             Text("Install the room voice models on Excalibur to use voice recognition.")
         } else {
             if profile.hasVoiceProfile {
-                Label("Voice profile active on all paired devices", systemImage: "waveform.badge.checkmark")
+                Label("Voice profile active on all signed-in devices", systemImage: "waveform.badge.checkmark")
             }
             if enrolling {
                 enrollmentControls
@@ -189,7 +189,7 @@ struct VoiceEnrollment: View {
         let api = try model.connection()
         let subject = removing ? "delete" : "enroll-" + SHA256.hash(data: samples).map { String(format: "%02x", $0) }.joined()
         try await privacy.withBiometrics(removing ? "Delete this device’s voice samples" : "Save this device’s voice samples") { context in
-            let key = try OwnerKey.load(using: context)
+            let key = try OwnerKey.load(using: context, slot: api.biometricSlot)
             var proof = try await OwnerKey.proof(api, key: key, purpose: "voice", subject: subject)
             try Task.checkCancellation()
             proof["action"] = removing ? "delete" : "enroll"

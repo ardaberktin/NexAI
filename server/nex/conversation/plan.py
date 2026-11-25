@@ -48,8 +48,8 @@ from .document_routing import (
     normalize_source_url,
     repair_document_search,
 )
-from .goal_context import goal_references, pending_pdf_edit
-from .goal_management_prompts import OPERATIONS
+from .goal_context import goal_references, pending_pdf_action
+from .goal_management_prompts import CHOOSE_DELETION_SCOPE, OPERATIONS
 from .goal_plans import (
     GoalPlanError,
     choose_goal_target,
@@ -203,7 +203,7 @@ def validated(tools):
             if tool.get("mode") == "current" and (times or dates):
                 raise ValueError("Current activity uses fresh recordings. Use range for a date or time window.")
         if name == "manage_goal" and ("query" in tool or
-                ("operation" in tool and tool["operation"] not in OPERATIONS) or
+                ("operation" in tool and tool["operation"] not in OPERATIONS | {"keep_settings"}) or
                 ("format_only" in tool and tool.get("operation") != "edit")):
             raise ValueError("Use a supported manage_goal operation. format_only applies to an edit.")
     if len(names) > 1 and names.intersection({"screen", "goal", "manage_goal", "save_memory", "weather_city", "clock"}):
@@ -269,8 +269,16 @@ async def select_tools(turn, generate, data, *, recall=None):
     label = route.label
     if label in {"answer", "clarify"}:
         return Plan((), clarify=label == "clarify")
-    if label == "manage" and pending_pdf_edit(turn.history):
+    if label == "manage" and pending_pdf_action(turn.history):
         return await select_document(turn, generate, data)
+    if label == "delete" and not turn.journal:
+        request = {"latest_message": turn.text, "history": data["history"][-4:]}
+        raw = await generate(model_messages(CHOOSE_DELETION_SCOPE, request), 8)
+        scope = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
+        if scope == "PDF":
+            return Plan(({"name": "manage_goal", "operation": "remove_pdf"},))
+        if scope == "OTHER":
+            return Plan((), clarify=True)
     if not turn.journal and (label == "manage" or label in OPERATIONS):
         tool = {"name": "manage_goal"}
         if label in OPERATIONS:
@@ -321,6 +329,8 @@ async def select_tools(turn, generate, data, *, recall=None):
 
 async def select_document(turn, generate, data):
     context = schedule_context(turn, data)
+    if pending := pending_pdf_action(turn.history):
+        context["pending_pdf_action"] = pending
     raw = await generate(model_messages(CHOOSE_DOCUMENT_ACTION, context, schema=DOCUMENT_ACTION_SCHEMA), 72)
     raw = raw if isinstance(raw, str) else ""
     decision = json_object(raw)
@@ -337,17 +347,23 @@ async def select_document(turn, generate, data):
     if action in {"REPEAT", "ONCE"}:
         context["document_delivery"] = action
         instructions = PLAN_PDF_GOAL + f"\nThe selected delivery mode is {action}."
-        plan = await generate_plan(turn, generate, model_messages(instructions, context),
+        schema = plan_schema({"goal"}, goal_type="recurring" if action == "REPEAT" else None)
+        plan = await generate_plan(turn, generate, model_messages(instructions, context, schema=schema),
                                    available={"goal"}, goal_review=context)
         if not plan.error:
             return plan if plan.tools else Plan((), clarify=True)
         prompt = model_messages(REVIEW_PDF_DELIVERY, context, schema=PDF_RECOVERY_SCHEMA)
         action = json_object(await generate(prompt, 35) or "").get("action")
-        if action not in {"FORMAT", "EDIT", "CLARIFY"}:
+        if action not in {"FORMAT", "REMOVE", "CLARIFY"}:
             return plan
+    if action == "REMOVE":
+        return Plan(({"name": "manage_goal", "operation": "remove_pdf"},))
     if action in {"FORMAT", "EDIT"}:
         return Plan(({"name": "manage_goal", "operation": "edit", "format_only": action == "FORMAT"},))
-    if action in {"CLARIFY", "ADVICE"}:
+    if action == "SKIP" and pending == "REMOVE":
+        # Preserve the private cancellation through handoff without replanning it as a public request.
+        return Plan(({"name": "manage_goal", "operation": "keep_settings"},))
+    if action in {"CLARIFY", "ADVICE", "SKIP"}:
         return Plan((), clarify=action == "CLARIFY")
     return Plan((), "model_unavailable")
 

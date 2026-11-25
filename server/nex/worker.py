@@ -18,8 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 class Worker:
-    def __init__(self, store, engines, assistant, settings):
+    def __init__(self, store, engines, assistant, settings, *, enabled=lambda: True):
         self.store, self.engines, self.assistant, self.settings = store, engines, assistant, settings
+        self.enabled = enabled
         self.wake = threading.Event()
         self.stop = threading.Event()
         self.voice_streams = VoiceStreams(store.recording)
@@ -186,7 +187,7 @@ class Worker:
 
     def run(self, voice):
         while not self.stop.is_set():
-            row = self.claim(voice)
+            row = self.claim(voice) if self.enabled() else None
             if row is None:
                 self.wake.wait(0.25 if voice else 1)
                 self.wake.clear()

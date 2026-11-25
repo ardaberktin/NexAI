@@ -3,7 +3,10 @@ import SwiftUI
 struct MarkdownMessageBody: View {
     let text: String
 
-    init(_ text: String) {
+    private let selectable: Bool
+
+    init(_ text: String, selectable: Bool = true) {
+        self.selectable = selectable
         self.text = text
     }
 
@@ -14,7 +17,7 @@ struct MarkdownMessageBody: View {
             }
         }
         #if !os(watchOS)
-        .textSelection(.enabled)
+        .modifier(MessageTextSelection(enabled: selectable))
         #endif
     }
 }

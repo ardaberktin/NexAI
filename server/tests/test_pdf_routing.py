@@ -17,7 +17,6 @@ from nex.conversation.document_routing import (
     REVIEW_PDF_DELIVERY,
 )
 from nex.conversation.goal_management_prompts import (
-    EDIT_GOAL,
     SELECT_PDF_GOAL,
     VERIFY_PDF_CHANGE,
 )
@@ -26,21 +25,21 @@ from nex.conversation.reply import (
     VERIFY_GOAL_FORMAT,
     WRITE,
     WRITE_GOAL,
+    WRITE_GOAL_CLARIFICATION,
     WRITE_GOAL_FORMAT,
 )
 from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.goal_runner import EXECUTE
+from nex.goal_update_pdfs import CHOOSE_COPY_LAYOUT, deliver_update_pdfs
 from nex.goals import Goals
 from nex.pdf.artifacts import content
-from nex.pdf.document import WRITE_DOCUMENT
-from nex.pdf.scheduled import VERIFY_SKIP_PDF, WRITE_NOTE
 from nex.pdf.web import VERIFY_DOCUMENT_WEB, WRITE_WEB_DOCUMENT
 from nex.privacy import public
 from nex.scheduled_plan import PLAN
 from nex.store import Store
 from nex.web_html import Page
 from nex.web_transport import WebReadError
-from nex.workspace_content import artifacts
+from nex.workspace_content import artifacts, chat_history
 
 DATE = "2026-11-23"
 TITLE = "Library opens new reading room"
@@ -64,6 +63,39 @@ class PDFRoutingTests(unittest.TestCase):
     def ask(self, question, generate):
         self.assistant.generate_conversation = generate
         return public.chat(self.assistant, str(uuid4()), "mac", question, "en", "UTC", session=self.session)
+
+    def test_text_only_preference_cannot_enable_pdf_even_if_routed_as_an_edit(self):
+        goals = Goals(self.store)
+        goal = goals.save(str(uuid4()), {"title": "Garden check", "prompt": "Report on the greenhouse.", "zone": "UTC"})
+        before = goals.detail(goal["id"])
+        question = "Please keep the Garden check as text only. Do not add PDFs."
+        for action in ("SKIP", "FORMAT"):
+            with self.subTest(action=action):
+                reviewed = []
+
+                def generate(messages, *_args, action=action, reviewed=reviewed, **_options):
+                    prompt = messages[0]["content"]
+                    data = json.loads(messages[1]["content"])
+                    if prompt.startswith(ROUTE_HEADER):
+                        return "DOCUMENT"
+                    if prompt == CHOOSE_DOCUMENT_ACTION:
+                        return json.dumps({"action": action, "sources": []})
+                    if prompt.startswith(SELECT_PDF_GOAL):
+                        return '{"target":1,"title":"Garden check"}'
+                    if prompt == VERIFY_PDF_CHANGE:
+                        reviewed.append(data["latest_message"])
+                        return "NO"
+                    if prompt == WRITE_GOAL_CLARIFICATION:
+                        return '{"question":"Is there another change you want for the Garden check?"}'
+                    self.assertEqual(prompt, WRITE)
+                    return "The Garden check will continue as text."
+
+                result = self.ask(question, generate)
+                self.assertFalse(result.get("goal_id"))
+                self.assertEqual(bool(reviewed), action == "FORMAT")
+                self.assertTrue(all(item == question for item in reviewed))
+                self.assertEqual(goals.detail(goal["id"]), before)
+                self.assertFalse(artifacts(self.store))
 
     def test_immediate_news_pdf_recovers_from_agenda_only_plan(self):
         for question in ("Could you make a PDF of today's news?", "Put the day's top headlines in a newspaper PDF."):
@@ -167,11 +199,11 @@ class PDFRoutingTests(unittest.TestCase):
         anchor = (datetime.now(UTC) + timedelta(hours=1)).replace(second=0, microsecond=0)
         identifier = str(uuid4())
         task = "Report when the new library reading room opens."
-        instruction = "Publish every report as a newspaper PDF."
         goals = Goals(self.store)
         goals.save(identifier, {"title": "Morning check-in", "prompt": task, "zone": "UTC",
                                 "frequency_minutes": 1440, "scheduled_at": anchor.isoformat()})
-        question = "Create PDFs for every Morning check-in from now on."
+        question = "Create a two-column newspaper PDF for every Morning check-in from now on."
+        instruction = question
 
         def edit(messages, *_args, **_options):
             prompt = messages[0]["content"]
@@ -187,16 +219,12 @@ class PDFRoutingTests(unittest.TestCase):
             if prompt == REVIEW_PDF_DELIVERY:
                 self.assertEqual(data["question"], question)
                 return '{"action":"FORMAT"}'
-            if prompt == SELECT_PDF_GOAL:
+            if prompt.startswith(SELECT_PDF_GOAL):
                 self.assertEqual(data["goals"][0]["title"], "Morning check-in")
                 self.assertEqual(data["goals"][0]["frequency"], 1440)
                 return '{"target":1,"title":"Morning check-in"}'
-            if prompt.startswith(EDIT_GOAL):
-                self.assertEqual(data["selected_goal"]["task"], task)
-                self.assertTrue(data["format_only"])
-                return json.dumps({"format_instruction": instruction})
             if prompt == VERIFY_PDF_CHANGE:
-                self.assertEqual(data["proposed_operation"], {"edit": {"format_instruction": instruction}})
+                self.assertEqual(data, {"selected_goal": "Morning check-in", "latest_message": instruction})
                 return "YES"
             if prompt == VERIFY_GOAL_FORMAT:
                 return "YES"
@@ -213,29 +241,50 @@ class PDFRoutingTests(unittest.TestCase):
         self.assertEqual(saved["frequency_minutes"], 1440)
         self.assertEqual(datetime.fromisoformat(saved["next_run"]), anchor)
 
+        update = f"{STORY} ✅"
+
         def generate(messages, _tokens):
             prompt = messages[0]["content"]
             data = json.loads(messages[1]["content"])
             self.assertEqual(data["goal"], task)
             if prompt == PLAN:
                 return '{"sources":["none"]}'
-            if prompt.startswith(EXECUTE):
-                return "NO_UPDATE" if calls == 0 else STORY
-            if prompt == VERIFY_SKIP_PDF:
-                self.assertEqual(calls, 0)
-                return "NO"
-            if prompt == WRITE_DOCUMENT:
-                self.assertEqual(data["verified_update"], "" if calls == 0 else STORY)
-                self.assertEqual(data["document_brief"], instruction)
-                return json.dumps(EDITION | {"sections": [{"paragraphs": [STORY]}]})
-            self.assertEqual(prompt, WRITE_NOTE)
-            return "The update is in Files and the goal's Artifacts."
+            self.assertEqual(prompt, EXECUTE)
+            return "NO_UPDATE" if calls == 0 else update
 
         runner = Goals(self.store, generate=generate)
-        for calls in (0, 1):
-            due = anchor + timedelta(days=calls)
-            runner.run(due)
-            runner.run(due + timedelta(minutes=1))
-            files = artifacts(self.store, identifier)
-            self.assertEqual(len(files), calls + 1)
-            self.assertEqual(files, artifacts(self.store))
+        calls = 0
+        runner.run(anchor)
+        self.assertEqual(artifacts(self.store, identifier), [])
+        calls = 1
+        due = anchor + timedelta(days=1)
+        runner.run(due)
+        text_update, = [row for row in chat_history(self.store) if row.get("goal_id") == identifier]
+        self.assertEqual(text_update["text"], update)
+        self.assertNotIn("pdf_attachment", text_update)
+        with self.assertLogs("nex.goal_update_pdfs", level="WARNING"):
+            deliver_update_pdfs(self.store, lambda *_: None, due)
+        self.assertEqual(goals.detail(identifier)["latest"], update)
+        self.assertIsNone(goals.detail(identifier)["error"])
+
+        def layout(messages, _tokens):
+            self.assertEqual(messages[0]["content"], CHOOSE_COPY_LAYOUT)
+            payload = json.loads(messages[1]["content"])
+            self.assertEqual(payload["document_brief"], instruction)
+            return json.dumps({"title": EDITION["title"], "layout": "newspaper",
+                               "sections": [{"paragraphs": ["This text was never published."]}]})
+
+        deliver_update_pdfs(self.store, layout, due + timedelta(minutes=5))
+        deliver_update_pdfs(self.store, layout, due + timedelta(minutes=10))
+        item, = artifacts(self.store, identifier)
+        self.assertEqual(artifacts(self.store), [item])
+        self.assertEqual(item["id"], text_update["id"])
+        with PdfDocument(content(self.store, item["id"])) as pdf:
+            actual = pdf[0].get_textpage().get_text_bounded()
+            self.assertIn(STORY, " ".join(actual.split()))
+            self.assertIn("[White Heavy Check Mark]", " ".join(actual.split()))
+            self.assertNotIn("never published", actual)
+        message, = [row for row in chat_history(self.store) if row.get("goal_id") == identifier]
+        self.assertEqual(message["text"], update)
+        self.assertEqual(message["pdf_attachment"]["id"], item["id"])
+        self.assertEqual(datetime.fromisoformat(goals.detail(identifier)["next_run"]), due + timedelta(days=1))

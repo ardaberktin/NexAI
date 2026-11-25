@@ -43,7 +43,7 @@ def recorded_speaker(store, engines, question, config):
         enrolled = db.execute("SELECT 1 FROM voices LIMIT 1").fetchone()
     if not enrolled or question.neighbor or question.target["duration"] > 22 or not config.get("ffmpeg"):
         return "unverified"
-    path = engines.runtime.parent / "nex-live" / "speaker.sock"
+    path = getattr(store, "speaker_socket", engines.runtime.parent / "nex-live" / "speaker.sock")
     if not path.is_socket():
         return "unverified"
     try:

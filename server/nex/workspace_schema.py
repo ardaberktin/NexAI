@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS pdf_artifacts (
 );
 CREATE INDEX IF NOT EXISTS pdf_artifacts_goal ON pdf_artifacts(goal_id, created DESC);
 CREATE INDEX IF NOT EXISTS pdf_artifacts_recent ON pdf_artifacts(created DESC);
+CREATE TABLE IF NOT EXISTS goal_update_pdfs (
+    activity_id TEXT PRIMARY KEY, goal_id TEXT NOT NULL, brief TEXT NOT NULL,
+    title TEXT NOT NULL, language TEXT, retry_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS goal_update_pdfs_due ON goal_update_pdfs(retry_at);
+CREATE INDEX IF NOT EXISTS goal_update_pdfs_goal ON goal_update_pdfs(goal_id);
 CREATE TABLE IF NOT EXISTS clock_alerts (
     id TEXT PRIMARY KEY, request_id TEXT NOT NULL UNIQUE,
     kind TEXT NOT NULL CHECK(kind IN ('timer','alarm')), label TEXT NOT NULL,
@@ -88,6 +94,10 @@ CREATE INDEX IF NOT EXISTS goal_follow_up_notices_chat ON goal_follow_up_notices
 CREATE TABLE IF NOT EXISTS iphone_push_registration (
     singleton INTEGER PRIMARY KEY CHECK(singleton=1), installation TEXT NOT NULL, token TEXT NOT NULL,
     environment TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS iphone_push_session (
+    singleton INTEGER PRIMARY KEY REFERENCES iphone_push_registration(singleton) ON DELETE CASCADE,
+    device_id TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS goal_push_delivery (
     id TEXT PRIMARY KEY, token TEXT NOT NULL,

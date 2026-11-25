@@ -153,13 +153,24 @@ class AudioArchive:
         if options.keys() != {"audio_limit_gib", "retention_days"}:
             raise ValueError("Supply the audio limit and retention days.")
         limit, days = options["audio_limit_gib"], options["retention_days"]
-        if limit is not None and (type(limit) is not int or not 1 <= limit < 2**23):
-            raise ValueError("Enter a positive, whole GiB limit or leave the limit blank.")
+        limit_bytes = self.limit_bytes(limit)
         if type(days) is not int or not 0 <= days <= 36500:
             raise ValueError("Enter a retention period in whole days, or 0 to keep all audio.")
         with self.connect() as db:
             db.execute("UPDATE archive_policy SET audio_limit_bytes=?,retention_days=? WHERE singleton=1",
-                       (None if limit is None else limit * GIB, days))
+                       (limit_bytes, days))
+            return self.capacity(db)
+
+    @staticmethod
+    def limit_bytes(limit):
+        if limit is not None and (type(limit) is not int or not 1 <= limit < 2**23):
+            raise ValueError("Enter a positive, whole GiB limit or leave the limit blank.")
+        return None if limit is None else limit * GIB
+
+    def set_limit(self, limit):
+        limit_bytes = self.limit_bytes(limit)
+        with self.connect() as db:
+            db.execute("UPDATE archive_policy SET audio_limit_bytes=? WHERE singleton=1", (limit_bytes,))
             return self.capacity(db)
 
     def claim(self, at, limit):

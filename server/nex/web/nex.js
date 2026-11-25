@@ -266,7 +266,12 @@ async function loadModels(changes) {
     else field.value = value;
   }
   const speech = data.models.speech.join(', ') || 'device voices';
-  const mode = { mac_connected: 'Mac model connected', mac_waiting: 'Waiting for Mac relay' };
+  const mode = {
+    excalibur_live: 'Excalibur live model',
+    excalibur_unavailable: 'Excalibur model unavailable',
+    mac_connected: 'Mac model connected',
+    mac_waiting: 'Waiting for Mac relay',
+  };
   $('model-status').textContent = 'Chat: ' + (mode[data.models.chat] || data.models.chat.replaceAll('_', ' ')) +
     ' · AAC decoder: ' + (data.models.decoder === 'configured' ? 'configured' : 'awaiting decoder') +
     ' · Transcription: ' + data.models.transcription.replaceAll('_', ' ') + ' · Speech: ' + speech;

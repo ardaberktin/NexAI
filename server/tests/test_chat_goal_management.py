@@ -7,6 +7,7 @@ from uuid import uuid4
 from conversation_fixtures import unlock
 from nex.assistant import Assistant
 from nex.conversation.goal_management_prompts import (
+    CHOOSE_DELETION_SCOPE,
     EDIT_GOAL,
     FIND_GOALS,
     MANAGE_GOALS,
@@ -17,9 +18,10 @@ from nex.conversation.goal_management_prompts import (
 from nex.conversation.reply import (
     VERIFY_GOAL,
     VERIFY_GOAL_STATUS,
-    WRITE,
+    VERIFY_UNSAVED_GOAL,
     WRITE_GOAL,
     WRITE_GOAL_STATUS,
+    WRITE_UNSAVED_GOAL,
 )
 from nex.conversation.routing_prompt import ROUTE_HEADER
 from nex.goal_follow_up_jobs import GoalFollowUpJobs
@@ -56,6 +58,8 @@ class ChatGoalManagementTests(unittest.TestCase):
         if prompt.startswith(ROUTE_HEADER):
             self.assertNotIn("goals", data)
             return self.intent
+        if prompt == CHOOSE_DELETION_SCOPE:
+            return "GOAL"
         if prompt == FIND_GOALS:
             return json.dumps({"matches": [self.match_all or self.card["title"] in label for label in data["goals"]]})
         if prompt.startswith((MANAGE_GOALS, SELECT_GOAL)):
@@ -80,8 +84,10 @@ class ChatGoalManagementTests(unittest.TestCase):
             return f"{text} Next check is {schedule}." if schedule else text
         if prompt in (VERIFY_GOAL, VERIFY_GOAL_STATUS):
             return "YES" if self.verify_receipt else "NO"
-        if prompt.startswith(WRITE):
-            outcome = data["tools"]["manage_goal"]
+        if prompt == VERIFY_UNSAVED_GOAL:
+            return "YES"
+        if prompt.startswith(WRITE_UNSAVED_GOAL):
+            outcome = data["outcome"]
             self.assertFalse(outcome["changed"])
             if question := outcome.get("suggested_question"):
                 return question

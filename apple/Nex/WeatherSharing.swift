@@ -29,7 +29,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
     private let base = "/v1/workspace/weather-location"
     private let preferenceKey = "nex.weatherSharing"
     private let manager = CLLocationManager()
-    private var pairing: Pairing?
+    private var profile: ServerProfile?
     private var preference: Preference?
     private var foreground = false
     private var clearing: Task<Void, Never>?
@@ -45,9 +45,9 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
         manager.delegate = self
     }
 
-    func paired(_ pairing: Pairing?) {
-        self.pairing = pairing
-        enabled = pairing?.pin == preference?.pin && preference?.enabled == true
+    func connect(_ profile: ServerProfile?) {
+        self.profile = profile
+        enabled = profile?.workspaceScope == preference?.pin && preference?.enabled == true
         configureLocation()
         retryClear()
     }
@@ -59,7 +59,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
     }
 
     func setEnabled(_ value: Bool, using model: Controller) async {
-        guard !busy, let pairing = model.pairing else { return }
+        guard !busy, let profile = model.serverProfile else { return }
         busy = true
         defer { busy = false }
         status = nil
@@ -71,13 +71,13 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
                     return
                 }
                 await clearing?.value
-                if let preference, preference.pin == pairing.pin, !preference.enabled {
+                if let preference, preference.pin == profile.workspaceScope, !preference.enabled {
                     try await clear(preference.consent, using: api)
                     save(nil)
                 }
                 let result: Consent = try await api.send(base, method: "PUT", body: ConsentRequest())
-                guard model.pairing?.pin == pairing.pin else { return }
-                save(Preference(pin: pairing.pin, consent: result.consent, enabled: true))
+                guard model.serverProfile?.workspaceScope == profile.workspaceScope else { return }
+                save(Preference(pin: profile.workspaceScope, consent: result.consent, enabled: true))
                 requestPermission()
                 configureLocation()
             } else {
@@ -89,10 +89,10 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
         }
     }
 
-    func unpair() {
+    func disconnect() {
         turnOff()
         retryClear()
-        pairing = nil
+        profile = nil
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -105,7 +105,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard enabled, let pairing, let preference, preference.pin == pairing.pin,
+        guard enabled, let profile, let preference, preference.pin == profile.workspaceScope,
               let location = locations.last, CLLocationCoordinate2DIsValid(location.coordinate),
               location.horizontalAccuracy >= 0, abs(location.timestamp.timeIntervalSinceNow) < 900 else { return }
         let rounded = WeatherLocationResult(id: "shared", location: location)
@@ -113,7 +113,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
         let fix = LocationFix(consent: preference.consent, latitude: latitude, longitude: longitude,
                               observed_at: location.timestamp.timeIntervalSince1970)
         sending?.cancel()
-        sending = Task { await upload(fix, pairing: pairing) }
+        sending = Task { await upload(fix, profile: profile) }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -149,7 +149,7 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
     }
 
     private func turnOff() {
-        guard var preference, preference.pin == pairing?.pin else { return }
+        guard var preference, preference.pin == profile?.workspaceScope else { return }
         preference.enabled = false
         save(preference)
         sending?.cancel()
@@ -168,14 +168,14 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
     }
 
     func retryClear() {
-        guard clearing == nil, Date.now >= clearAfter, let pairing, let preference,
-              preference.pin == pairing.pin, !preference.enabled else {
+        guard clearing == nil, Date.now >= clearAfter, let profile, let preference,
+              preference.pin == profile.workspaceScope, !preference.enabled else {
             return
         }
         clearing = Task {
             defer { clearing = nil }
             do {
-                try await clear(preference.consent, using: NexAPI(pairing))
+                try await clear(preference.consent, using: NexAPI(profile))
                 if self.preference?.consent == preference.consent && !enabled {
                     save(nil)
                     status = nil
@@ -189,13 +189,13 @@ final class WeatherSharing: NSObject, ObservableObject, @preconcurrency CLLocati
         }
     }
 
-    private func upload(_ fix: LocationFix, pairing: Pairing) async {
+    private func upload(_ fix: LocationFix, profile: ServerProfile) async {
         #if os(iOS)
         let background = UIApplication.shared.beginBackgroundTask(withName: "Nex weather location")
         defer { if background != .invalid { UIApplication.shared.endBackgroundTask(background) } }
         #endif
         do {
-            let result: SharingResult = try await NexAPI(pairing).send(base + "/fix", method: "PUT", body: fix, timeout: 8)
+            let result: SharingResult = try await NexAPI(profile).send(base + "/fix", method: "PUT", body: fix, timeout: 8)
             if !Task.isCancelled && enabled && result.shared { status = "Sharing approximate location with Excalibur." }
         } catch {
             if !Task.isCancelled && enabled { status = "Couldn’t share location. Nex will try again on the next update." }

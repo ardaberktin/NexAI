@@ -2,12 +2,19 @@ import CryptoKit
 import Foundation
 import Security
 
-struct Pairing: Codable {
+struct ServerProfile: Codable {
     let url: String
     let pin: String
     let token: String
     let device: String
-    var setup: String? = nil
+    var account: HostedAccount
+
+    var workspaceScope: String {
+        SHA256.hash(data: Data((pin + ":" + account.accountId).utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    var biometricSlot: String { "account-device-" + account.deviceId }
+    var signingDevice: String { device + ":" + account.deviceId }
 
     static var platform: String {
         #if os(iOS)
@@ -23,16 +30,16 @@ struct Pairing: Codable {
               parts.query == nil, parts.fragment == nil, parts.user == nil, parts.password == nil,
               Self.isTailscaleV4(host), let result = parts.url,
               Data(base64Encoded: pin)?.count == 32,
-              token.count >= 40, token.count <= 120,
+              token.utf8.count == 43,
               token.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0)
                   || (97...122).contains($0) || $0 == 45 || $0 == 95 }),
-              device == Self.platform else {
-            throw NexError.pairing("Use the updated Excalibur Tailscale pairing profile for this device.")
+              device == Self.platform, account.valid else {
+            throw NexError.connection("Sign in with a valid Nex account for this device.")
         }
         return result
     }
 
-    private static func isTailscaleV4(_ host: String) -> Bool {
+    static func isTailscaleV4(_ host: String) -> Bool {
         let segments = host.split(separator: ".", omittingEmptySubsequences: false)
         let numbers = segments.compactMap { UInt8($0) }
         guard segments.count == 4, numbers.count == 4, numbers.map(String.init).joined(separator: ".") == host else {
@@ -42,23 +49,26 @@ struct Pairing: Codable {
     }
 }
 
-enum PairingKeychain {
+enum ServerProfileKeychain {
     private static let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
+        // Keep the keychain service so existing account credentials survive upgrades.
         kSecAttrService as String: "com.ardaberktin.nex.pairing",
         kSecAttrAccount as String: "excalibur"
     ]
 
-    static func load() -> Pairing? {
+    static func load() -> ServerProfile? {
         var lookup = query
         lookup[kSecReturnData as String] = true
         var result: CFTypeRef?
         guard SecItemCopyMatching(lookup as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data else { return nil }
-        return try? JSONDecoder().decode(Pairing.self, from: data)
+        guard let profile = try? JSONDecoder().decode(ServerProfile.self, from: data),
+              (try? profile.address()) != nil else { return nil }
+        return profile
     }
 
-    static func save(_ value: Pairing) throws {
+    static func save(_ value: ServerProfile) throws {
         let data = try JSONEncoder().encode(value)
         #if os(iOS)
         let attributes: [String: Any] = [
@@ -73,11 +83,16 @@ enum PairingKeychain {
             status = SecItemAdd(query.merging(attributes) { _, value in value } as CFDictionary, nil)
         }
         guard status == errSecSuccess else {
-            throw NexError.pairing("Could not save the profile in Keychain (\(status)).")
+            throw NexError.connection("Could not save the profile in Keychain (\(status)).")
         }
     }
 
-    static func clear() { SecItemDelete(query as CFDictionary) }
+    static func clear() throws {
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw NexError.connection("Could not remove the Nex credential from Keychain (\(status)).")
+        }
+    }
 }
 
 final class CertificatePin: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
@@ -137,9 +152,10 @@ final class NexAPI {
         guard !accessLock.withLock({ live ? liveCompatible : compatible }) else { return }
         let request = try makeRequest("/v1/privacy/version", method: "GET", query: [], timeout: 5, port: live ? 8767 : nil)
         let (data, response) = try await session.data(for: request)
+        try Self.validate(response, data: data)
         guard (response as? HTTPURLResponse)?.statusCode == 200,
               (try? JSONDecoder().decode([String: Int].self, from: data))?["version"] == 1 else {
-            throw NexError.pairing("Update the Excalibur privacy service before connecting Nex.")
+            throw NexError.connection("Update the Excalibur privacy service before connecting Nex.")
         }
         accessLock.withLock {
             if live { liveCompatible = true } else { compatible = true }
@@ -147,14 +163,24 @@ final class NexAPI {
     }
     private let base: URL
     private let token: String
+    let signingDevice: String
+    let biometricSlot: String
     private let session: URLSession
     private let decoder: JSONDecoder
 
-    init(_ pairing: Pairing) throws {
-        base = try pairing.address()
-        token = pairing.token
-        guard let host = base.host, let pin = Data(base64Encoded: pairing.pin) else {
-            throw NexError.pairing("The Excalibur profile is invalid.")
+    init(_ profile: ServerProfile) throws {
+        base = try profile.address()
+        token = profile.token
+        signingDevice = profile.signingDevice
+        biometricSlot = profile.biometricSlot
+        session = try Self.pinnedSession(base: base, pin: profile.pin)
+        decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+    }
+
+    static func pinnedSession(base: URL, pin: String) throws -> URLSession {
+        guard let host = base.host, let fingerprint = Data(base64Encoded: pin) else {
+            throw NexError.connection("The Excalibur profile is invalid.")
         }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 220
@@ -162,11 +188,8 @@ final class NexAPI {
         configuration.httpShouldSetCookies = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.connectionProxyDictionary = [:]
-        session = URLSession(configuration: configuration,
-                             delegate: CertificatePin(digest: pin, host: host),
-                             delegateQueue: nil)
-        decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return URLSession(configuration: configuration,
+                          delegate: CertificatePin(digest: fingerprint, host: host), delegateQueue: nil)
     }
 
     deinit { session.invalidateAndCancel() }
@@ -181,12 +204,22 @@ final class NexAPI {
         let request = try makeRequest(path, method: method, query: query, body: body, headers: headers,
                                       timeout: timeout, port: port)
         let (data, response) = try await session.data(for: request)
+        try Self.validate(response, data: data)
+        return data
+    }
+
+    func signOut() async throws {
+        let request = try makeRequest("/v1/auth/logout", method: "POST", timeout: 5)
+        let (data, response) = try await session.data(for: request)
+        try Self.validate(response, data: data)
+    }
+
+    static func validate(_ response: URLResponse, data: Data) throws {
         guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(response.statusCode) else {
-            let failure = try? decoder.decode([String: String].self, from: data)
+            let failure = try? JSONDecoder().decode([String: String].self, from: data)
             throw NexError.api(response.statusCode, failure?["error"] ?? failure?["detail"] ?? "Excalibur rejected the request.")
         }
-        return data
     }
 
     private func makeRequest(
@@ -194,12 +227,12 @@ final class NexAPI {
         headers: [String: String] = [:], timeout: Double, port: Int? = nil
     ) throws -> URLRequest {
         guard var url = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
-            throw NexError.pairing("Invalid Excalibur address.")
+            throw NexError.connection("Invalid Excalibur address.")
         }
         if let port { url.port = port }
         url.path = try protectedPath(path)
         url.queryItems = query.isEmpty ? nil : query
-        guard let address = url.url else { throw NexError.pairing("Invalid Excalibur request.") }
+        guard let address = url.url else { throw NexError.connection("Invalid Excalibur request.") }
         var request = URLRequest(url: address, timeoutInterval: timeout)
         request.httpMethod = method
         request.httpBody = body
@@ -212,7 +245,7 @@ final class NexAPI {
 
     // Older Excalibur releases do not serve these paths, including after a server rollback.
     private func protectedPath(_ path: String) throws -> String {
-        guard path.hasPrefix("/v1/") else { throw NexError.pairing("Invalid Nex API path.") }
+        guard path.hasPrefix("/v1/") else { throw NexError.connection("Invalid Nex API path.") }
         return "/v2/" + path.dropFirst(4)
     }
 
@@ -270,17 +303,17 @@ final class NexAPI {
     func liveSocket(path: String = "/v1/live", language: String? = nil,
                     wakeChime: Bool = false) throws -> URLSessionWebSocketTask {
         guard accessLock.withLock({ compatible }) else {
-            throw NexError.pairing("Connect to the Excalibur privacy service first.")
+            throw NexError.connection("Connect to the Excalibur privacy service first.")
         }
         guard var url = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
-            throw NexError.pairing("Invalid Excalibur address.")
+            throw NexError.connection("Invalid Excalibur address.")
         }
         url.scheme = "wss"
         url.port = 8767
         url.path = try protectedPath(path)
         if let language { url.queryItems = [URLQueryItem(name: "language", value: language)] }
         if wakeChime { url.queryItems = (url.queryItems ?? []) + [URLQueryItem(name: "wake_chime", value: "1")] }
-        guard let address = url.url else { throw NexError.pairing("Invalid live voice address.") }
+        guard let address = url.url else { throw NexError.connection("Invalid live voice address.") }
         var request = URLRequest(url: address)
         request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
         return session.webSocketTask(with: request)

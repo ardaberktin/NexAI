@@ -101,6 +101,9 @@ def finish_prompt(goals, row, result, anchor, epoch):
                 activity = goals.record(db, identifier, now, GOAL_UPDATE_TITLE, latest, artifact=True)
                 if result.pdf:
                     pdf_artifacts.insert(db, activity, identifier, now, result.pdf)
+                if result.pdf_copy:
+                    db.execute("INSERT INTO goal_update_pdfs VALUES(?,?,?,?,?,?)",
+                               (activity, identifier, result.pdf_copy, current["title"], current["reply_language"], now))
                 enqueue(db, activity, anchor)
             if any(watch.pending for watch in result.watches.values()):
                 next_run = stamp(anchor + timedelta(seconds=15))

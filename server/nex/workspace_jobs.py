@@ -8,6 +8,7 @@ from .feed import Feed
 from .goal_follow_up_jobs import GoalFollowUpJobs
 from .goal_follow_up_notices import GoalFollowUpNotices
 from .goal_follow_up_pdfs import deliver_pdfs
+from .goal_update_pdfs import deliver_update_pdfs
 from .goals import Goals
 from .push_queue import PushQueue
 from .workspace_ideas import WorkspaceIdeas
@@ -15,16 +16,17 @@ from .workspace_ideas import WorkspaceIdeas
 logger = logging.getLogger(__name__)
 
 
-def run_until_stopped(job, label, interval, stop):
+def run_until_stopped(job, label, interval, stop, enabled):
     while not stop.is_set():
         try:
-            job()
+            if enabled():
+                job()
         except Exception as exc:  # noqa: BLE001 - keep scheduled jobs running after an individual failure.
             logger.warning("Nex %s failed (%s)", label, type(exc).__name__)
         stop.wait(interval)
 
 
-def start_workspace_jobs(store, engines, settings, stop):
+def start_workspace_jobs(store, engines, settings, stop, *, enabled=lambda: True):
     feed = Feed(store)
     goals = Goals(store, engines.classify_background, generate=engines.generate_background)
     follow_ups = GoalFollowUpJobs(store, engines.generate_background)
@@ -46,9 +48,10 @@ def start_workspace_jobs(store, engines, settings, stop):
         (follow_ups.decide, "goal follow-up decisions", 5),
         (follow_ups.deliver, "goal follow-up delivery", 5),
         (lambda: deliver_pdfs(store, engines.generate_background), "goal follow-up PDFs", 5),
+        (lambda: deliver_update_pdfs(store, engines.generate_background), "goal update PDFs", 5),
         (notices.run, "goal follow-up confirmations", 5),
         (PushQueue(store).run, "iPhone push", 2),
     )
     for job, label, interval in jobs:
-        threading.Thread(target=run_until_stopped, args=(job, label, interval, stop),
+        threading.Thread(target=run_until_stopped, args=(job, label, interval, stop, enabled),
                          name=label.replace(" ", "-"), daemon=True).start()

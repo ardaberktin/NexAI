@@ -44,7 +44,7 @@ CATALOG = {
             "timing = exact words in the latest request asking for this one-time run time. "
             "Set check_in:true to ask the user to confirm an outcome. "
             "To update a goal, use target from goal_references. Omitted fields keep their current values.",
-    "manage_goal": "Look up goals privately. Optional operation: complete, edit, delete, keep. Use alone.",
+    "manage_goal": "Look up goals privately. Optional operation: complete, edit, delete, keep, remove_pdf. Use alone.",
     "screen": "Inspect the shared Mac screen. Use alone.",
 }
 PUBLIC = {"weather", "web", "python"}
@@ -134,6 +134,8 @@ and goal_references for saved facts.
    and optional exclusive end_date for explicit ranges. Retain valid agenda_dates for an unchanged scope.
 6. Use {"tools":[{"name":"manage_goal"}]} for a reported fulfilled outcome or a request to change the date,
    task, or status of an existing goal or remove it. This tool can find goals outside recent chat.
+   Adding a PDF copy while keeping the scheduled task uses {"tools":[{"name":"manage_goal","operation":"edit","format_only":true}]}.
+   Turning off saved PDF attachments uses {"tools":[{"name":"manage_goal","operation":"remove_pdf"}]}.
    A pending personal outcome can use manage_goal with operation keep. For other requests use proposal and
    related_tools if they serve the latest question. Never make a goal for an action the user did not request.
 
@@ -155,6 +157,8 @@ REVIEW_GOAL_EDIT = """Return a JSON plan for updating the goal already matched t
 For a fulfilled outcome, changed date or task, or a request to remove a goal, use
 {"tools":[{"name":"manage_goal"}]} so the private goal manager can review and apply the change.
 Use one goal tool with target set to edit_target. Include only fields changed by the user.
+For a PDF attachment without changing the task or schedule, use manage_goal with operation edit and format_only:true.
+To turn off saved PDF attachments, use manage_goal with operation remove_pdf.
 If the user wants another check only if the outcome is still pending, use check_in:true and keep
 the existing question and time. For edit_target 1 that is {"tools":[{"name":"goal","target":1,"check_in":true}]}.
 If the user changes the reminder time, give a future local start in YYYY-MM-DDTHH:MM and quote the user's
@@ -165,7 +169,8 @@ VERIFY_GOAL_PLAN = """Verify Nex's proposed goal against the latest user request
 Return exactly YES or NO. A check-in without a requested time is complete with check_in:true and no start.
 Nex's scheduler chooses the time later. If the user stated the reminder time, verify start matches it.
 For a requested recurrence, require its numeric frequency and a start for a new goal. Timing mentioned
-only inside query has no scheduling effect. For requested PDF delivery, require the document format
+only inside query has no scheduling effect. A recurring request with a first-run date still requires
+frequency. Return NO for a one-time plan when the user asks for repeat delivery. For requested PDF delivery, require the document format
 and requested contents in query. Preserve any restriction on where the task may get its facts.
 If timing is present, it must ask for the proposed time or delegate the choice.
 A time mentioned as background or as an outcome's deadline does not necessarily schedule a reminder.

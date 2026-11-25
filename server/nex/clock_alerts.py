@@ -102,7 +102,7 @@ class ClockAlerts:
             return card(row) | {"status": "cancelled"}
 
     def notification_schedule(self, device, *, installation=None, anchor=None):
-        # The paired device can schedule a sound while the workspace is locked.
+        # A signed-in device can schedule a sound while the workspace is locked.
         # Labels and request IDs stay behind the workspace session.
         now = anchor or datetime.now(UTC)
         if installation is not None:

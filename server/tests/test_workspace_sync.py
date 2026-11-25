@@ -1,12 +1,8 @@
 import json
-import tempfile
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
-from http.client import HTTPConnection
-from threading import Event, Lock, Thread
+from threading import Event
 from time import time
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -16,13 +12,12 @@ from nex.clock_alerts import ClockAlerts
 from nex.conversation.plan import Plan
 from nex.goal_follow_up_jobs import GoalFollowUpJobs
 from nex.goals import Goals
-from nex.http_api import Server
-from nex.privacy.state import digest
 from nex.store import Store, now
 from nex.workspace_chat_pages import PAGE_SIZE
 from nex.workspace_content import chat_snapshot
 from nex.workspace_ideas import WorkspaceIdeas
 from nex.workspace_sync import RecordingPresence
+from test_hosted_accounts import HostedAccountFixture
 
 CHAT = "/v1/workspace/chat"
 RECORDER = "/v1/workspace/iphone-recording"
@@ -31,38 +26,18 @@ FEATURE_SETTINGS = "/v2/workspace/features"
 REPLY = {"text": "Ready.", "language": "en", "sources": [], "engine": "local_model"}
 
 
-class WorkspaceSyncTests(unittest.TestCase):
+class WorkspaceSyncTests(HostedAccountFixture):
     def setUp(self):
-        folder = tempfile.TemporaryDirectory()
-        self.addCleanup(folder.cleanup)
-        self.store = Store(folder.name, 0, 2**20)
-        self.assistant = Assistant(self.store, None, None)
-        app = SimpleNamespace(store=self.store, assistant=self.assistant, chat_slot=Lock(),
-                              keys={"iphone": "phone-key", "mac": "mac-key"})
-        self.server = Server(("127.0.0.1", 0), app)
-        with self.store.privacy.transaction(write=True) as db:
-            db.executemany("INSERT INTO sessions VALUES(?,?,?)",
-                           [(digest(d + "-session"), d, time() + 60) for d in ("mac", "iphone")])
-        self.addCleanup(self.server.server_close)
-        thread = Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
-        thread.start()
-        self.addCleanup(thread.join)
-        self.addCleanup(self.server.shutdown)
+        super().setUp()
+        self.store = self.host.owner.store
+        self.assistant = self.host.owner.assistant = Assistant(self.store, None, None)
+        self.devices = {role: self.register_device(role) for role in ("mac", "iphone")}
+        self.sessions = {role: self.unlock(login) for role, login in self.devices.items()}
 
     def request(self, device, path, body=None, method="GET", status=200, *, workspace=True):
-        connection = HTTPConnection(*self.server.server_address, timeout=4)
-        headers = {"Authorization": "Bearer " + {"iphone": "phone-key", "mac": "mac-key"}.get(device, "invalid"),
-                   "Content-Type": "application/json"}
-        if workspace:
-            headers["X-Nex-Workspace"] = device + "-session"
-        try:
-            connection.request(method, path, json.dumps(body) if body is not None else None, headers)
-            response = connection.getresponse()
-            data = json.load(response)
-            self.assertEqual(response.status, status, data)
-            return data
-        finally:
-            connection.close()
+        login = self.devices.get(device, {})
+        return super().request(method, path, login.get("token"), body=body, status=status,
+                               workspace=self.sessions.get(device) if workspace else None)
 
     def test_feature_switches_are_shared_and_keep_chat_and_files_available(self):
         features = {"daybook": "/v2/daybook?day=2026-11-20", "activities": "/v2/activities?current=1",
@@ -326,7 +301,7 @@ class WorkspaceSyncTests(unittest.TestCase):
         report("mac", True)
         idle = self.request("mac", RECORDING_STATUS)
         waiting_path = RECORDING_STATUS + "?" + urlencode({"previous": idle["cursor"]})
-        changed = self.server.recording_status.changed
+        changed = self.host.owner.recording_status.changed
         wait = changed.wait
         both_waiting = Event()
         reader_count = 0
@@ -372,12 +347,12 @@ class WorkspaceSyncTests(unittest.TestCase):
         transition(True, start)
         with patch("nex.workspace_sync.monotonic", return_value=10**12):
             self.assertEqual(watch(), {"state": "recording", "until_changed": True, "valid_for": 30})
-        self.server.recording_status = RecordingPresence(self.store)
+        self.host.owner.recording_status = RecordingPresence(self.store)
         self.assertTrue(watch()["until_changed"])
         transition(False, start + 120)
         transition(True, start)
         self.assertEqual(watch()["state"], "idle")
-        self.server.recording_status = RecordingPresence(self.store)
+        self.host.owner.recording_status = RecordingPresence(self.store)
         transition(True, start)
         self.assertEqual(watch()["state"], "unknown")
         transition(True, start + 180)

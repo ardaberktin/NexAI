@@ -43,10 +43,12 @@ class UnixHTTP(http.client.HTTPConnection):
 
 
 class Engines:
-    def __init__(self, settings, runtime):
+    def __init__(self, settings, runtime, *, allow_mac=True, live_socket=None):
         self.settings = settings
         self.runtime = Path(runtime)
         self.runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.live_socket = live_socket or self.runtime.parent / "nex-live" / "daybook.sock"
+        self.allow_mac = allow_mac
         self.lock = threading.Lock()
         self.process = self.profile = None
         self.model_dir = self.runtime / "llama"
@@ -218,7 +220,12 @@ class Engines:
         self.stop()
         raise ModelError("The offline language model did not become ready. Check its files and runtime.")
 
+    def route(self, config):
+        return chat_route(config if self.allow_mac else config | {"use_mac_model": False})
+
     def mac_socket(self):
+        if not self.allow_mac:
+            return None
         path = self.runtime / "mac-model.sock"
         try:
             info = path.lstat()
@@ -229,8 +236,8 @@ class Engines:
     def model_status(self):
         result = self.settings.status()
         if self.managed_live():
-            result["chat"] = "excalibur_live"
-        elif chat_route(self.settings.read()) == "mac":
+            result["chat"] = "excalibur_live" if self.live_socket.is_socket() else "excalibur_unavailable"
+        elif self.route(self.settings.read()) == "mac":
             reachable = False
             try:
                 path = self.mac_socket()
@@ -241,8 +248,7 @@ class Engines:
         return result
 
     def managed_live(self):
-        return ((self.settings.path.parent / "live-model").is_file()
-                and (self.runtime.parent / "nex-live" / "daybook.sock").is_socket())
+        return (self.settings.path.parent / "live-model").is_file()
 
     def generate_daybook(self, messages, tokens):
         return self.generate_warm(messages, tokens) or self.generate(messages, tokens, self.settings.read())
@@ -254,7 +260,7 @@ class Engines:
 
     def generate_background(self, messages, tokens):
         config = self.settings.read()
-        if self.managed_live() or not chat_route(config):
+        if self.managed_live() or not self.route(config):
             return self.generate_warm(messages, tokens, temperature=0)
         try:
             return self.generate(messages, tokens, config, wait=False, temperature=0, thinking=False)
@@ -263,7 +269,7 @@ class Engines:
 
     def classify(self, messages):
         config = self.settings.read()
-        if not chat_route(config):
+        if not self.route(config):
             return self.generate_warm(messages, 4, decision=True)
         try:
             return self.generate(messages, 4, config, wait=False, decision=True)
@@ -272,7 +278,6 @@ class Engines:
 
     def generate_warm(self, messages, tokens, *, decision=False, temperature=None):
         # The live daemon gives its active voice conversation priority over archive clients.
-        path = self.runtime.parent / "nex-live" / "daybook.sock"
         body = {"messages": messages, "max_tokens": tokens} | response_options(messages)
         if decision:
             body["decision"] = True
@@ -281,7 +286,7 @@ class Engines:
         try:
             with socket.socket(socket.AF_UNIX) as client:
                 client.settimeout(5 if decision else 34)
-                client.connect(str(path))
+                client.connect(str(self.live_socket))
                 client.sendall(json.dumps(body, ensure_ascii=False).encode() + b"\n")
                 with client.makefile("rb") as response:
                     result = json.loads(response.readline(32_768))
@@ -305,7 +310,7 @@ class Engines:
 
     def generate(self, messages, tokens, config, *, on_text=None, wait=True, decision=False, temperature=None,
                  thinking=True):
-        route = "live" if self.managed_live() else chat_route(config)
+        route = "live" if self.managed_live() else self.route(config)
         if route is None:
             return None
         options = {"messages": messages, "max_tokens": tokens, "temperature": 0.25 if temperature is None else temperature,
@@ -320,6 +325,7 @@ class Engines:
             if route == "live":
                 self.stop()
                 answer = self.generate_warm(messages, tokens, decision=decision, temperature=temperature)
+                self.last_chat_error = None if answer else "The Excalibur model did not answer."
                 if answer and on_text:
                     on_text(answer)
                 return answer

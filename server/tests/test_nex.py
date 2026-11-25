@@ -440,6 +440,23 @@ class NexArchiveTests(unittest.TestCase):
             ensure.assert_called_once_with(config)
             self.assertNotIn("socket_path", request.call_args.kwargs)
 
+    def test_managed_chat_reports_unavailable_without_switching_to_mac(self):
+        (self.root / "live-model").write_text("gemma\n")
+        self.settings.update({"use_mac_model": True})
+        self.assertEqual(self.engines.model_status()["chat"], "excalibur_unavailable")
+        with (
+            patch.object(self.engines, "generate_warm", return_value=None) as generate,
+            patch.object(self.engines, "mac_socket") as mac,
+        ):
+            for question in ("What is the tallest mountain?", "Which mountain is the highest?"):
+                generate.reset_mock()
+                reply = self.assistant.answer(question, "en")
+                self.assertEqual(reply["engine"], "model_unavailable")
+                self.assertTrue(generate.called)
+                for call in generate.call_args_list:
+                    self.assertIn(question, call.args[0][-1]["content"])
+            mac.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

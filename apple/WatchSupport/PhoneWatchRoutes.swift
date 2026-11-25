@@ -67,7 +67,7 @@ struct PhoneWatchRoute {
         }
     }
 
-    private static let invalid = NexError.pairing("The Apple Watch request is invalid.")
+    private static let invalid = NexError.connection("The Apple Watch request is invalid.")
 
     private static func identifier(_ request: WatchRequest) throws -> String {
         guard let id = request.id, id.utf8.count <= 80, !id.isEmpty,

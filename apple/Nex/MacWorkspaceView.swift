@@ -19,7 +19,7 @@ struct MacWorkspaceView<Content: View>: View {
                 .background(Color(nsColor: .textBackgroundColor))
                 .navigationTitle(selection.title)
                 .toolbar {
-                    if model.pairing != nil {
+                    if model.serverProfile != nil {
                         ToolbarItem(placement: .automatic) {
                             RecordingStatusPeers(local: .mac)
                         }
@@ -92,7 +92,7 @@ struct MacWorkspaceView<Content: View>: View {
     }
 
     private var connectionStatus: LocalizedStringKey {
-        if model.pairing == nil { return "Not paired" }
+        if model.serverProfile == nil { return "Signed out" }
         if model.statusUnavailable { return "Unavailable" }
         return model.status == nil ? "Connecting…" : "Connected"
     }

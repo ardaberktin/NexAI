@@ -9,8 +9,29 @@ from ..recall_dates import time_zone
 from ..store import excerpt, normalized
 from ..workspace_features import require
 from .goal_management_prompts import FIND_GOALS, FIND_PDF_GOALS
+from .tools import Evidence
 
 PAGE_SIZE = 8
+
+
+def outcome(status, **details):
+    return Evidence({"status": status, "changed": False, **details}, engine="goal_management")
+
+
+def clarify_target(candidates, goals):
+    candidates = candidates[:PAGE_SIZE]
+    return outcome("clarification_needed", candidate_titles=[row["title"] for row in candidates],
+                   goal_choices=[goals[row["target"] - 1]["id"] for row in candidates])
+
+
+def listed_target(result, candidates):
+    target = result.get("target")
+    title = result.get("title")
+    candidate = next((row for row in candidates if row["target"] == target), None)
+    if (type(target) is not int or not candidate or not isinstance(title, str) or
+            candidate["title"].casefold().rstrip(" .!?") != title.casefold().rstrip(" .!?")):
+        raise ValueError("The target number and copied title must identify the same listed goal.")
+    return target
 
 
 def saved_goals(store):
@@ -73,6 +94,38 @@ async def shortlist(descriptions, context, generate, *, verify_match=False):
         if len(matches) > PAGE_SIZE:
             break
     return matches
+
+
+def pdf_target_schema(candidates):
+    options = [
+        {"type": "object", "required": ["target", "title"], "additionalProperties": False,
+         "properties": {key: {"const": row[key]} for key in ("target", "title")}}
+        for row in candidates
+    ]
+    targets = {"type": "array", "minItems": 1, "maxItems": len(candidates),
+               "items": {"enum": [row["target"] for row in candidates]}}
+    clarification = {"type": "object", "required": ["action", "targets"], "additionalProperties": False,
+                     "properties": {"action": {"const": "clarify"}, "targets": targets}}
+    none = {"type": "object", "required": ["action"], "additionalProperties": False,
+            "properties": {"action": {"const": "none"}}}
+    return {"anyOf": [*options, clarification, none]}
+
+
+def pdf_clarification_targets(result, candidates):
+    targets = result.get("targets")
+    if (result.keys() != {"action", "targets"} or not isinstance(targets, list) or not targets
+            or any(type(target) is not int for target in targets)):
+        raise ValueError("Provide a nonempty targets array with only the supplied goal numbers.")
+    chosen = [row for row in candidates if row["target"] in targets]
+    if len(chosen) != len(targets):
+        raise ValueError("Use each supplied target number at most once.")
+    return chosen
+
+
+def exact_title_targets(text, candidates):
+    """Validate an exact goal-title reply independently of the proposed tool target."""
+    title = normalized(text.strip())
+    return {row["target"] for row in candidates if normalized(row["title"]) == title}
 
 
 def named_targets(question, goals):

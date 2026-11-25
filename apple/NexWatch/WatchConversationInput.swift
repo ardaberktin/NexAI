@@ -4,7 +4,6 @@ import Foundation
 final class WatchConversationInput {
     var recording: Bool { capture.isRecording }
     private let capture: WatchCapture
-    private let spool: Spool
     private var detector = WatchQuestionDetector()
     private var archive: LiveArchive?
     private var turn: String?
@@ -12,16 +11,17 @@ final class WatchConversationInput {
 
     enum Event { case began, submitted(String) }
 
-    init(capture: WatchCapture, spool: Spool) {
+    init(capture: WatchCapture) {
         self.capture = capture
-        self.spool = spool
     }
 
     func open(id: String, language: NexLanguage, completed: @escaping @Sendable (String?) -> Void) async throws
         -> AsyncThrowingStream<Data, Error> {
         let pcm = AsyncThrowingStream<Data, Error>.makeStream(bufferingPolicy: .bufferingOldest(40))
+        let spool = capture.spool
         let ambient = try await capture.openLive(language: language, stream: pcm.continuation)
         try Task.checkCancellation()
+        guard capture.spool.directory == spool.directory else { throw CancellationError() }
         archive = LiveArchive(spool: spool, language: language.rawValue, seed: Data(), ambient: ambient,
                               watchConversation: id, completed: completed)
         lastFrame = .now

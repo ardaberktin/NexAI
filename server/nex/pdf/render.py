@@ -1,8 +1,9 @@
 """Render and independently inspect each finished PDF before it can be saved."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from io import BytesIO
 from threading import Lock
+from unicodedata import category, name
 
 from .document import PDFError
 from .layout import MARGIN, MAX_PAGES, PAGE_HEIGHT, PAGE_WIDTH, pages
@@ -23,10 +24,10 @@ class ValidatedPDF:
         return {"title": self.title, "pages": self.pages}
 
 
-def render(document):
+def render(document, *, label_unsupported_symbols=False):
     try:
         with RENDER_LOCK:
-            return build(document)
+            return build(document, label_unsupported_symbols=label_unsupported_symbols)
     except ImportError as exc:
         raise PDFError("renderer_unavailable", "The server PDF dependencies are unavailable.") from exc
     except PDFError:
@@ -35,15 +36,17 @@ def render(document):
         raise PDFError("validation_failed", "The PDF could not be rendered or verified.") from exc
 
 
-def build(document):
+def build(document, *, label_unsupported_symbols=False):
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.pdfgen.canvas import Canvas
 
-    for name, filename in (("NexSans", "Vera.ttf"), ("NexBold", "VeraBd.ttf")):
-        if name not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont(name, filename))
+    for font_name, filename in (("NexSans", "Vera.ttf"), ("NexBold", "VeraBd.ttf")):
+        if font_name not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(font_name, filename))
     glyphs = pdfmetrics.getFont("NexSans").face.charToGlyph
+    if label_unsupported_symbols:
+        document = readable_symbols(document, glyphs)
     if any(not glyphs.get(ord(character)) for character in document.text() if not character.isspace()):
         raise PDFError("unsupported_text", "Some characters are unavailable in the embedded PDF fonts.")
 
@@ -75,6 +78,25 @@ def build(document):
     data = buffer.getvalue()
     validate(data, planned)
     return ValidatedPDF(document.title, len(planned), data)
+
+
+def readable_symbols(document, glyphs):
+    """Keep copied text legible when the PDF font lacks a pictograph."""
+    def copy(text):
+        parts = []
+        for char in text:
+            if char in ("\ufe0e", "\ufe0f"):
+                continue
+            if not glyphs.get(ord(char)) and category(char).startswith("S"):
+                label = name(char, f"U+{ord(char):04X}")
+                parts.append(f" [{label.title()}] ")
+            else:
+                parts.append(char)
+        return " ".join("".join(parts).split())
+
+    sections = tuple(replace(section, heading=copy(section.heading), paragraphs=tuple(map(copy, section.paragraphs)))
+                     for section in document.sections)
+    return replace(document, title=copy(document.title), subtitle=copy(document.subtitle), sections=sections)
 
 
 def validate(data, planned):

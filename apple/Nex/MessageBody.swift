@@ -64,7 +64,10 @@ enum MessageBlock: Equatable {
 struct MessageBody: View {
     private let blocks: [MessageBlock]
 
-    init(_ text: String) {
+    private let selectable: Bool
+
+    init(_ text: String, selectable: Bool = true) {
+        self.selectable = selectable
         blocks = MessageBlock.parse(text)
     }
 
@@ -80,7 +83,7 @@ struct MessageBody: View {
             }
         }
         #if !os(watchOS)
-        .textSelection(.enabled)
+        .modifier(MessageTextSelection(enabled: selectable))
         #endif
     }
 }
@@ -99,3 +102,13 @@ struct MessageCodeBlock: View {
         .background(.primary.opacity(0.065), in: RoundedRectangle(cornerRadius: 8))
     }
 }
+
+#if !os(watchOS)
+struct MessageTextSelection: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled { content.textSelection(.enabled) } else { content }
+    }
+}
+#endif

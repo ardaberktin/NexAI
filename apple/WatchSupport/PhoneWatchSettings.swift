@@ -10,12 +10,10 @@ struct PhoneWatchSettings: View {
                 get: { relay.enabled },
                 set: { relay.setEnabled($0) }
             ))
-            .disabled(model.pairing == nil)
+            .disabled(model.serverProfile == nil)
             if let error = relay.syncError {
                 Text(error).foregroundStyle(.red)
             }
-        } header: {
-            Text("Apple Watch")
         } footer: {
             Text("The paired watch can sync its microphone recordings through this iPhone. To open the private workspace on your watch, unlock Nex on iPhone first.")
         }

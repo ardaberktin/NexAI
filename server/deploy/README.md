@@ -15,9 +15,11 @@ systemctl --user enable --now nex-live.service
 journalctl --user -u nex-live.service -n 30
 ```
 
-The recipe uses Python 3.12, a pinned PyTorch CPU wheel, and several gigabytes of downloaded assets. On other Linux architectures supply compatible dependencies and model runtimes before starting the service. Set `NEX_LIVE_DEVICE=cpu` in the unit if you installed Vulkan and want to force CPU inference. `bash deploy/stage-gemma.sh` stages the second optional language model using the same `NEX_DATA`.
+The recipe uses Python 3.12, a pinned PyTorch CPU wheel, and several gigabytes of downloaded assets. On other Linux architectures supply compatible dependencies and model runtimes before starting the service. Set `NEX_LIVE_DEVICE=cpu` in the unit if you installed Vulkan and want to force CPU inference. Gemma 3 4B serves Chat and voice on Excalibur. For an existing installation, run `bash deploy/stage-gemma.sh` with the same `NEX_DATA` before upgrading.
 
-The voice service shares the archive’s pairing credentials and certificate on TCP 8767. It uses Nemotron with Sherpa-ONNX for streaming recognition, Silero and Smart Turn for turn detection, Kokoro for English speech, and EMA for Turkish speech. The model supervisor serves language requests on a private Unix socket. The archive still needs FFmpeg and Whisper for background transcription.
+If Gemma is unavailable, Nex reports a model failure while the archive stays accessible. Managed mode is recorded in `$NEX_DATA/live-model`. If you retire the managed service, stop it and remove that marker to return to the archive's configured model route.
+
+The voice service shares the archive’s account registry and certificate on TCP 8767. It uses Nemotron with Sherpa-ONNX for streaming recognition, Silero and Smart Turn for turn detection, Kokoro for English speech, and EMA for Turkish speech. The model supervisor serves language requests on a private Unix socket. The archive still needs FFmpeg and Whisper for background transcription.
 
 ## Accounts
 
@@ -44,4 +46,4 @@ For remote iPhone goal and clock alerts, use a push-enabled iOS build signed wit
 }
 ```
 
-Use real Apple IDs and the iOS bundle identifier you built. Use `production` for a production APNs entitlement and build setting. Give both files mode `600` and the directory mode `700`. Restart the archive service and enable notifications on the paired device.
+Use real Apple IDs and the iOS bundle identifier you built. Use `production` for a production APNs entitlement and build setting. Give both files mode `600` and the directory mode `700`. Restart the archive service and enable notifications on your signed-in iPhone.

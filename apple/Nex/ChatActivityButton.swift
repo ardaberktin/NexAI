@@ -7,7 +7,7 @@ struct RecordingChatActivity: View {
 
     var body: some View {
         RecordingStatusTimeline { presence, date in
-            if presence.anyRecording(local: Pairing.platform, localRecording: capture.recording, at: date) {
+            if presence.anyRecording(local: ServerProfile.platform, localRecording: capture.recording, at: date) {
                 ChatActivityButton(model: model, open: open)
             }
         }
@@ -40,8 +40,8 @@ private struct ChatActivityButton: View {
         .padding(.horizontal, WorkspaceStyle.inset)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
-        .task(id: scene != .background && model.pairing != nil) {
-            guard scene != .background, model.pairing != nil else { return }
+        .task(id: scene != .background && model.serverProfile != nil) {
+            guard scene != .background, model.serverProfile != nil else { return }
             await observe()
         }
     }
@@ -79,7 +79,7 @@ private struct ChatActivityButton: View {
     }
 
     private var emptyTitle: LocalizedStringKey {
-        if model.pairing == nil { return "Connect to see activity" }
+        if model.serverProfile == nil { return "Connect to see activity" }
         if unavailable { return "Activity status unavailable" }
         if detections == nil { return "Checking activity…" }
         return "No activity detected"
