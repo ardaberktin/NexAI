@@ -1,4 +1,4 @@
-"""Owner-only workspace routes for the paired native apps."""
+"""Owner-only workspace routes for native app accounts."""
 
 from ..live.weather_location import Coordinates
 from .keys import challenge, require_session, unlock
@@ -15,11 +15,11 @@ def route(api, method, path, device, problem):
     if method == "POST" and path == "challenge":
         data = api.object(1500)
         if data.get("purpose") != "unlock":
-            require_session(state, device, token, client=client)
-        return challenge(state, device, data.get("purpose"), data.get("subject", ""), client=client)
+            require_session(state, client, token)
+        return challenge(state, client, data.get("purpose"), data.get("subject", ""))
     if method == "POST" and path == "unlock":
-        return unlock(state, device, api.object(3000), client=client)
-    require_session(state, device, token, client=client)
+        return unlock(state, client, api.object(3000))
+    require_session(state, client, token)
     if method == "GET" and path == "inbox":
         return inbox(state, api.app.store)
     if method == "POST" and path in {"approve", "resolve"}:
@@ -30,7 +30,7 @@ def route(api, method, path, device, problem):
             if path == "resolve":
                 resolve(state, device, token, data.get("id"), api.app.assistant, Coordinates.from_reply(data))
             else:
-                approve(state, device, data.get("id"), data, api.app.assistant, client=client)
+                approve(state, client, data.get("id"), data, api.app.assistant)
         finally:
             api.app.chat_slot.release()
     elif method == "POST" and path == "screen" and device == "mac":

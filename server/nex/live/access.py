@@ -3,17 +3,17 @@
 import asyncio
 import ipaddress
 
-from ..hosted.auth import authenticate_client, bearer
+from ..hosted.auth import bearer
 from ..network import TAILNET
 
 
 def identity(scope, workspaces, *, loopback):
     peer = scope.get("client")
     if not peer or (not loopback and ipaddress.ip_address(peer[0]) not in TAILNET):
-        return None, None
+        return None
     headers = dict(scope["headers"])
     token = bearer(headers.get(b"authorization", b"").decode("latin1"))
-    return authenticate_client(workspaces.accounts, workspaces.keys, token)
+    return workspaces.accounts.authenticate(token)
 
 
 class LiveAccess:
@@ -29,9 +29,9 @@ class LiveAccess:
         def resolve():
             return identity(scope, workspaces, loopback=self.loopback)
 
-        role, client = await asyncio.to_thread(resolve)
-        if role:
-            state = await workspaces.workspace(client.account if client else None)
+        client = await asyncio.to_thread(resolve)
+        if client:
+            state = await workspaces.workspace(client.account)
             if state is None:
                 if scope["type"] == "websocket":
                     await send({"type": "websocket.close", "code": 1013})
@@ -42,12 +42,11 @@ class LiveAccess:
                 return
             scope["nex.workspace"] = state
             scope["nex.client"] = client
-            scope["nex.role"] = role
-        if "nex.role" not in scope or scope["type"] != "websocket":
+        if client is None or scope["type"] != "websocket":
             await self.app(scope, receive, send)
             return
         handler = asyncio.create_task(self.app(scope, receive, send))
-        monitor = asyncio.create_task(self.watch(resolve, role, client.id if client else None))
+        monitor = asyncio.create_task(self.watch(resolve, client.id))
         try:
             completed, _ = await asyncio.wait((handler, monitor), return_when=asyncio.FIRST_COMPLETED)
             if handler in completed:
@@ -62,16 +61,17 @@ class LiveAccess:
             await asyncio.gather(handler, monitor, return_exceptions=True)
 
     @staticmethod
-    async def watch(resolve, role, device_id):
+    async def watch(resolve, device_id):
         while True:
             await asyncio.sleep(2)
-            current_role, client = await asyncio.to_thread(resolve)
-            if current_role != role or (client.id if client else None) != device_id:
+            client = await asyncio.to_thread(resolve)
+            if client is None or client.id != device_id:
                 return
 
 
 def authenticate(connection):
-    return connection.scope.get("nex.role")
+    client = connection.scope.get("nex.client")
+    return client.role if client else None
 
 
 def workspace_for(connection):

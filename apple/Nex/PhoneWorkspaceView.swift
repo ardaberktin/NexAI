@@ -14,7 +14,7 @@ struct PhoneWorkspaceView<Content: View>: View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 header
-                if model.pairing != nil {
+                if model.serverProfile != nil {
                     RecordingStatusPeers(local: .iphone)
                 }
             }

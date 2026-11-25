@@ -1,6 +1,4 @@
 import argparse
-import base64
-import hashlib
 import ipaddress
 import json
 import logging
@@ -15,34 +13,17 @@ from .accounts.credentials import Credentials
 from .accounts.http import AccountError
 from .accounts.setup import authorize
 from .hosted import cli as account_cli
-from .hosted.auth import Accounts
 from .hosted.workspaces import HostedWorkspaces
 from .http_api import Server
 from .initialize import initialize
 from .network import CLIENT_PORT, TAILNET, TAILSCALE_INTERFACE, TailnetEndpoint
-from .privacy.keys import issue_setup
-from .privacy.state import AccessDenied, PrivacyState
+from .privacy.state import AccessDenied
 
 logger = logging.getLogger(__name__)
 
 
 def read_access(root):
     return json.loads((root / "access.json").read_text())
-
-
-def pairing(root, device):
-    credentials = read_access(root)
-    if device == "admin":
-        print(credentials["keys"]["admin"])
-        return
-    if not Accounts(root).legacy_allowed():
-        raise ValueError("Sign in with your Nex account. Legacy pairing is disabled.")
-    endpoint = TailnetEndpoint.current(root)
-    certificate = ssl.PEM_cert_to_DER_cert(endpoint.certificate.read_text())
-    digest = base64.b64encode(hashlib.sha256(certificate).digest()).decode()
-    print(json.dumps({"url": f"https://{endpoint.address}:{CLIENT_PORT}",
-                      "pin": digest, "token": credentials["keys"][device], "device": device,
-                      "setup": issue_setup(PrivacyState(root), device)}))
 
 
 def report_ready():
@@ -99,8 +80,7 @@ def main():
     server = subcommands.add_parser("serve")
     server.add_argument("--runtime", type=Path, required=True)
     server.add_argument("--ssd-audio", type=Path)
-    export = subcommands.add_parser("pair")
-    export.add_argument("device", choices=("mac", "iphone", "admin"))
+    subcommands.add_parser("admin-key", help="print the loopback console credential")
     init = subcommands.add_parser("init", help="initialize a private server archive")
     init.add_argument("--audio-quota-gib", type=int, default=48)
     init.add_argument("--min-free-gib", type=int, default=2)
@@ -120,10 +100,10 @@ def main():
         except (OSError, ValueError) as exc:
             parser.exit(1, str(exc) + "\n")
         print(f"Nex archive initialized at {args.data.resolve()}")
-    elif args.command in {"pair", "account"}:
+    elif args.command in {"admin-key", "account"}:
         try:
-            if args.command == "pair":
-                pairing(args.data.resolve(), args.device)
+            if args.command == "admin-key":
+                print(read_access(args.data.resolve())["keys"]["admin"])
             else:
                 account_cli.run(args.data.resolve(), args)
         except (AccessDenied, OSError, ValueError) as exc:

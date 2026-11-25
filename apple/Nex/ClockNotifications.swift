@@ -23,7 +23,7 @@ enum ClockNotifications {
     }
 
     static func observe(using model: Controller) async {
-        guard model.workspaceFeatureEnabled(.goals), model.pairing != nil else {
+        guard model.workspaceFeatureEnabled(.goals), model.serverProfile != nil else {
             await clear()
             return
         }
@@ -143,7 +143,7 @@ struct ClockNotificationMonitor: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.task(id: Context(pairing: model.pairing?.workspaceScope, observing: observing,
+        content.task(id: Context(accountScope: model.serverProfile?.workspaceScope, observing: observing,
                                  enabled: model.workspaceFeatureEnabled(.goals))) {
             guard observing else { return }
             await ClockNotifications.observe(using: model)
@@ -151,7 +151,7 @@ struct ClockNotificationMonitor: ViewModifier {
     }
 
     private struct Context: Equatable {
-        let pairing: String?
+        let accountScope: String?
         let observing: Bool
         let enabled: Bool
     }

@@ -43,7 +43,7 @@ struct DaybookView: View {
                 if scenePhase == .active { await load(selected) }
             }
         }
-        .onChange(of: model.pairing?.url) {
+        .onChange(of: model.serverProfile?.url) {
             overview = nil
             Task { await load(context) }
         }
@@ -67,11 +67,11 @@ struct DaybookView: View {
                 #if os(iOS)
                 header
                 #endif
-                if model.pairing == nil {
+                if model.serverProfile == nil {
                     ContentUnavailableView {
-                        Label("Pair with Excalibur", systemImage: "book.closed")
+                        Label("Sign In to Nex", systemImage: "book.closed")
                     } description: {
-                        Text("Pair in Settings to open your Daybook.")
+                        Text("Sign in to open your Daybook.")
                     } actions: {
                         Button("Open Settings", action: openSettings)
                             .buttonStyle(.borderedProminent)
@@ -138,7 +138,7 @@ struct DaybookView: View {
     }
 
     private func load(_ selected: DaybookContext) async {
-        guard model.pairing != nil else { return }
+        guard model.serverProfile != nil else { return }
         do {
             let day = try await model.daybook(selected)
             guard selected == context, !Task.isCancelled else { return }

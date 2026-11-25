@@ -6,7 +6,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS keys(device TEXT PRIMARY KEY, public BLOB, bootstrap TEXT);
 CREATE TABLE IF NOT EXISTS challenges(id TEXT PRIMARY KEY, device TEXT, purpose TEXT, subject TEXT, expires REAL);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, device TEXT, expires REAL);
 CREATE TABLE IF NOT EXISTS session_devices(

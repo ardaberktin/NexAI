@@ -1,4 +1,4 @@
-"""Bootstrap the first owner using host access or an unlocked legacy device."""
+"""Bootstrap the first owner using a one-time host-issued setup link."""
 
 import hmac
 import secrets
@@ -31,30 +31,26 @@ def setup_secret(accounts):
     return secret
 
 
-def check_setup(db, secret, legacy_device):
+def check_setup(db, secret):
     if owner_exists(db):
         raise AccessDenied("This Nex server already has an owner. Sign in to the existing account.")
-    if legacy_device:
-        return
     pending = db.execute("SELECT token,expires FROM owner_setup").fetchone()
     if (not isinstance(secret, str) or not TOKEN.fullmatch(secret) or not pending
             or pending["expires"] <= time() or not hmac.compare_digest(pending["token"], hash_token(secret))):
         raise AccessDenied("The setup link is invalid or expired. Export a new link on the server.")
 
 
-def claim_owner(accounts, body, peer, *, legacy_device=None):
+def claim_owner(accounts, body, peer):
     role, public = device_public(body)
-    if legacy_device and legacy_device != role:
-        raise AccessDenied("Set up the owner account on the authorized device.")
     secret = body.get("setup")
     name = username(body.get("username"))
     with accounts.password_work(peer):
         with accounts.connect() as db:
-            check_setup(db, secret, legacy_device)
+            check_setup(db, secret)
         record = password_record(body.get("password"))
         try:
             with accounts.connect(write=True) as db:
-                check_setup(db, secret, legacy_device)
+                check_setup(db, secret)
                 identifier = insert_user(db, name, record, owner=True)
                 db.execute("DELETE FROM owner_setup")
                 return issue_device(db, identifier, name, True, role, public)

@@ -8,7 +8,7 @@ enum PhoneWatchTransfers {
     }
 
     static func deliver(_ clip: Clip, inbox: PhoneWatchInbox, session: WCSession, connection: NexAPI,
-                        voice: PhoneWatchReplyVoice, scope: String?, isCurrent: () -> Bool) async throws -> Bool {
+                        voice: PhoneWatchReplyVoice, scope: String, isCurrent: () -> Bool) async throws -> Bool {
         let question = clip.watchConversation != nil
         var row: Recording
         if question, inbox.submitted(clip) {

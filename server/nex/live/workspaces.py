@@ -23,8 +23,8 @@ LOG = logging.getLogger(__name__)
 
 
 class LiveWorkspaces:
-    def __init__(self, root, runtime, keys, speech, room, verifier, model_socket, mac_socket):
-        self.root, self.runtime, self.keys = root, runtime, keys
+    def __init__(self, root, runtime, admin_key, speech, room, verifier, model_socket, mac_socket):
+        self.root, self.runtime, self.admin_key = root, runtime, admin_key
         self.accounts = Accounts(root)
         self.speech, self.room, self.verifier = speech, room, verifier
         self.model_socket, self.mac_socket = model_socket, mac_socket
@@ -66,7 +66,7 @@ class LiveWorkspaces:
             await asyncio.sleep(2)
 
     async def workspace(self, account):
-        if not account or account.owner:
+        if account.owner:
             return self.owner
         async with self.build_lock:
             if account.id not in self.workspaces:
@@ -88,7 +88,7 @@ class LiveWorkspaces:
             if not account:
                 await dialogue.wait_ready()
                 await stack.enter_async_context(daybook_socket(self.runtime / "daybook.sock", dialogue))
-            secret = self.keys["admin"]
+            secret = self.admin_key
             if account:
                 secret = hmac.digest(secret.encode(), account.id.encode(), "sha256").hex()
             voices = VoiceProfiles(memory.privacy, self.room, secret)

@@ -55,7 +55,7 @@ struct CaptureWorkspaceControls: View {
                 if capture.ambient && capture.interrupted {
                     Button("Pause", action: model.pauseRecording).buttonStyle(.bordered)
                 }
-                if model.pairing != nil {
+                if model.serverProfile != nil {
                     Button(model.liveState != nil ? "End conversation" :
                            (capture.voice ? "Send question" : "Ask by voice")) {
                         Task { await model.toggleVoice() }

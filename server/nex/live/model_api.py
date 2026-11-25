@@ -28,7 +28,7 @@ def install_model_api(app, authenticate):
     async def switch_model(request: Request, selection: Selection):
         models = runtime(request)
         client = request.scope.get("nex.client")
-        if client and not client.account.owner:
+        if not client or not client.account.owner:
             raise HTTPException(403)
         state = workspace_for(request)
         if state.active.locked():

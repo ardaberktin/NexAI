@@ -3,10 +3,9 @@ import WatchConnectivity
 
 extension WatchSync {
     func replyAudio(_ id: String) async throws -> Data {
-        guard enabled, let session, session.activationState == .activated else {
+        guard enabled, let account = scope, let session, session.activationState == .activated else {
             throw NexError.capture("Nex voice is unavailable.")
         }
-        let account = scope
         var clip = WatchReplyAudio(id: id)
         repeat {
             try Task.checkCancellation()

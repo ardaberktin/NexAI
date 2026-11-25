@@ -59,7 +59,7 @@ struct VoiceEnrollment: View {
             Text("Install the room voice models on Excalibur to use voice recognition.")
         } else {
             if profile.hasVoiceProfile {
-                Label("Voice profile active on all paired devices", systemImage: "waveform.badge.checkmark")
+                Label("Voice profile active on all signed-in devices", systemImage: "waveform.badge.checkmark")
             }
             if enrolling {
                 enrollmentControls

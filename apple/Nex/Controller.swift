@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class Controller: ObservableObject {
-    @Published var pairing: Pairing?
+    @Published var serverProfile: ServerProfile?
     @Published private(set) var signingOut = false
     @Published private(set) var signOutError: String?
     @Published var status: ServerStatus?
@@ -72,7 +72,7 @@ final class Controller: ObservableObject {
     let gemma: MacGemmaControl
     let screenSharing: ScreenSharing
     #endif
-    private let legacySpool: Spool
+    private let spoolRoot: Spool
     private var spool: Spool
     private var liveConversation: LiveConversation?
     private let recordingAttention = RecordingAttention()
@@ -93,14 +93,14 @@ final class Controller: ObservableObject {
     private var lastSpeechIssue = Date.distantPast
     private var lastSpeechLanguage: NexLanguage?
 
-    init(spool: Spool, profile: Pairing?) throws {
+    init(spool: Spool, profile: ServerProfile?) throws {
         #if os(macOS)
         let gemma = MacGemmaControl()
         self.gemma = gemma
         screenSharing = ScreenSharing(gemma: gemma)
         #endif
-        legacySpool = spool
-        self.spool = if let profile, profile.account != nil { try spool.scoped(to: profile.workspaceScope) } else { spool }
+        spoolRoot = spool
+        self.spool = if let profile { try spool.scoped(to: profile.workspaceScope) } else { spool }
         capture = Capture(spool: self.spool)
         language = NexLanguage(rawValue: saved.string(forKey: "language") ?? "auto") ?? .auto
         handsFree = saved.bool(forKey: "handsFree")
@@ -112,10 +112,10 @@ final class Controller: ObservableObject {
         if let profile {
             do {
                 setConnection(try NexAPI(profile), featureCacheScope: profile.workspaceScope)
-                pairing = profile
+                serverProfile = profile
             } catch { message = error.localizedDescription }
         }
-        weatherSharing.paired(pairing)
+        weatherSharing.connect(serverProfile)
         configureAutomaticVoice()
         capture.liveInterrupted = { [weak self] in self?.stopLive() }
         capture.notify = { [weak self] in
@@ -123,98 +123,68 @@ final class Controller: ObservableObject {
         }
     }
 
-    func pair(_ profile: Pairing) async throws {
-        guard !signingOut, pairing?.account == nil, profile.account == nil else { throw CancellationError() }
-        let connection = try NexAPI(profile)
-        try await privacy.connect(connection, profile: profile)
-        var savedProfile = profile
-        savedProfile.setup = nil
-        try install(savedProfile, connection: connection)
-        InstalledPairing.finish(profile)
-    }
-
     func signIn(link: String, username: String, password: String) async throws {
-        guard !signingOut, pairing?.account == nil else { throw CancellationError() }
+        guard !signingOut, serverProfile == nil else { throw CancellationError() }
         let server = try NexServerLink(link)
         try await privacy.signIn(server, username: username, password: password) { profile, connection in
             try install(profile, connection: connection)
         }
     }
 
-    func createOwnerAccount(username: String, password: String) async throws {
-        guard let previous = pairing, previous.account == nil, privacy.connected else {
-            throw NexError.pairing("Unlock the legacy workspace to set up the owner account.")
-        }
-        guard !capture.ambient, !capture.recording, try spool.clips().isEmpty, try spool.gaps().isEmpty else {
-            throw NexError.pairing("Pause recording and finish syncing this device before changing accounts.")
-        }
-        let legacy = try connection()
-        try await privacy.registerHosted(install: { profile, connection in
-            try install(profile, connection: connection)
-        }) { publicKey in
-            let enrollment = HostedEnrollment(username: username, password: password, publicKey: publicKey)
-            let result: HostedLogin = try await legacy.send("/v1/auth/setup", body: enrollment)
-            return try result.pairing(url: previous.url, pin: previous.pin)
-        }
-    }
-
-    private func install(_ profile: Pairing, connection: NexAPI) throws {
-        let accountSpool = profile.account == nil ? legacySpool : try legacySpool.scoped(to: profile.workspaceScope)
-        try PairingKeychain.save(profile)
-        if pairing?.workspaceScope != profile.workspaceScope {
+    private func install(_ profile: ServerProfile, connection: NexAPI) throws {
+        let accountSpool = try spoolRoot.scoped(to: profile.workspaceScope)
+        try ServerProfileKeychain.save(profile)
+        if serverProfile?.workspaceScope != profile.workspaceScope {
             stopAccountActivity()
             capture.useSpool(accountSpool)
             spool = accountSpool
             #if os(iOS)
-            if let previous = pairing { IPhonePush.shared.unpair(previous) }
             PhoneWatchRelay.shared.setEnabled(false)
             #endif
         }
         setConnection(connection, featureCacheScope: profile.workspaceScope)
-        pairing = profile
+        serverProfile = profile
         #if os(iOS)
         PhoneWatchRelay.shared.accountChanged()
         #endif
-        weatherSharing.paired(profile)
+        weatherSharing.connect(profile)
         resetConnectionStatus()
         Task { await sync() }
     }
 
     func signOut(revoke: Bool = true) async {
-        guard !signingOut, let profile = pairing else { return }
+        guard !signingOut, let profile = serverProfile else { return }
         signingOut = true
         signOutError = nil
         defer { signingOut = false }
-        do { try PairingKeychain.clear() }
+        do { try ServerProfileKeychain.clear() }
         catch {
             signOutError = error.localizedDescription
             privacy.lock()
             return
         }
-        weatherSharing.unpair()
+        weatherSharing.disconnect()
         #if os(iOS)
-        IPhonePush.shared.unpair(profile)
+        IPhonePush.shared.signedOut()
         PhoneWatchRelay.shared.setEnabled(false)
         #endif
         stopAccountActivity()
         privacy.lock()
         setConnection(nil)
-        pairing = nil
+        serverProfile = nil
         #if os(iOS)
         PhoneWatchRelay.shared.accountChanged()
         #endif
-        capture.useSpool(legacySpool)
-        spool = legacySpool
+        capture.useSpool(spoolRoot)
+        spool = spoolRoot
         resetConnectionStatus()
         await GoalNotifications.removeAll()
         await ClockNotifications.clear()
-        if profile.account != nil {
-            OwnerKey.discard(profile.biometricSlot)
-            if revoke, let api = try? NexAPI(profile) {
-                do { try await api.signOut() }
-                catch NexError.api(401, _) {}
-                catch { message = "Signed out on this device. The server could not confirm revocation." }
-            }
+        OwnerKey.discard(profile.biometricSlot)
+        if revoke, let api = try? NexAPI(profile) {
+            do { try await api.signOut() }
+            catch NexError.api(401, _) {}
+            catch { message = "Signed out on this device. The server could not confirm revocation." }
         }
     }
 
@@ -466,7 +436,7 @@ final class Controller: ObservableObject {
     }
 
     func loop() async {
-        if pairing != nil && !capture.ambient && saved.bool(forKey: "resumeRecording") {
+        if serverProfile != nil && !capture.ambient && saved.bool(forKey: "resumeRecording") {
             await capture.resumeRecording()
         }
         while !Task.isCancelled {
@@ -590,7 +560,7 @@ final class Controller: ObservableObject {
             pending = try spool.clips().filter { $0.duration != nil }.count
             message = nil
         } catch NexError.api(401, _) {
-            if api === attempt, pairing?.account != nil { await signOut(revoke: false) }
+            if api === attempt, serverProfile != nil { await signOut(revoke: false) }
         } catch {
             guard api === attempt else { return }
             message = error.localizedDescription
@@ -752,12 +722,12 @@ final class Controller: ObservableObject {
     }
 
     func connection() throws -> NexAPI {
-        guard let api else { throw NexError.pairing("Pair with Excalibur first.") }
+        guard let api else { throw NexError.connection("Sign in to Nex first.") }
         return api
     }
 
     func play(_ id: String) async throws {
-        guard let api else { throw NexError.pairing("Pair with Excalibur first.") }
+        guard let api else { throw NexError.connection("Sign in to Nex first.") }
         let data = try await api.bytes("/v1/recordings/" + id + "/audio")
         if self.api !== api || playing || capture.voice { return }
         stopLive()
@@ -790,7 +760,7 @@ final class Controller: ObservableObject {
     }
 
     var canStartChatSpeech: Bool {
-        pairing != nil && liveConversation == nil && !playing && !capture.voice && !capture.listeningForQuestion
+        serverProfile != nil && liveConversation == nil && !playing && !capture.voice && !capture.listeningForQuestion
     }
 
     func readChatMessage(_ message: WorkspaceMessage, language: String) {

@@ -1,4 +1,4 @@
-"""Create the private archive and initial access keys for a self-hosted server."""
+"""Create the private archive and the console credential for a self-hosted server."""
 
 import fcntl
 import json
@@ -24,7 +24,7 @@ def initialize(root, quota_gib, reserve_gib):
                 raise ValueError("The access.json file must be accessible only to its owner (chmod 600).")
             return
         settings = {
-            "keys": {role: secrets.token_urlsafe(36) for role in ("admin", "mac", "iphone")},
+            "keys": {"admin": secrets.token_urlsafe(36)},
             "audio_quota_bytes": quota_gib * 2**30,
             "min_free_bytes": reserve_gib * 2**30,
         }

@@ -28,7 +28,7 @@ class PushQueue:
         self.provider = None
         self.signature = None
 
-    def register(self, installation, token, environment, enabled, *, device_id=None):
+    def register(self, installation, token, environment, enabled, *, device_id):
         try:
             if str(UUID(installation)) != installation or type(enabled) is not bool:
                 raise ValueError
@@ -44,10 +44,7 @@ class PushQueue:
             if enabled:
                 db.execute("INSERT OR REPLACE INTO iphone_push_registration VALUES(1,?,?,?)",
                            (installation, token, environment))
-                if device_id:
-                    db.execute("INSERT OR REPLACE INTO iphone_push_session VALUES(1,?)", (device_id,))
-                else:
-                    db.execute("DELETE FROM iphone_push_session")
+                db.execute("INSERT OR REPLACE INTO iphone_push_session VALUES(1,?)", (device_id,))
                 db.execute("DELETE FROM goal_push_delivery WHERE token<>?", (token,))
             else:
                 db.execute("DELETE FROM goal_push_delivery WHERE token IN "
@@ -116,7 +113,7 @@ class PushQueue:
             if registration is None:
                 return False
             device_id = registration["device_id"]
-            current = accounts.device_active(device_id) if device_id else accounts.legacy_allowed()
+            current = device_id and accounts.device_active(device_id)
             if current:
                 return True
             # Only clear the registration we inspected. A fresh sign-in may already have registered.

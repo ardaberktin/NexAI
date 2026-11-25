@@ -21,13 +21,12 @@ enum WatchLink {
     static let responseChunkSize = 32_000
     static let maximumResponseBytes = 12_000_000
 
-    static func envelope(_ data: Data, scope: String?) -> Data {
-        guard let scope else { return data }
+    static func envelope(_ data: Data, scope: String) -> Data {
         return header(scope) + data
     }
 
     static func payload(_ data: Data, scope: String?) -> Data? {
-        guard let scope else { return data }
+        guard let scope else { return nil }
         let prefix = header(scope)
         guard data.starts(with: prefix) else { return nil }
         return Data(data.dropFirst(prefix.count))

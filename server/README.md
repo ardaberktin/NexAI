@@ -23,7 +23,7 @@ python3 -m nex --data "$NEX_DATA" provision-tailnet
 python3 -m nex --data "$NEX_DATA" serve --runtime "$NEX_RUNTIME"
 ```
 
-Initialization generates stable keys for `admin`, `mac`, and `iphone`. Running it again preserves the existing access file and storage limits. The archive service creates its SQLite schemas and working directories when it starts.
+Initialization generates the loopback console key. Running it again preserves the existing access file and storage limits. The archive service creates its SQLite schemas and working directories when it starts.
 
 From the client Mac, open an SSH tunnel to the server’s loopback console. Replace the SSH target with your user and server address.
 
@@ -31,7 +31,7 @@ From the client Mac, open an SSH tunnel to the server’s loopback console. Repl
 ssh -N -L 127.0.0.1:8766:127.0.0.1:8766 user@your-linux-host
 ```
 
-Open <http://127.0.0.1:8766> while that tunnel runs. On the server, run `python3 -m nex --data "$NEX_DATA" pair admin` from the server source directory to get the console key. Keep it private.
+Open <http://127.0.0.1:8766> while that tunnel runs. On the server, run `python3 -m nex --data "$NEX_DATA" admin-key` from the server source directory to get the console key. Keep it private.
 
 ## Configure Chat and transcription
 
@@ -58,7 +58,7 @@ service after updating the server source. On a distribution that protects its sy
 environment with `--system-site-packages` if the service already uses system-installed packages. The archive
 adds the PDF storage table on startup.
 
-Ask Nex to create a PDF in Chat, or include the PDF format and layout in a goal's instructions. The paired Mac
+Ask Nex to create a PDF in Chat, or include the PDF format and layout in a goal's instructions. The Mac
 and iPhone apps can open, save, and share the result from **Library → Files**. A PDF produced by or attached to a
 goal also appears in that goal's **Artifacts**. The renderer provides single-column reports and two-column
 newspapers with embedded fonts for English and Turkish. It checks page geometry, text, and rasterized output
@@ -74,7 +74,7 @@ python3 -m nex --data "$NEX_DATA" account setup-link
 
 Paste the link into Nex on a Mac or iPhone connected to the tailnet. Choose the owner's username and password and finish Touch ID or Face ID registration. The setup link expires in 30 minutes. Once signed in, open **Settings → Nex Account** to share the reusable server link. Use **Manage Users** there to add other accounts. Give each user their own credentials through a trusted channel.
 
-On a paired server, update the archive and live services and the Apple apps. Pause recording and finish syncing the Mac, iPhone, and Watch queues. Then use **Settings → Nex Account → Set Up Owner Account** from an unlocked, paired Mac or iPhone. The new owner inherits the existing archive and legacy device credentials are retired. Sign in on the other client and re-enable Apple Watch in iPhone settings. Unsynced legacy recordings stay in their original local queues.
+The first owner uses the archive already on the server. After upgrading a server with archived recordings, sign in with that account and re-enable Apple Watch on iPhone if needed. Current account credentials and account-scoped queues carry through the upgrade.
 
 **Nex Account** lets users rename themselves, change their password and sign out other devices. The owner can appoint administrators. Administrators can create and rename member accounts, reset member passwords, disable or restore access, and set audio limits. Disabling an account signs its devices out and preserves its archive. Additional accounts keep separate archives under `$NEX_DATA/users/` and use server-side models. The host console continues to manage the original archive and shared model configuration.
 
@@ -86,18 +86,6 @@ python3 -m nex --data "$NEX_DATA" account server-link
 python3 -m nex --data "$NEX_DATA" account list
 python3 -m nex --data "$NEX_DATA" account reset-password alice
 ```
-
-### Legacy pairing
-
-Legacy profiles remain available to installations that have yet to assign the original archive to an account.
-
-```bash
-umask 077
-python3 -m nex --data "$NEX_DATA" pair mac > "$HOME/Nex-Pairing-mac.json"
-python3 -m nex --data "$NEX_DATA" pair iphone > "$HOME/Nex-Pairing-iphone.json"
-```
-
-Transfer each file privately to its intended device. Import it from **Legacy pairing → Open pairing file** and finish biometric registration. Export a fresh file when pairing another installation or replacing a device. Apple Watch connects through the paired iPhone.
 
 ## Run as user services
 
@@ -115,7 +103,7 @@ See [Live voice and optional integrations](deploy/README.md) for the second serv
 
 ## Maintain and verify
 
-- Back up the entire private archive with Nex stopped or take a consistent filesystem snapshot. Include any externally configured SSD audio directory. Include `accounts.sqlite` and the account archives under `users/`. Keep backups and pairing files outside the source checkout.
-- The paired endpoint uses a pinned self-signed certificate for the current tailnet IP. If the certificate expires or the IP changes, provision the current identity, restart both services, and give users a new server link. Drain device queues before a planned certificate change. For same-IP renewal, stop both services and move the old identity directory under `tailnet-tls/` to a private backup before running `provision-tailnet`.
+- Back up the entire private archive with Nex stopped or take a consistent filesystem snapshot. Include any externally configured SSD audio directory. Include `accounts.sqlite` and the account archives under `users/`. Keep backups and account credentials outside the source checkout.
+- The server uses a pinned self-signed certificate for the current tailnet IP. If the certificate expires or the IP changes, provision the current identity, restart both services, and give users a new server link. Drain device queues before a planned certificate change. For same-IP renewal, stop both services and move the old identity directory under `tailnet-tls/` to a private backup before running `provision-tailnet`.
 - Check that the console opens through SSH, sign in on a client, test Chat, and upload a short recording. Enable Live Conversation separately and try it on a physical device.
 - Run `python3.12 -m pip install -r requirements-test.txt` in a development virtual environment and `python3.12 -m unittest discover -s tests -v` from this directory. Tests that require Bubblewrap or other Linux-specific facilities can skip on macOS.

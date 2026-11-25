@@ -13,7 +13,6 @@
 		7EFD00000000000000004203 /* question-chime.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7EFD00000000000000004201; };
 		0493C46B1723470A60B87D6F /* Assets-iOS.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F74B4998DE7D8CC74B1031A /* Assets-iOS.xcassets */; };
 		049AE7542C29392753ECF295 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D47FE3984805D0ACF6E3901 /* Connection.swift */; };
-		F6B52F1BBE7125C8930CBC14 /* InstalledPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561463CA3238DDBB5674D193 /* InstalledPairing.swift */; };
 		768776E2B58A6EC07991CC46 /* OwnerKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CE0DB190A1DBAF0FEDC66B /* OwnerKey.swift */; };
 		4E14FC278E5DC26E2F788225 /* AppPrivacy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AF987A4A1BE25D80B2C15C /* AppPrivacy.swift */; };
 		FD9CD371BA464C3A98DCCC11 /* AppAutoLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9CD371BA464C3A98DCCC01 /* AppAutoLock.swift */; };
@@ -39,7 +38,7 @@
 		7EEB9A8221EC0496905EDB19 /* Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB17DEE0831E942DC796E9B /* Types.swift */; };
 		8A915428EA83E6D42343296F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7527C652D86FA8745E8B9B4 /* SettingsView.swift */; };
 		7EFA00000000000000000102 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000101 /* SettingsPage.swift */; };
-		7EFA00000000000000000202 /* ExcaliburPairingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */; };
+		7EFA00000000000000000202 /* NexServerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* NexServerSettings.swift */; };
 		7EFA00000000000000000FA2 /* HostedAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA1 /* HostedAccount.swift */; };
 		7EFA00000000000000000FB4 /* HostedAccountAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB3 /* HostedAccountAPI.swift */; };
 		7EFA00000000000000000FB7 /* HostedAccountFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB6 /* HostedAccountFields.swift */; };
@@ -53,7 +52,7 @@
 		8FCCD7CEC1E24968EF3209AF /* MicrophoneStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE51C5927CC5C22F59BC7EE3 /* MicrophoneStream.swift */; };
 		916493B868C0F01A5C47A79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7527C652D86FA8745E8B9B4 /* SettingsView.swift */; };
 		7EFA00000000000000000103 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000101 /* SettingsPage.swift */; };
-		7EFA00000000000000000203 /* ExcaliburPairingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */; };
+		7EFA00000000000000000203 /* NexServerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* NexServerSettings.swift */; };
 		7EFA00000000000000000FA3 /* HostedAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA1 /* HostedAccount.swift */; };
 		7EFA00000000000000000FB5 /* HostedAccountAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB3 /* HostedAccountAPI.swift */; };
 		7EFA00000000000000000FB8 /* HostedAccountFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB6 /* HostedAccountFields.swift */; };
@@ -67,7 +66,6 @@
 		9E212347A4290D5AC4FC1846 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1BCBAFCB8B0863DF86DE52AD /* Foundation.framework */; };
 		A16C881E96386DDF16C25E55 /* ListenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD9CE14007C48AB8AF481EDE /* ListenView.swift */; };
 		A83CD02E6B9F80D1A07E46E5 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D47FE3984805D0ACF6E3901 /* Connection.swift */; };
-		6BDD15D091F9894CC9816A3C /* InstalledPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561463CA3238DDBB5674D193 /* InstalledPairing.swift */; };
 		07B3D4DEA07785642E5BFF1F /* OwnerKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CE0DB190A1DBAF0FEDC66B /* OwnerKey.swift */; };
 		E5B221F5F30FF07873653B86 /* AppPrivacy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AF987A4A1BE25D80B2C15C /* AppPrivacy.swift */; };
 		FD9CD371BA464C3A98DCCC21 /* AppAutoLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9CD371BA464C3A98DCCC01 /* AppAutoLock.swift */; };
@@ -342,7 +340,6 @@
 		7EFD00000000000000004201 /* question-chime.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "question-chime.wav"; sourceTree = "<group>"; };
 		0BB17DEE0831E942DC796E9B /* Types.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Types.swift; sourceTree = "<group>"; };
 		0D47FE3984805D0ACF6E3901 /* Connection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Connection.swift; sourceTree = "<group>"; };
-		561463CA3238DDBB5674D193 /* InstalledPairing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InstalledPairing.swift; sourceTree = "<group>"; };
 		82CE0DB190A1DBAF0FEDC66B /* OwnerKey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OwnerKey.swift; sourceTree = "<group>"; };
 		05AF987A4A1BE25D80B2C15C /* AppPrivacy.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppPrivacy.swift; sourceTree = "<group>"; };
 		FD9CD371BA464C3A98DCCC01 /* AppAutoLock.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppAutoLock.swift; sourceTree = "<group>"; };
@@ -365,7 +362,7 @@
 		A393EF8B647B2D45F55A0B36 /* Capture.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
 		A7527C652D86FA8745E8B9B4 /* SettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000101 /* SettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPage.swift; sourceTree = "<group>"; };
-		7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcaliburPairingSettings.swift; sourceTree = "<group>"; };
+		7EFA00000000000000000201 /* NexServerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NexServerSettings.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FA1 /* HostedAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccount.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FB3 /* HostedAccountAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccountAPI.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FB6 /* HostedAccountFields.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccountFields.swift; sourceTree = "<group>"; };
@@ -572,7 +569,6 @@
 				A393EF8B647B2D45F55A0B36 /* Capture.swift */,
 				3CA3FD10A31A42EE901BCD03 /* CaptureAudio.swift */,
 				0D47FE3984805D0ACF6E3901 /* Connection.swift */,
-				561463CA3238DDBB5674D193 /* InstalledPairing.swift */,
 				82CE0DB190A1DBAF0FEDC66B /* OwnerKey.swift */,
 				05AF987A4A1BE25D80B2C15C /* AppPrivacy.swift */,
 				FD9CD371BA464C3A98DCCC01 /* AppAutoLock.swift */,
@@ -585,7 +581,7 @@
 				32E3958FC59DCFF13933D07F /* NexApp.swift */,
 				A7527C652D86FA8745E8B9B4 /* SettingsView.swift */,
 				7EFA00000000000000000101 /* SettingsPage.swift */,
-				7EFA00000000000000000201 /* ExcaliburPairingSettings.swift */,
+				7EFA00000000000000000201 /* NexServerSettings.swift */,
 				7EFA00000000000000000FA1 /* HostedAccount.swift */,
 				7EFA00000000000000000FB3 /* HostedAccountAPI.swift */,
 				7EFA00000000000000000FB6 /* HostedAccountFields.swift */,
@@ -916,7 +912,6 @@
 				1630094A107233B8EDC46836 /* Capture.swift in Sources */,
 				3CA3FD10A31A42EE901BCD01 /* CaptureAudio.swift in Sources */,
 				049AE7542C29392753ECF295 /* Connection.swift in Sources */,
-				F6B52F1BBE7125C8930CBC14 /* InstalledPairing.swift in Sources */,
 				768776E2B58A6EC07991CC46 /* OwnerKey.swift in Sources */,
 				4E14FC278E5DC26E2F788225 /* AppPrivacy.swift in Sources */,
 				FD9CD371BA464C3A98DCCC11 /* AppAutoLock.swift in Sources */,
@@ -929,7 +924,7 @@
 				8FCCA97E6C0E657C23367244 /* NexApp.swift in Sources */,
 				8A915428EA83E6D42343296F /* SettingsView.swift in Sources */,
 				7EFA00000000000000000102 /* SettingsPage.swift in Sources */,
-				7EFA00000000000000000202 /* ExcaliburPairingSettings.swift in Sources */,
+				7EFA00000000000000000202 /* NexServerSettings.swift in Sources */,
 				7EFA00000000000000000FA2 /* HostedAccount.swift in Sources */,
 				7EFA00000000000000000FB4 /* HostedAccountAPI.swift in Sources */,
 				7EFA00000000000000000FB7 /* HostedAccountFields.swift in Sources */,
@@ -1034,7 +1029,6 @@
 				79A83028086DFA3C7D976126 /* Capture.swift in Sources */,
 				3CA3FD10A31A42EE901BCD02 /* CaptureAudio.swift in Sources */,
 				A83CD02E6B9F80D1A07E46E5 /* Connection.swift in Sources */,
-				6BDD15D091F9894CC9816A3C /* InstalledPairing.swift in Sources */,
 				07B3D4DEA07785642E5BFF1F /* OwnerKey.swift in Sources */,
 				E5B221F5F30FF07873653B86 /* AppPrivacy.swift in Sources */,
 				FD9CD371BA464C3A98DCCC21 /* AppAutoLock.swift in Sources */,
@@ -1049,7 +1043,7 @@
 				6FD1E0A863E3F10D67610A43 /* NexApp.swift in Sources */,
 				916493B868C0F01A5C47A79A /* SettingsView.swift in Sources */,
 				7EFA00000000000000000103 /* SettingsPage.swift in Sources */,
-				7EFA00000000000000000203 /* ExcaliburPairingSettings.swift in Sources */,
+				7EFA00000000000000000203 /* NexServerSettings.swift in Sources */,
 				7EFA00000000000000000FA3 /* HostedAccount.swift in Sources */,
 				7EFA00000000000000000FB5 /* HostedAccountAPI.swift in Sources */,
 				7EFA00000000000000000FB8 /* HostedAccountFields.swift in Sources */,

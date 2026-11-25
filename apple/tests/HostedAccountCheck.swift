@@ -28,26 +28,31 @@ struct HostedAccountCheck {
         }
         let migration = HostedEnrollment(username: "alice", password: "disposable test password", publicKey: Data())
         let request = try JSONSerialization.jsonObject(with: JSONEncoder().encode(migration)) as? [String: Any]
-        precondition(request?["setup"] == nil && request?["device"] as? String == Pairing.platform)
+        precondition(request?["setup"] == nil && request?["device"] as? String == ServerProfile.platform)
         precondition(request?["public"] as? String == "")
 
-        let legacy = Pairing(url: link.address.absoluteString, pin: link.pin,
-                             token: String(repeating: "z", count: 48), device: Pairing.platform)
-        let encoded = try JSONEncoder().encode(legacy)
-        let decoded = try JSONDecoder().decode(Pairing.self, from: encoded)
-        precondition(decoded.account == nil && decoded.workspaceScope == fingerprint)
-        var alice = legacy
+        let obsolete = ["url": link.address.absoluteString, "pin": link.pin,
+                        "token": String(repeating: "z", count: 48), "device": ServerProfile.platform]
+        let oldData = try JSONEncoder().encode(obsolete)
+        precondition((try? JSONDecoder().decode(ServerProfile.self, from: oldData)) == nil)
+
         let aliceID = String(repeating: "a", count: 32)
         let bobID = String(repeating: "b", count: 32)
-        alice.account = HostedAccount(accountId: aliceID, username: "alice", deviceId: bobID, owner: true)
+        let alice = ServerProfile(url: link.address.absoluteString, pin: link.pin,
+                                  token: String(repeating: "z", count: 43), device: ServerProfile.platform,
+                                  account: HostedAccount(accountId: aliceID, username: "alice", deviceId: bobID, owner: true))
+        let accountData = try JSONEncoder().encode(alice)
+        let decoded = try JSONDecoder().decode(ServerProfile.self, from: accountData)
+        precondition(decoded.account.username == alice.account.username)
+        let scope = alice.workspaceScope
+        precondition(decoded.workspaceScope == scope)
+        precondition(alice.signingDevice == ServerProfile.platform + ":" + bobID)
         var rotated = alice
         rotated.account = HostedAccount(accountId: aliceID, username: "alice", deviceId: aliceID, owner: true)
-        var bob = legacy
-        bob.account = HostedAccount(accountId: bobID, username: "bob", deviceId: aliceID, owner: false)
-        let scope = alice.workspaceScope
-        precondition(alice.signingDevice == Pairing.platform + ":" + bobID)
         precondition(scope == rotated.workspaceScope && alice.biometricSlot != rotated.biometricSlot)
-        precondition(scope != bob.workspaceScope && scope != legacy.workspaceScope)
+        var bob = alice
+        bob.account = HostedAccount(accountId: bobID, username: "bob", deviceId: aliceID, owner: false)
+        precondition(scope != bob.workspaceScope)
 
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -67,7 +72,7 @@ struct HostedAccountCheck {
         precondition(WatchLink.payload(envelope, scope: scope) == payload)
         precondition(WatchLink.payload(envelope, scope: bob.workspaceScope) == nil)
         precondition(WatchLink.payload(payload, scope: scope) == nil)
-        precondition(WatchLink.envelope(payload, scope: nil) == payload)
+        precondition(WatchLink.payload(payload, scope: nil) == nil)
         print("Hosted account client checks passed")
     }
 }

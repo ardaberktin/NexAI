@@ -182,10 +182,6 @@ class Accounts:
             return [(account(row), not row["disabled"]) for row in db.execute(
                 "SELECT * FROM users WHERE disabled=0 OR ? ORDER BY username", (not active,))]
 
-    def legacy_allowed(self):
-        with self.connect() as db:
-            return db.execute("SELECT 1 FROM users WHERE owner=1").fetchone() is None
-
     def authenticate(self, token):
         if not TOKEN.fullmatch(token):
             return None
@@ -256,14 +252,3 @@ class Accounts:
 
 def bearer(header):
     return header.removeprefix("Bearer ") if header.startswith("Bearer ") else ""
-
-
-def authenticate_client(accounts, keys, token):
-    if accounts and (device := accounts.authenticate(token)):
-        return device.role, device
-    if token:
-        encoded = token.encode()
-        role = next((role for role in DEVICES if hmac.compare_digest(encoded, keys[role].encode())), None)
-        if role and (accounts is None or accounts.legacy_allowed()):
-            return role, None
-    return None, None

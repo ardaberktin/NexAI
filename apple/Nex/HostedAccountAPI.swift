@@ -92,7 +92,7 @@ struct HostedAccountAPI {
     }
 }
 
-extension Pairing {
+extension ServerProfile {
     var serverLink: String? {
         guard let address = try? address() else { return nil }
         return NexServerLink.serverLink(address: address, pin: pin)
@@ -102,10 +102,10 @@ extension Pairing {
 @MainActor
 extension Controller {
     func rememberUsername(_ username: String, deviceId: String) throws {
-        guard var profile = pairing, profile.account?.deviceId == deviceId,
-              profile.account?.username != username else { return }
-        profile.account?.username = username
-        try PairingKeychain.save(profile)
-        pairing = profile
+        guard var profile = serverProfile, profile.account.deviceId == deviceId,
+              profile.account.username != username else { return }
+        profile.account.username = username
+        try ServerProfileKeychain.save(profile)
+        serverProfile = profile
     }
 }

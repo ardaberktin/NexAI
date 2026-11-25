@@ -5,7 +5,7 @@ struct NexRoot: View {
 
     var body: some View {
         WorkspaceRoot(model: model, privacy: model.privacy)
-            .id(model.pairing?.url)
+            .id(model.serverProfile?.url)
             .tint(WorkspaceStyle.accent)
     }
 }
@@ -99,7 +99,7 @@ private struct WorkspaceRoot: View {
         #if os(macOS)
         await GoalNotifications.removeAll()
         #else
-        if model.pairing == nil || !model.workspaceFeatureEnabled(.goals) {
+        if model.serverProfile == nil || !model.workspaceFeatureEnabled(.goals) {
             await GoalNotifications.removeAll()
             return
         }
@@ -114,14 +114,14 @@ private struct WorkspaceRoot: View {
     }
 
     @ViewBuilder private var content: some View {
-        if model.pairing == nil && selection != .chat && selection != .daybook {
+        if model.serverProfile == nil && selection != .chat && selection != .daybook {
             VStack {
                 #if os(macOS)
                 Spacer()
                 #endif
                 WorkspaceEmpty(
                     title: "Connect to Excalibur", symbol: "externaldrive.connected.to.line.below",
-                    detail: "Pair Nex to sync and open your workspace.")
+                    detail: "Sign in to sync and open your workspace.")
                 Button("Open Settings", action: openSettings).buttonStyle(.borderedProminent)
                 Spacer()
             }

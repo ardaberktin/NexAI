@@ -1,13 +1,14 @@
 """Exercise native account administration across the authenticated TLS API."""
 
+from time import time
 from uuid import uuid4
 
 from nex.hosted.auth import Accounts, hash_token
 from nex.hosted.management import AccountSettings
 from nex.hosted.setup import setup_secret
-from nex.privacy.keys import issue_setup
-from nex.privacy.state import AccessDenied
-from test_hosted_accounts import PASSWORD, HostedAccountFixture, public_key, signature
+from nex.privacy.state import AccessDenied, digest
+from nex.store import now
+from test_hosted_accounts import AUDIO, PASSWORD, HostedAccountFixture, public_key
 
 NEW_PASSWORD = "a new disposable password"
 
@@ -24,24 +25,22 @@ class HostedAccountSettingsTests(HostedAccountFixture):
     def enroll(self, **extras):
         return {"username": "owner", "password": PASSWORD, "device": "iphone", "public": public_key(self.key)} | extras
 
-    def test_legacy_owner_setup_requires_workspace_and_preserves_existing_recordings(self):
-        legacy = self.keys["iphone"]
-        identifier = str(uuid4())
-        self.upload(legacy, identifier)
-        legacy_setup = issue_setup(self.host.owner.privacy, "iphone")
-        challenge = self.request("POST", "privacy/challenge", legacy, body={"purpose": "unlock"})
-        proof = signature(self.key, challenge) | {"public": public_key(self.key), "setup": legacy_setup}
-        workspace = self.request("POST", "privacy/unlock", legacy, body=proof)["token"]
-        self.request("POST", "auth/setup", body=self.enroll(), status=403)
-        self.request("POST", "auth/setup", legacy, body=self.enroll(), status=403)
-        self.request("POST", "auth/setup", legacy, workspace=workspace, body=self.enroll(device="mac"), status=403)
-        owner = self.request("POST", "auth/setup", legacy, workspace=workspace, body=self.enroll())
+    def test_obsolete_profile_credentials_cannot_access_or_claim_an_existing_archive(self):
+        legacy, identifier = "x" * 48, str(uuid4())
+        self.host.credentials["keys"]["iphone"] = legacy
+        self.host.owner.store.save_recording(identifier, "iphone", now(), 1, "ambient", False, "auto", AUDIO)
+        workspace = "obsolete-workspace-session"
+        with self.host.owner.privacy.transaction(write=True) as db:
+            db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest(workspace), "iphone", time() + 60))
         self.request("GET", "status", legacy, status=401)
+        self.request("POST", "auth/setup", legacy, workspace=workspace, body=self.enroll(), status=403)
+        setup = setup_secret(self.accounts)
+        owner = self.request("POST", "auth/setup", body=self.enroll(setup=setup))
+        self.assertTrue(owner["owner"])
         self.request("GET", "recordings", owner["token"], workspace=workspace, status=403)
         unlocked = self.unlock(owner)
         owner_profile = self.call(owner, unlocked, "profile")
         self.assertTrue(owner_profile["admin"])
-        self.assertTrue(owner_profile["owner"])
         self.assertEqual(self.request("GET", "recordings", owner["token"], workspace=unlocked)["items"][0]["id"],
                          identifier)
 

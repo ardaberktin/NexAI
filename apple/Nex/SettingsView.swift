@@ -14,7 +14,7 @@ struct SettingsView: View {
 
     init(model: Controller) {
         self.model = model
-        _selection = State(initialValue: model.pairing == nil ? .excalibur : .workspace)
+        _selection = State(initialValue: model.serverProfile == nil ? .excalibur : .workspace)
     }
     #endif
 

@@ -19,7 +19,7 @@ The recipe uses Python 3.12, a pinned PyTorch CPU wheel, and several gigabytes o
 
 If Gemma is unavailable, Nex reports a model failure while the archive stays accessible. Managed mode is recorded in `$NEX_DATA/live-model`. If you retire the managed service, stop it and remove that marker to return to the archive's configured model route.
 
-The voice service shares the archive’s pairing credentials and certificate on TCP 8767. It uses Nemotron with Sherpa-ONNX for streaming recognition, Silero and Smart Turn for turn detection, Kokoro for English speech, and EMA for Turkish speech. The model supervisor serves language requests on a private Unix socket. The archive still needs FFmpeg and Whisper for background transcription.
+The voice service shares the archive’s account registry and certificate on TCP 8767. It uses Nemotron with Sherpa-ONNX for streaming recognition, Silero and Smart Turn for turn detection, Kokoro for English speech, and EMA for Turkish speech. The model supervisor serves language requests on a private Unix socket. The archive still needs FFmpeg and Whisper for background transcription.
 
 ## Accounts
 
@@ -46,4 +46,4 @@ For remote iPhone goal and clock alerts, use a push-enabled iOS build signed wit
 }
 ```
 
-Use real Apple IDs and the iOS bundle identifier you built. Use `production` for a production APNs entitlement and build setting. Give both files mode `600` and the directory mode `700`. Restart the archive service and enable notifications on the paired device.
+Use real Apple IDs and the iOS bundle identifier you built. Use `production` for a production APNs entitlement and build setting. Give both files mode `600` and the directory mode `700`. Restart the archive service and enable notifications on your signed-in iPhone.

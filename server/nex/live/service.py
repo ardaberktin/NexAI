@@ -49,7 +49,7 @@ async def lifespan(app):
         assets = Path(os.environ.get("NEX_WHISPER_ASSETS", str(DATA / "assets")))
         mac = None if TEST_LOOPBACK or models else RUNTIME.parent / "nex" / "mac-model.sock"
         workspaces = LiveWorkspaces(
-            DATA, RUNTIME, read_access(DATA)["keys"], speech, room, Verifier(assets, RUNTIME),
+            DATA, RUNTIME, read_access(DATA)["keys"]["admin"], speech, room, Verifier(assets, RUNTIME),
             models.socket if models else RUNTIME / "model.sock", mac,
         )
         app.state.workspaces = workspaces
@@ -63,7 +63,7 @@ app.add_middleware(LiveAccess, workspaces=lambda: app.state.workspaces, loopback
 
 install_model_api(app, authenticate)
 install_standby(app, authenticate)
-install_voice_enrollment(app, authenticate)
+install_voice_enrollment(app, lambda request: request.scope.get("nex.client"))
 install_watch_reply_voice(app, authenticate)
 
 

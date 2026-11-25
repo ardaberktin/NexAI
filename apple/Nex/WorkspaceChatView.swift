@@ -36,7 +36,7 @@ struct WorkspaceChatView: View {
             #else
             thread(messages)
             #endif
-            if model.pairing != nil {
+            if model.serverProfile != nil {
                 if let error = chat.sendError ?? sourceError ?? model.chatSpeechError ?? model.liveError ?? voiceIssue {
                     WorkspaceIssue(message: error)
                         .padding(.horizontal, WorkspaceStyle.inset)
@@ -71,7 +71,7 @@ struct WorkspaceChatView: View {
         ChatThreadScrollView(firstMessageID: messages.first?.id, latestMessageID: messages.last?.id, isSending: chat.sending,
                              nextBefore: chat.olderError == nil ? chat.nextBefore : nil,
                              loadOlder: { await chat.loadOlder(model) },
-                             refresh: { if model.pairing != nil { await chat.load(model) } }) {
+                             refresh: { if model.serverProfile != nil { await chat.load(model) } }) {
             #if os(iOS)
             if messages.isEmpty && !chat.sending { welcome }
             #endif
@@ -106,7 +106,7 @@ struct WorkspaceChatView: View {
     }
 
     @ViewBuilder private var welcome: some View {
-        if model.pairing == nil {
+        if model.serverProfile == nil {
             VStack(spacing: 6) {
                 WorkspaceEmpty(
                     title: "Your conversations", symbol: "waveform",

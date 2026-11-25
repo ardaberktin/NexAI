@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from nex.__main__ import read_access
-from nex.hosted.auth import Accounts, hash_token
+from nex.hosted.auth import Accounts, hash_token, insert_user, issue_device
 from nex.hosted.workspaces import HostedWorkspaces
 from nex.http_api import Server
 from nex.initialize import initialize
@@ -70,7 +70,7 @@ class HostedAccountFixture(unittest.TestCase):
         # Exercise real storage and transport without starting model, push, and scheduled workers.
         self.host.start_jobs = Mock()
         self.addCleanup(self.host.close)
-        self.keys = config["keys"]
+        self.admin_key = config["keys"]["admin"]
         self.accounts = self.host.accounts
         self.key = ec.generate_private_key(ec.SECP256R1())
         self.user = ec.generate_private_key(ec.SECP256R1())
@@ -92,7 +92,7 @@ class HostedAccountFixture(unittest.TestCase):
             headers["Content-Type"] = "application/json"
         connection = HTTPSConnection("localhost", self.server.server_port, timeout=6, context=self.trust)
         try:
-            connection.request(method, "/v2/" + path, body, headers)
+            connection.request(method, path if path.startswith("/") else "/v2/" + path, body, headers)
             response = connection.getresponse()
             data = response.read()
             self.assertEqual(response.status, status, data)
@@ -101,16 +101,25 @@ class HostedAccountFixture(unittest.TestCase):
         finally:
             connection.close()
 
+    def register_device(self, role, key=None):
+        # Tests concerned with workspace behavior can seed a signed-in owner and exercise the real TLS listener.
+        public = base64.b64decode(public_key(key or self.key))
+        with self.accounts.connect(write=True) as db:
+            existing = db.execute("SELECT id FROM users WHERE owner=1").fetchone()
+            identifier = existing["id"] if existing else insert_user(db, "fixture-owner", (bytes(16), bytes(32)), owner=True)
+            return issue_device(db, identifier, "fixture-owner", True, role, public)
+
     def login(self, username, *, device="iphone", key=None, password=PASSWORD, status=200):
-        return self.request("POST", "auth/login", status=status, body={
+        return HostedAccountFixture.request(self, "POST", "auth/login", status=status, body={
             "username": username, "password": password, "device": device, "public": public_key(key or self.key)
         })
 
     def unlock(self, login, key=None):
         token = login["token"]
-        challenge = self.request("POST", "privacy/challenge", token, body={"purpose": "unlock"})
+        challenge = HostedAccountFixture.request(self, "POST", "privacy/challenge", token, body={"purpose": "unlock"})
         self.assertIn(login["device_id"], challenge["message"])
-        return self.request("POST", "privacy/unlock", token, body=signature(key or self.key, challenge))["token"]
+        return HostedAccountFixture.request(self, "POST", "privacy/unlock", token,
+                                            body=signature(key or self.key, challenge))["token"]
 
     def upload(self, token, identifier, audio=AUDIO, *, watch=False, status=201):
         path = ("watch/" if watch else "") + "recordings/" + identifier
@@ -127,12 +136,11 @@ class HostedAccountTests(HostedAccountFixture):
             Server(("127.0.0.1", 0), self.host.owner, hosted=self.host)
 
     def test_archive_owner_adoption_and_same_ids_stay_in_separate_accounts(self):
-        legacy, identifier = self.keys["iphone"], str(uuid4())
-        self.upload(legacy, identifier)
+        identifier = str(uuid4())
+        self.host.owner.store.save_recording(identifier, "iphone", now(), 1, "ambient", False, "auto", AUDIO)
         self.accounts.create("Owner", PASSWORD, owner=True)
         self.accounts.create("guest", PASSWORD)
-        self.request("GET", "status", legacy, status=401)
-        self.request("POST", "auth/logout", self.keys["admin"], status=401)
+        self.request("POST", "auth/logout", self.admin_key, status=401)
         owner = self.login("oWnEr")
         guest = self.login("guest", key=self.user)
         owner_workspace = self.unlock(owner)
@@ -228,10 +236,11 @@ class HostedAccountTests(HostedAccountFixture):
         owner, guest = self.login("owner"), self.login("guest")
         app = FastAPI()
         app.state.models = Mock()
-        workspaces = SimpleNamespace(accounts=self.accounts, keys=self.keys)
+        obsolete = "x" * 48
+        workspaces = SimpleNamespace(accounts=self.accounts, keys={"iphone": obsolete})
 
         async def select(account):
-            return self.host.workspace(account) if account else self.host.owner
+            return self.host.workspace(account)
 
         workspaces.workspace = select
         app.add_middleware(LiveAccess, workspaces=lambda: workspaces, loopback=True)
@@ -255,6 +264,7 @@ class HostedAccountTests(HostedAccountFixture):
             return {"Authorization": "Bearer " + login["token"]}
 
         with TestClient(app) as client:
+            self.assertIsNone(client.get("/status", headers={"Authorization": "Bearer " + obsolete}).json()["role"])
             self.assertEqual(client.get("/status", headers=headers(owner)).json()["root"], self.host.root.name)
             self.assertEqual(client.get("/status", headers=headers(guest)).json()["root"], guest["account_id"])
             self.assertEqual(client.put("/v2/live-model", json={"model": "test"}, headers=headers(guest)).status_code, 403)

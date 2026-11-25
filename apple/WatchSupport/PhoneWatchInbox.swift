@@ -15,8 +15,7 @@ struct PhoneWatchInbox: Sendable {
         try location.setResourceValues(values)
     }
 
-    func scoped(to scope: String?) throws -> PhoneWatchInbox {
-        guard let scope else { return self }
+    func scoped(to scope: String) throws -> PhoneWatchInbox {
         guard scope.utf8.count == 64, scope.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
             throw NexError.capture("The Watch recording queue account is invalid.")
         }

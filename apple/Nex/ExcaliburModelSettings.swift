@@ -30,7 +30,7 @@ struct ExcaliburModelSettings: View {
                             .tag(option.id).disabled(!option.available)
                     }
                 }
-                .disabled(pending || model.pairing?.account?.owner == false)
+                .disabled(pending || model.serverProfile?.account.owner == false)
                 if let device = status.device { LabeledContent("Running on", value: device) }
             }
             if pending { ProgressView(status == nil ? "Checking models…" : "Switching model…") }
@@ -39,7 +39,7 @@ struct ExcaliburModelSettings: View {
                 Button("Refresh models") { Task { await request() } }.disabled(pending)
             }
         }
-        .task(id: model.pairing?.workspaceScope) { await request() }
+        .task(id: model.serverProfile?.workspaceScope) { await request() }
     }
 
     @MainActor

@@ -43,7 +43,7 @@ class HostedWorkspaces:
         worker = Worker(store, engines, assistant, self.settings, enabled=enabled.is_set)
         return SimpleNamespace(
             store=store, worker=worker, assistant=assistant, engines=engines, settings=self.settings,
-            chat_slot=threading.Lock(), speech_slot=self.speech_slot, keys=self.credentials["keys"],
+            chat_slot=threading.Lock(), speech_slot=self.speech_slot, admin_key=self.credentials["keys"]["admin"],
             sign_in=AppSignIn(root), privacy=store.privacy, chat_followups=ChatFollowups(),
             recording_status=RecordingPresence(store), enabled=enabled,
         )

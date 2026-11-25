@@ -18,7 +18,7 @@ struct HostedEnrollment: Encodable {
     let password: String
     let publicKey: Data
     var setup: String?
-    var device = Pairing.platform
+    var device = ServerProfile.platform
 
     enum CodingKeys: String, CodingKey {
         case username, password, device, setup
@@ -33,10 +33,10 @@ struct HostedLogin: Decodable {
     let username: String
     let owner: Bool
 
-    func pairing(url: String, pin: String) throws -> Pairing {
+    func profile(url: String, pin: String) throws -> ServerProfile {
         let account = HostedAccount(accountId: accountId, username: username, deviceId: deviceId,
                                     owner: owner)
-        let profile = Pairing(url: url, pin: pin, token: token, device: Pairing.platform, account: account)
+        let profile = ServerProfile(url: url, pin: pin, token: token, device: ServerProfile.platform, account: account)
         _ = try profile.address()
         return profile
     }
@@ -50,9 +50,9 @@ struct NexServerLink {
     init(_ link: String) throws {
         let value = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parts = URLComponents(string: value), parts.scheme == "nex",
-              let host = parts.host, Pairing.isTailscaleV4(host), parts.port == 8765,
+              let host = parts.host, ServerProfile.isTailscaleV4(host), parts.port == 8765,
               parts.fragment == nil, parts.user == nil, parts.password == nil else {
-            throw NexError.pairing("Enter the Nex server link from your server administrator.")
+            throw NexError.connection("Enter the Nex server link from your server administrator.")
         }
         let encoded = String(parts.percentEncodedPath.dropFirst())
         let standard = encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + "="
@@ -60,12 +60,12 @@ struct NexServerLink {
               pinData.base64EncodedString().replacingOccurrences(of: "+", with: "-")
                 .replacingOccurrences(of: "/", with: "_").dropLast() == encoded,
               let address = URL(string: "https://\(host):8765") else {
-            throw NexError.pairing("The Nex server link has an invalid certificate fingerprint.")
+            throw NexError.connection("The Nex server link has an invalid certificate fingerprint.")
         }
         if let query = parts.queryItems {
             guard query.count == 1, query[0].name == "setup", let secret = query[0].value,
                   secret.utf8.count == 43, secret.utf8.allSatisfy(Self.isLinkCharacter) else {
-                throw NexError.pairing("Enter a valid Nex server or setup link.")
+                throw NexError.connection("Enter a valid Nex server or setup link.")
             }
             setup = secret
         } else {
@@ -86,7 +86,7 @@ struct NexServerLink {
         (48...57).contains(value) || (65...90).contains(value) || (97...122).contains(value) || value == 45 || value == 95
     }
 
-    func signIn(username: String, password: String, publicKey: Data) async throws -> Pairing {
+    func signIn(username: String, password: String, publicKey: Data) async throws -> ServerProfile {
         let session = try NexAPI.pinnedSession(base: address, pin: pin)
         defer { session.invalidateAndCancel() }
         let path = setup == nil ? "v2/auth/login" : "v2/auth/setup"
@@ -100,6 +100,6 @@ struct NexServerLink {
         try NexAPI.validate(response, data: data)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(HostedLogin.self, from: data).pairing(url: address.absoluteString, pin: pin)
+        return try decoder.decode(HostedLogin.self, from: data).profile(url: address.absoluteString, pin: pin)
     }
 }

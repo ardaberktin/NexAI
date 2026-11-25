@@ -17,24 +17,17 @@ struct HostedAccountSettings: View {
 
     var body: some View {
         Group {
-            if let account = model.pairing?.account {
+            if let account = model.serverProfile?.account {
                 accountSection(account)
                 if let profile {
                     deviceSection(profile.devices)
                     if profile.user.admin { administration(profile.user) }
                 }
-            } else if model.pairing != nil {
-                Section("Owner account") {
-                    Text("Pause recording and finish syncing your Apple devices before moving the existing archive to a Nex account.")
-                        .foregroundStyle(.secondary)
-                    Button("Set Up Owner Account") { panel = .credentials(.owner) }
-                        .disabled(!privacy.connected || model.pending > 0 || model.capture.recording)
-                }
             } else {
                 NexServerSignInFields(model: model)
             }
         }
-        .task(id: privacy.connected ? model.pairing?.account?.deviceId : nil) { await load() }
+        .task(id: privacy.connected ? model.serverProfile?.account.deviceId : nil) { await load() }
         .sheet(item: $panel) { selected in
             switch selected {
             case .credentials(let action):
@@ -60,7 +53,7 @@ struct HostedAccountSettings: View {
                 Button("Edit Username") { panel = .credentials(.rename(profile.user.username)) }
                 Button("Change Password") { panel = .credentials(.changePassword) }
             }
-            if let link = model.pairing?.serverLink {
+            if let link = model.serverProfile?.serverLink {
                 ShareLink(item: link) { Label("Share Server Link", systemImage: "square.and.arrow.up") }
             }
             Button("Sign Out", role: .destructive) { Task { await model.signOut() } }
@@ -111,18 +104,18 @@ struct HostedAccountSettings: View {
     private func refresh() { Task { await load() } }
 
     private func load() async {
-        guard privacy.connected, !loading, let pairing = model.pairing, let account = pairing.account else { return }
+        guard privacy.connected, !loading, let account = model.serverProfile?.account else { return }
         loading = true
         defer { loading = false }
         issue = nil
         do {
             let api = HostedAccountAPI(try model.connection())
             let loaded = try await api.profile()
-            guard !Task.isCancelled, model.pairing?.account?.deviceId == account.deviceId else { return }
+            guard !Task.isCancelled, model.serverProfile?.account.deviceId == account.deviceId else { return }
             profile = loaded
             try model.rememberUsername(loaded.user.username, deviceId: account.deviceId)
             let people = try await loaded.user.admin ? api.users() : []
-            guard !Task.isCancelled, model.pairing?.account?.deviceId == account.deviceId else { return }
+            guard !Task.isCancelled, model.serverProfile?.account.deviceId == account.deviceId else { return }
             users = people
         } catch {
             if !Task.isCancelled { issue = error.localizedDescription }

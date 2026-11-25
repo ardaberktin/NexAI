@@ -30,13 +30,12 @@ class HostedLiveWorkspacesTests(unittest.IsolatedAsyncioTestCase):
         with guest_app.store.connect() as db:
             guest_app.store.add_memory(db, "guest-entry", now(), "question", "iphone", "guest live sentinel")
         mac_socket = directory / "mac-model.sock"
-        service = LiveWorkspaces(root, runtime, config["keys"], Mock(), None, Mock(), runtime / "model.sock", mac_socket)
+        service = LiveWorkspaces(root, runtime, config["keys"]["admin"], Mock(), None, Mock(), runtime / "model.sock", mac_socket)
         self.enterContext(patch("nex.live.dialogue.Dialogue.wait_ready", new_callable=AsyncMock))
         self.enterContext(patch("nex.live.workspaces.LiveWorkspaces.run_jobs", new_callable=AsyncMock))
         async with service.running():
             owner_voice = await service.workspace(owner)
             guest_voice = await service.workspace(guest)
-            self.assertIs(owner_voice, await service.workspace(None))
             self.assertIs(guest_voice, await service.workspace(guest))
             self.assertIs(guest_voice.speech, owner_voice.speech)
             self.assertIs(guest_voice.active, owner_voice.active)

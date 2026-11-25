@@ -2,7 +2,6 @@ import SwiftUI
 
 struct NexServerSignInView: View {
     @ObservedObject var model: Controller
-    @State private var showLegacy = false
 
     var body: some View {
         Form {
@@ -15,9 +14,6 @@ struct NexServerSignInView: View {
                 }
             }
             NexServerSignInFields(model: model)
-            DisclosureGroup("Legacy pairing", isExpanded: $showLegacy) {
-                LegacyPairingFields(model: model)
-            }
         }
         .formStyle(.grouped)
         .frame(maxWidth: 520, maxHeight: 640)

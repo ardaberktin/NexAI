@@ -25,7 +25,7 @@ struct PrivacyGate<Content: View>: View {
 
     var body: some View {
         Group {
-            if model.pairing == nil {
+            if model.serverProfile == nil {
                 NexServerSignInView(model: model)
                     .accessibilityHidden(!isActive)
                     .allowsHitTesting(isActive)
@@ -44,7 +44,7 @@ struct PrivacyGate<Content: View>: View {
                     if let error = model.signOutError ?? privacy.error { Text(error).multilineTextAlignment(.center) }
                     Button("Unlock Nex") { Task { await privacy.unlock(model) } }
                         .buttonStyle(.borderedProminent).disabled(privacy.authenticating || model.signingOut)
-                    if model.pairing?.account != nil {
+                    if model.serverProfile != nil {
                         Button("Sign Out") { Task { await model.signOut() } }
                             .disabled(privacy.authenticating || model.signingOut)
                     }
@@ -52,7 +52,7 @@ struct PrivacyGate<Content: View>: View {
             }
         }
         .task(id: isActive) {
-            guard model.pairing != nil, isActive, !Task.isCancelled, !privacy.unlocked, !privacy.authenticating,
+            guard model.serverProfile != nil, isActive, !Task.isCancelled, !privacy.unlocked, !privacy.authenticating,
                   autoLock.takeAutomaticUnlockAttempt() else { return }
             Task { await privacy.unlock(model) }
         }

@@ -17,7 +17,7 @@ final class WatchSync: NSObject, ObservableObject {
     private var lastFastAttempt = Date.distantPast
     private var lastRecording: WatchRecordingReport?
     var accountChanged: ((Spool) -> Void)?
-    private let legacySpool: Spool
+    private let spoolRoot: Spool
     private var spool: Spool
     let session = WCSession.isSupported() ? WCSession.default : nil
     private var nextSend = Date.distantPast
@@ -26,8 +26,8 @@ final class WatchSync: NSObject, ObservableObject {
     private var localError: String?
     private let retryKey = "watch.relayAttempts"
 
-    init(legacySpool: Spool, spool: Spool) {
-        self.legacySpool = legacySpool
+    init(spoolRoot: Spool, spool: Spool) {
+        self.spoolRoot = spoolRoot
         self.spool = spool
         scope = Self.savedScope
         super.init()
@@ -44,7 +44,7 @@ final class WatchSync: NSObject, ObservableObject {
         do {
             let clips = try spool.clips().filter { $0.duration != nil }
             pending = clips.count
-            guard enabled, let session, session.activationState == .activated,
+            guard enabled, let scope, let session, session.activationState == .activated,
                   Date.now >= nextSend else { return }
             nextSend = .now.addingTimeInterval(2)
             let outstanding = session.outstandingFileTransfers
@@ -82,14 +82,13 @@ final class WatchSync: NSObject, ObservableObject {
     /// The file survives suspension. An immediate copy lets short questions start processing sooner.
     func deliverQuestion(_ id: String) {
         sync()
-        guard enabled, let session, session.activationState == .activated else { return }
+        guard enabled, let account = scope, let session, session.activationState == .activated else { return }
         if fastQuestion != id, Date.now.timeIntervalSince(lastFastAttempt) >= 8,
            let clip = try? spool.clips().first(where: { $0.id == id && $0.duration != nil && $0.watchConversation != nil }),
            let metadata = try? JSONEncoder().encode(clip),
            let size = try? spool.audio(id).resourceValues(forKeys: [.fileSizeKey]).fileSize,
            size <= WatchLink.immediateAudioLimit, let audio = try? Data(contentsOf: spool.audio(id)) {
             lastFastAttempt = .now
-            let account = scope
             var message: [String: Any] = [WatchLink.clip: metadata, WatchLink.questionAudio: audio]
             message[WatchLink.accountScope] = account
             session.sendMessage(message, replyHandler: { response in
@@ -99,7 +98,7 @@ final class WatchSync: NSObject, ObservableObject {
             }, errorHandler: { _ in })
         } else {
             var message: [String: Any] = [WatchLink.questionStatus: id]
-            message[WatchLink.accountScope] = scope
+            message[WatchLink.accountScope] = account
             session.sendMessage(message, replyHandler: { [weak self] response in
                 _ = self?.receiveQuestion(response)
             }, errorHandler: { _ in })
@@ -124,7 +123,7 @@ final class WatchSync: NSObject, ObservableObject {
     }
 
     func reportRecording() {
-        guard enabled, let isRecording, let session, session.activationState == .activated else { return }
+        guard enabled, let scope, let isRecording, let session, session.activationState == .activated else { return }
         let now = Date.now
         let recording = isRecording()
         let changed = lastRecording?.recording != recording
@@ -143,10 +142,9 @@ final class WatchSync: NSObject, ObservableObject {
     }
 
     func request(_ data: Data) async throws -> Data {
-        guard enabled, let session, session.activationState == .activated, session.isReachable else {
-            throw NexError.pairing("The paired iPhone is out of reach. Open Nex on iPhone and try again.")
+        guard enabled, let account = scope, let session, session.activationState == .activated, session.isReachable else {
+            throw NexError.connection("The paired iPhone is out of reach. Open Nex on iPhone and try again.")
         }
-        let account = scope
         let wire = WatchLink.envelope(data, scope: account)
         let response: Data = try await withCheckedThrowingContinuation { continuation in
             session.sendMessageData(wire, replyHandler: { continuation.resume(returning: $0) },
@@ -168,7 +166,7 @@ final class WatchSync: NSObject, ObservableObject {
                 return
             }
         }
-        enabled = state.enabled
+        enabled = state.enabled && scope != nil
         relayError = state.error
         if !enabled {
             lastRecording = nil
@@ -180,7 +178,7 @@ final class WatchSync: NSObject, ObservableObject {
     }
 
     private func useScope(_ account: String?) throws {
-        let next = try account.map { try legacySpool.scoped(to: $0) } ?? legacySpool
+        let next = try account.map { try spoolRoot.scoped(to: $0) } ?? spoolRoot
         for transfer in session?.outstandingFileTransfers ?? [] { transfer.cancel() }
         scope = account
         UserDefaults.standard.set(account, forKey: WatchLink.accountScope)
@@ -249,7 +247,7 @@ extension WatchSync: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
         if receiveQuestion(userInfo) { return }
         let ids = userInfo[WatchLink.acknowledgements] as? [String] ?? []
-        let account = userInfo[WatchLink.accountScope] as? String
+        guard let account = userInfo[WatchLink.accountScope] as? String else { return }
         Task { @MainActor in if account == scope { acknowledge(ids) } }
     }
 
@@ -261,7 +259,7 @@ extension WatchSync: WCSessionDelegate {
         guard let bytes = message[WatchLink.questionResult] as? Data, bytes.count <= 64_000,
               let result = try? JSONDecoder().decode(WatchQuestionResult.self, from: bytes),
               WatchLink.isClipID(result.id) else { return false }
-        let account = message[WatchLink.accountScope] as? String
+        guard let account = message[WatchLink.accountScope] as? String else { return false }
         Task { @MainActor in if account == scope, enabled { questionReceived?(result) } }
         return true
     }

@@ -3,30 +3,14 @@
 import re
 
 from ..privacy.keys import require_session
-from ..privacy.state import AccessDenied
-from .auth import authenticate_client
 from .management import AccountSettings
-from .setup import claim_owner
 
 USER = re.compile(r"/v2/auth/users/([0-9a-f]{32})(?:/(password|storage))?")
 
 
-def setup_request(api, hosted, token):
-    body = api.object(8_000)
-    legacy = None
-    if "setup" not in body:
-        legacy, client = authenticate_client(hosted.accounts, api.app.keys, token)
-        if not legacy or client:
-            raise AccessDenied("Use a server setup link or unlock the legacy Nex workspace.")
-        require_session(api.privacy, legacy, api.headers.get("X-Nex-Workspace", ""))
-    return claim_owner(hosted.accounts, body, api.client_address[0], legacy_device=legacy)
-
-
-def account_request(api, hosted, method, path, device, problem):
+def account_request(api, hosted, method, path, problem):
     client = api.client_identity
-    if client is None:
-        raise AccessDenied("Sign in to a Nex account to manage these settings.")
-    require_session(api.privacy, device, api.headers.get("X-Nex-Workspace", ""), client=client)
+    require_session(api.privacy, client, api.headers.get("X-Nex-Workspace", ""))
     settings = AccountSettings(hosted.accounts, client, api.client_address[0])
     route = method, path.removeprefix("/v2/auth/")
     if route == ("GET", "profile"):

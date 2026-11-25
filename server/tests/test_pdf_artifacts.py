@@ -24,7 +24,7 @@ from nex.pdf.artifacts import content
 from nex.pdf.document import WRITE_DOCUMENT, Document, PDFError
 from nex.pdf.render import render
 from nex.privacy import public, requests
-from nex.privacy.state import AccessDenied
+from nex.privacy.state import AccessDenied, digest
 from nex.store import Store
 from nex.workspace_chat_pages import chat_page
 from nex.workspace_content import artifacts, chat_history
@@ -146,8 +146,11 @@ class PDFWorkflowTests(unittest.TestCase):
         save(self.store, identifier, None, pdf)
         endpoint = f"/v2/workspace/artifacts/{identifier}/pdf"
         handler = API.__new__(API)
-        handler.server = SimpleNamespace(app=SimpleNamespace(store=self.store), privacy=self.store.privacy)
+        handler.server = SimpleNamespace(app=SimpleNamespace(store=self.store, privacy=self.store.privacy))
         handler.send = Mock()
+        handler.client_identity = SimpleNamespace(role="mac", id="fixture-device")
+        with self.store.privacy.transaction(write=True) as db:
+            db.execute("INSERT INTO session_devices VALUES(?,?)", (digest(self.session), handler.client_identity.id))
         handler.headers = {}
         with self.assertRaises(AccessDenied):
             handler.dispatch("GET", endpoint, {}, "mac")

@@ -1,11 +1,10 @@
 import SwiftUI
 
 enum HostedCredentialAction {
-    case owner, createUser, rename(String), changePassword, reset(HostedUser)
+    case createUser, rename(String), changePassword, reset(HostedUser)
 
     var title: String {
         switch self {
-        case .owner: "Set Up Owner Account"
         case .createUser: "Add User"
         case .rename: "Edit Username"
         case .changePassword: "Change Password"
@@ -15,7 +14,7 @@ enum HostedCredentialAction {
 
     var usesUsername: Bool {
         switch self {
-        case .owner, .createUser, .rename: true
+        case .createUser, .rename: true
         case .changePassword, .reset: false
         }
     }
@@ -46,10 +45,6 @@ struct HostedCredentialEditor: View {
     var body: some View {
         HostedForm(title: action.title, pending: pending, error: error, saveTitle: saveTitle,
                    ready: ready, save: submit) {
-            if case .owner = action {
-                Text("This account will inherit the existing archive. Other devices will need to sign in again.")
-                    .foregroundStyle(.secondary)
-            }
             if case .reset(let user) = action {
                 Text("Resetting the password signs \(user.username) out on all devices.")
                     .foregroundStyle(.secondary)
@@ -68,7 +63,7 @@ struct HostedCredentialEditor: View {
 
     private var saveTitle: String {
         switch action {
-        case .owner, .createUser: "Create"
+        case .createUser: "Create"
         case .reset: "Reset"
         default: "Save"
         }
@@ -106,12 +101,10 @@ struct HostedCredentialEditor: View {
     private func save(password: String, current: String) async throws {
         let api = HostedAccountAPI(try model.connection())
         switch action {
-        case .owner:
-            try await model.createOwnerAccount(username: username, password: password)
         case .createUser:
             _ = try await api.create(username: username, password: password)
         case .rename:
-            let device = model.pairing?.account?.deviceId
+            let device = model.serverProfile?.account.deviceId
             let profile = try await api.rename(username)
             if let device { try model.rememberUsername(profile.user.username, deviceId: device) }
         case .changePassword:

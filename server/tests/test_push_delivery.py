@@ -27,7 +27,7 @@ class PushDeliveryTests(unittest.TestCase):
 
     def register(self, token=None):
         with patch("nex.push_queue.Provider.load", return_value=self.provider):
-            return self.queue.register(self.installation, token or self.token, "development", True)
+            return self.queue.register(self.installation, token or self.token, "development", True, device_id="fixture-iphone")
 
     def reminder(self):
         goal_id = str(uuid4())
@@ -68,14 +68,14 @@ class PushDeliveryTests(unittest.TestCase):
         self.assertEqual(self.pending(), [])
 
     def test_registration_requires_a_configured_provider_and_unpair_retires_its_token(self):
-        self.assertEqual(self.queue.register(self.installation, self.token, "development", True), {"active": False})
+        self.assertEqual(self.queue.register(self.installation, self.token, "development", True, device_id="fixture-iphone"), {"active": False})
         with self.assertRaises(ValueError):
-            self.queue.register(self.installation, "not a token", "development", True)
+            self.queue.register(self.installation, "not a token", "development", True, device_id="fixture-iphone")
         self.register()
         self.run_goal(self.reminder())
-        self.queue.register(str(uuid4()), None, None, False)
+        self.queue.register(str(uuid4()), None, None, False, device_id="fixture-iphone")
         self.assertEqual(len(self.pending()), 1)
-        self.queue.register(self.installation, None, None, False)
+        self.queue.register(self.installation, None, None, False, device_id="fixture-iphone")
         self.assertEqual(self.pending(), [])
 
     def test_expired_token_is_removed(self):

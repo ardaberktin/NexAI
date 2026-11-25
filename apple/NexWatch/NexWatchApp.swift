@@ -42,10 +42,10 @@ final class WatchServices {
     let workspace: WatchWorkspace
     let live: WatchLiveConversation
 
-    init(spool legacySpool: Spool) throws {
-        let spool = try WatchSync.savedScope.map { try legacySpool.scoped(to: $0) } ?? legacySpool
+    init(spool spoolRoot: Spool) throws {
+        let spool = try WatchSync.savedScope.map { try spoolRoot.scoped(to: $0) } ?? spoolRoot
         capture = WatchCapture(spool: spool)
-        sync = WatchSync(legacySpool: legacySpool, spool: spool)
+        sync = WatchSync(spoolRoot: spoolRoot, spool: spool)
         workspace = WatchWorkspace(link: sync)
         live = WatchLiveConversation(capture: capture, sync: sync, spool: spool)
         capture.clipReady = { [weak sync] in sync?.sync() }

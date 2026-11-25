@@ -20,7 +20,7 @@ def workspace_request(api, method, path, query, device, problem):
     sharing = "/v1/workspace/weather-location"
     if path in (sharing, sharing + "/fix", sharing + "/clear"):
         if device not in ("mac", "iphone") or method != "PUT":
-            raise problem(403, "Weather location sharing is available on paired devices.")
+            raise problem(403, "Weather location sharing is available on signed-in devices.")
         data = api.object(512)
         if path == sharing:
             return shared_weather.enable(store, device)
@@ -35,7 +35,7 @@ def workspace_request(api, method, path, query, device, problem):
             return workspace_features.update(store, data.get("feature"), data.get("enabled"))
     if path == "/v1/workspace/clock-alerts" and method == "GET":
         if device not in ("mac", "iphone"):
-            raise problem(403, "Use a paired device to receive alarms and timers.")
+            raise problem(403, "Sign in to receive alarms and timers.")
         return ClockAlerts(store).notification_schedule(
             device, installation=query.get("native_installation") if device == "iphone" else None,
         )
@@ -56,7 +56,7 @@ def workspace_request(api, method, path, query, device, problem):
             return api.recording_status.report(device, api.object(256).get("recording"))
         if method == "GET" and device == "mac":
             return api.recording_status.read("iphone", query.get("previous"))
-        raise problem(403, "The paired iPhone reports recording status to the paired Mac.")
+        raise problem(403, "The iPhone reports recording status to the Mac on this account.")
     if path == "/v1/workspace/recording-status":
         return recording_status_request(api, method, query, device, problem)
     if method == "GET" and path == "/v1/workspace/chat":
@@ -70,7 +70,7 @@ def workspace_request(api, method, path, query, device, problem):
         return snapshot(store, cursor)
     if method == "GET" and path == "/v1/workspace/goal-alerts":
         if device != "mac":
-            raise problem(403, "Use the paired Mac to read local goal alerts.")
+            raise problem(403, "Use your signed-in Mac to read local goal alerts.")
         after = int(query.get("after", "0"))
         if not 0 <= after < 2**63:
             raise ValueError("Invalid goal alert cursor.")
@@ -87,12 +87,11 @@ def workspace_request(api, method, path, query, device, problem):
     goals = Goals(store)
     if path == "/v1/workspace/push":
         if device != "iphone" or method != "PUT":
-            raise problem(403, "Use Nex on the paired iPhone to register for push.")
+            raise problem(403, "Use Nex on your signed-in iPhone to register for push.")
         data = api.object(1_000)
-        client = getattr(api, "client_identity", None)
         return PushQueue(store).register(data.get("installation"), data.get("token"),
                                          data.get("environment"), data.get("enabled"),
-                                         device_id=client.id if client else None)
+                                         device_id=api.client_identity.id)
     if path == "/v1/workspace/feed":
         if method == "GET":
             day = date.fromisoformat(query["day"]).isoformat() if query.get("day") else None

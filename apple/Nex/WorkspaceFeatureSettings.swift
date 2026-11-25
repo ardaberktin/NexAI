@@ -25,8 +25,8 @@ struct WorkspaceFeatureSettings: View {
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("All five start on. Turning a feature off hides its tab and pauses its work on both devices. Chat and Files are always available.")
-                if model.pairing == nil {
-                    Text("Pair with Excalibur to change these settings.")
+                if model.serverProfile == nil {
+                    Text("Sign in to Nex to change these settings.")
                 } else if model.statusUnavailable || model.status == nil {
                     Text("Connect to Excalibur to sync these settings.")
                 } else if model.workspaceFeatures == nil {
@@ -34,8 +34,8 @@ struct WorkspaceFeatureSettings: View {
                 }
             }
         }
-        .task(id: model.pairing?.url) {
-            guard model.pairing != nil else { return }
+        .task(id: model.serverProfile?.url) {
+            guard model.serverProfile != nil else { return }
             try? await model.refreshStatus()
         }
     }
