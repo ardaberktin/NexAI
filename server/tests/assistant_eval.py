@@ -11,7 +11,14 @@ from uuid import uuid4
 import httpx
 
 from assistant_eval_cases import BOUNDARY_CASES, SCHEDULED_CASES, TOOL_CASES
-from assistant_eval_fixtures import execute, execute_scheduled
+from assistant_eval_fixtures import (
+    REMOVAL_FOLLOWUPS,
+    REMOVAL_GROUPS,
+    execute,
+    execute_scheduled,
+    removal_clarification,
+)
+from nex.conversation.goal_management_prompts import RESOLVE_PDF_REMOVAL
 from nex.conversation.plan import Turn, choose
 from nex.goal_writing import json_object
 from nex.live.dialogue import Dialogue
@@ -21,6 +28,7 @@ class MeasuredModel:
     def __init__(self, dialogue):
         self.dialogue = dialogue
         self.calls = []
+        self.removal_decisions = 0
 
     async def generate(self, messages, tokens):
         data = {"messages": messages, "max_tokens": tokens, "temperature": 0,
@@ -41,7 +49,11 @@ class MeasuredModel:
         payload = messages[1]["content"]
         revision = json.loads(payload).get("revision_needed") if payload.startswith('{"') else None
         instructions = messages[0]["content"]
-        repair = (len(messages) > 2 or bool(revision) or instructions.startswith("The first plan was invalid.")
+        removal = instructions.startswith(RESOLVE_PDF_REMOVAL)
+        if removal:
+            self.removal_decisions += 1
+        repair = ((len(messages) > 2 and not removal) or (removal and instructions != RESOLVE_PDF_REMOVAL)
+                  or bool(revision) or instructions.startswith("The first plan was invalid.")
                   or "\nAnswer each part using its own source." in instructions
                   or "\nYour draft repeats the previous reply verbatim." in instructions
                   or "\nCheck the next run against schedule_text" in instructions)
@@ -102,6 +114,8 @@ async def run(socket, groups, execute_tools, scheduled):
             model = MeasuredModel(dialogue)
             turn = Turn(str(uuid4()), "mac", prompt, "auto", "UTC", started=anchor, spoken=spoken)
             started = monotonic()
+            if group in REMOVAL_FOLLOWUPS:
+                turn.history = removal_clarification(turn, group)
             selected, status, delivery = (), "", None
             try:
                 plan = await choose(turn, model.generate)
@@ -110,6 +124,9 @@ async def run(socket, groups, execute_tools, scheduled):
                 if passed and execute_tools:
                     delivery = await execute(turn, group, plan, model.generate)
                     passed = delivery["passed"]
+                    if group in REMOVAL_GROUPS:
+                        delivery["removal_decisions"] = model.removal_decisions
+                        passed = delivery["passed"] = passed and model.removal_decisions == 1
             except (httpx.HTTPError, ValueError) as error:
                 passed, status = False, str(error)
             failed += not passed

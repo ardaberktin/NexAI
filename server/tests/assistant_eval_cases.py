@@ -47,6 +47,8 @@ BOUNDARY_CASES = (
     ("PDF format edit", "Keep sending the Garden report on schedule and attach a two-column newspaper PDF.",
      ("manage_goal",), "en"),
     ("PDF removal by subject", "Remove the PDF from my Walmart card check.", ("manage_goal",), "en"),
+    ("PDF removal after clarification", "walmart card", ("manage_goal",), "en"),
+    ("PDF removal with shared subject", "walmart card", ("manage_goal",), "en"),
     ("PDF advice", "How can I save a document as a PDF on my Mac?", (), "en"),
     ("clock or reminder", "Remind me tomorrow at 3 p.m. to check my alarm.", ("goal",), "en"),
     ("mail watch", "Notify me when the ceramics office emails my workshop confirmation.", ("goal",), "en"),
