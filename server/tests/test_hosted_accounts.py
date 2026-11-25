@@ -45,7 +45,7 @@ def signature(key, challenge):
     return {"nonce": challenge["nonce"], "signature": base64.b64encode(signed).decode()}
 
 
-class HostedAccountTests(unittest.TestCase):
+class HostedAccountFixture(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         with tempfile.TemporaryDirectory() as temp:
@@ -119,6 +119,9 @@ class HostedAccountTests(unittest.TestCase):
             "X-Nex-Duration": "1.0", "X-Nex-Mode": "ambient",
         })
 
+
+
+class HostedAccountTests(HostedAccountFixture):
     def test_hosted_sign_in_requires_a_tls_listener(self):
         with self.assertRaisesRegex(ValueError, "requires TLS"):
             Server(("127.0.0.1", 0), self.host.owner, hosted=self.host)

@@ -22,6 +22,7 @@ from .audio_files import open_audio
 from .coding.intent import pasted_python
 from .coding.sandbox import MAX_SOURCE
 from .daybook import Daybook, DayContext
+from .hosted import routes as account_routes
 from .hosted.auth import BadLogin, LoginBusy, authenticate_client, bearer
 from .models import ModelError
 from .personal_files import PersonalConflict, safe_line
@@ -231,6 +232,9 @@ class API(BaseHTTPRequestHandler):
                 if accounts and (method, url.path) == ("POST", "/v2/auth/login"):
                     self.send(accounts.sign_in(self.object(8_000), self.client_address[0]))
                     return
+                if accounts and (method, url.path) == ("POST", "/v2/auth/setup"):
+                    self.send(account_routes.setup_request(self, hosted, token))
+                    return
                 device, self.client_identity = authenticate_client(accounts, self.app.keys, token)
                 if device is None:
                     raise Problem(401, "Sign in to this Nex server.")
@@ -242,6 +246,9 @@ class API(BaseHTTPRequestHandler):
                     return
                 if self.client_identity:
                     self.workspace = hosted.workspace(self.client_identity.account)
+                if accounts and url.path.startswith("/v2/auth/"):
+                    self.send(account_routes.account_request(self, hosted, method, url.path, device, Problem))
+                    return
             query = {key: values[-1] for key, values in parse_qs(
                 url.query, keep_blank_values=True, max_num_fields=12
             ).items()}
@@ -249,7 +256,7 @@ class API(BaseHTTPRequestHandler):
         except BadLogin:
             self.send({"error": "The username or password could not be verified."}, 401)
         except LoginBusy:
-            self.send({"error": "Too many sign-in attempts. Try again shortly."}, 429)
+            self.send({"error": "Too many account requests. Try again shortly."}, 429)
         except Problem as exc:
             self.send({"error": exc.message}, exc.status)
         except AccessDenied as exc:

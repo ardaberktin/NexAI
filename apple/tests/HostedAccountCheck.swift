@@ -19,6 +19,18 @@ struct HostedAccountCheck {
             precondition((try? NexServerLink(invalid)) == nil, invalid)
         }
 
+        let oneTimeCode = String(repeating: "z", count: 43)
+        let setup = try NexServerLink("nex://\(address):8765/\(pin)?setup=\(oneTimeCode)")
+        precondition(setup.setup == oneTimeCode && link.setup == nil)
+        precondition(NexServerLink.serverLink(address: setup.address, pin: setup.pin) == "nex://\(address):8765/\(pin)")
+        for invalid in ["setup=x", "setup=\(oneTimeCode)&setup=\(oneTimeCode)", "setup=\(oneTimeCode)&secret=x"] {
+            precondition((try? NexServerLink("nex://\(address):8765/\(pin)?\(invalid)")) == nil)
+        }
+        let migration = HostedEnrollment(username: "alice", password: "disposable test password", publicKey: Data())
+        let request = try JSONSerialization.jsonObject(with: JSONEncoder().encode(migration)) as? [String: Any]
+        precondition(request?["setup"] == nil && request?["device"] as? String == Pairing.platform)
+        precondition(request?["public"] as? String == "")
+
         let legacy = Pairing(url: link.address.absoluteString, pin: link.pin,
                              token: String(repeating: "z", count: 48), device: Pairing.platform)
         let encoded = try JSONEncoder().encode(legacy)

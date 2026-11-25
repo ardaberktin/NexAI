@@ -21,7 +21,7 @@ from .http_api import Server
 from .initialize import initialize
 from .network import CLIENT_PORT, TAILNET, TAILSCALE_INTERFACE, TailnetEndpoint
 from .privacy.keys import issue_setup
-from .privacy.state import PrivacyState
+from .privacy.state import AccessDenied, PrivacyState
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def main():
                 pairing(args.data.resolve(), args.device)
             else:
                 account_cli.run(args.data.resolve(), args)
-        except (OSError, ValueError) as exc:
+        except (AccessDenied, OSError, ValueError) as exc:
             parser.exit(1, str(exc) + "\n")
     elif args.command == "connect":
         if not 1024 <= args.port <= 65535 or (args.provider == "google" and not args.client):

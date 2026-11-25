@@ -141,6 +141,23 @@ final class Controller: ObservableObject {
         }
     }
 
+    func createOwnerAccount(username: String, password: String) async throws {
+        guard let previous = pairing, previous.account == nil, privacy.connected else {
+            throw NexError.pairing("Unlock the legacy workspace to set up the owner account.")
+        }
+        guard !capture.ambient, !capture.recording, try spool.clips().isEmpty, try spool.gaps().isEmpty else {
+            throw NexError.pairing("Pause recording and finish syncing this device before changing accounts.")
+        }
+        let legacy = try connection()
+        try await privacy.registerHosted(install: { profile, connection in
+            try install(profile, connection: connection)
+        }) { publicKey in
+            let enrollment = HostedEnrollment(username: username, password: password, publicKey: publicKey)
+            let result: HostedLogin = try await legacy.send("/v1/auth/setup", body: enrollment)
+            return try result.pairing(url: previous.url, pin: previous.pin)
+        }
+    }
+
     private func install(_ profile: Pairing, connection: NexAPI) throws {
         let accountSpool = profile.account == nil ? legacySpool : try legacySpool.scoped(to: profile.workspaceScope)
         try PairingKeychain.save(profile)

@@ -21,6 +21,8 @@ struct SettingsPage: View {
                 if model.pairing != nil {
                     WeatherSharingSettings(model: model, sharing: model.weatherSharing)
                 }
+            case .nexAccount:
+                HostedAccountSettings(model: model)
             case .accounts:
                 AccountConnectionsView(model: model)
             case .excalibur:

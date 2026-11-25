@@ -47,7 +47,7 @@ class LiveAccess:
             await self.app(scope, receive, send)
             return
         handler = asyncio.create_task(self.app(scope, receive, send))
-        monitor = asyncio.create_task(self.watch(resolve, (role, client)))
+        monitor = asyncio.create_task(self.watch(resolve, role, client.id if client else None))
         try:
             completed, _ = await asyncio.wait((handler, monitor), return_when=asyncio.FIRST_COMPLETED)
             if handler in completed:
@@ -62,10 +62,11 @@ class LiveAccess:
             await asyncio.gather(handler, monitor, return_exceptions=True)
 
     @staticmethod
-    async def watch(resolve, initial):
+    async def watch(resolve, role, device_id):
         while True:
             await asyncio.sleep(2)
-            if await asyncio.to_thread(resolve) != initial:
+            current_role, client = await asyncio.to_thread(resolve)
+            if current_role != role or (client.id if client else None) != device_id:
                 return
 
 

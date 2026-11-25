@@ -14,6 +14,7 @@ from uuid import uuid4
 
 DEVICES = ("mac", "iphone")
 LIFETIME = 90 * 86400
+SETUP_LIFETIME = 30 * 60
 USERNAME = re.compile(r"[a-z0-9][a-z0-9._-]{2,63}")
 TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 SCHEMA = """
@@ -29,6 +30,9 @@ CREATE TABLE IF NOT EXISTS devices (
     UNIQUE(user_id,role)
 );
 CREATE TABLE IF NOT EXISTS attempts (peer TEXT PRIMARY KEY, count INTEGER NOT NULL, resets REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS owner_setup (
+    singleton INTEGER PRIMARY KEY CHECK(singleton=1), token BLOB NOT NULL, expires REAL NOT NULL
+);
 """
 
 
@@ -54,6 +58,33 @@ def hash_token(token):
     return sha256(token.encode()).digest()
 
 
+def password_record(password):
+    salt = secrets.token_bytes(16)
+    return salt, derive(password_bytes(password, minimum=12), salt)
+
+
+def device_public(body):
+    role = body.get("device")
+    public = base64.b64decode(body.get("public", ""), validate=True)
+    if role not in DEVICES or len(public) != 65 or public[0] != 4:
+        raise ValueError("A valid Nex device key is required.")
+    return role, public
+
+
+def insert_user(db, name, password, *, owner=False):
+    identifier = uuid4().hex
+    db.execute("INSERT INTO users(id,username,salt,password_hash,owner) VALUES(?,?,?,?,?)",
+               (identifier, name, *password, owner))
+    return identifier
+
+
+def issue_device(db, identifier, name, owner, role, public):
+    token, device_id = secrets.token_urlsafe(32), uuid4().hex
+    db.execute("INSERT OR REPLACE INTO devices VALUES(?,?,?,?,?,?)",
+               (hash_token(token), device_id, identifier, role, public, time() + LIFETIME))
+    return {"token": token, "device_id": device_id, "account_id": identifier, "username": name, "owner": bool(owner)}
+
+
 class BadLogin(Exception):
     pass
 
@@ -67,6 +98,11 @@ class Account:
     id: str
     username: str
     owner: bool
+    admin: bool = False
+
+    @property
+    def can_manage(self):
+        return self.owner or self.admin
 
     def root(self, host):
         return host if self.owner else host / "users" / self.id
@@ -84,7 +120,7 @@ class Device:
 
 
 def account(row):
-    return Account(row["id"], row["username"], bool(row["owner"]))
+    return Account(row["id"], row["username"], bool(row["owner"]), bool(row["admin"]))
 
 
 class Accounts:
@@ -95,32 +131,36 @@ class Accounts:
         self.slots = threading.BoundedSemaphore(2)
         with self.connect() as db:
             db.executescript(SCHEMA)
+            db.execute("BEGIN IMMEDIATE")
+            if "admin" not in {column[1] for column in db.execute("PRAGMA table_info(users)")}:
+                db.execute("ALTER TABLE users ADD COLUMN admin INTEGER NOT NULL DEFAULT 0 CHECK(admin IN (0, 1))")
 
     @contextmanager
-    def connect(self):
+    def connect(self, *, write=False):
         db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
         try:
             db.execute("PRAGMA foreign_keys=ON")
             with db:
+                if write:
+                    db.execute("BEGIN IMMEDIATE")
                 yield db
         finally:
             db.close()
 
     def create(self, name, password, *, owner=False):
         name = username(name)
-        salt = secrets.token_bytes(16)
-        hashed = derive(password_bytes(password, minimum=12), salt)
+        record = password_record(password)
         try:
             with self.connect() as db:
-                db.execute("INSERT INTO users(id,username,salt,password_hash,owner) VALUES(?,?,?,?,?)",
-                           (uuid4().hex, name, salt, hashed, owner))
+                insert_user(db, name, record, owner=owner)
+                if owner:
+                    db.execute("DELETE FROM owner_setup")
         except sqlite3.IntegrityError:
             raise ValueError("That username or the existing archive's owner is already registered.") from None
 
     def reset(self, name, password):
-        salt = secrets.token_bytes(16)
-        hashed = derive(password_bytes(password, minimum=12), salt)
+        salt, hashed = password_record(password)
         with self.connect() as db:
             user = db.execute("UPDATE users SET salt=?,password_hash=? WHERE username=? RETURNING id",
                               (salt, hashed, username(name))).fetchone()
@@ -179,23 +219,25 @@ class Accounts:
             if row is None:
                 raise LoginBusy
 
-    def sign_in(self, body, peer):
+    @contextmanager
+    def password_work(self, peer):
         if not self.slots.acquire(blocking=False):
             raise LoginBusy
         try:
             self.charge_attempt(peer)
-            return self.verify_login(body)
+            yield
         finally:
             self.slots.release()
 
+    def sign_in(self, body, peer):
+        with self.password_work(peer):
+            return self.verify_login(body)
+
     def verify_login(self, body):
-        role = body.get("device")
         try:
             name = username(body.get("username"))
             password = password_bytes(body.get("password"))
-            public = base64.b64decode(body.get("public", ""), validate=True)
-            if role not in DEVICES or len(public) != 65 or public[0] != 4:
-                raise ValueError
+            role, public = device_public(body)
         except (ValueError, TypeError):
             raise BadLogin from None
         with self.connect() as db:
@@ -204,17 +246,12 @@ class Accounts:
         matches = hmac.compare_digest(calculated, user["password_hash"] if user else bytes(32))
         if not matches or user is None or user["disabled"]:
             raise BadLogin
-        token, identifier = secrets.token_urlsafe(32), uuid4().hex
-        with self.connect() as db:
-            # The compare and replacement are atomic with password resets and disabling an account.
-            db.execute("BEGIN IMMEDIATE")
-            current = db.execute("SELECT password_hash,disabled FROM users WHERE id=?", (user["id"],)).fetchone()
-            if current["disabled"] or current["password_hash"] != user["password_hash"]:
+        with self.connect(write=True) as db:
+            # The compare and replacement are atomic with password resets, renames and disabling an account.
+            current = db.execute("SELECT username,password_hash,disabled FROM users WHERE id=?", (user["id"],)).fetchone()
+            if not current or current["disabled"] or current["password_hash"] != user["password_hash"] or current["username"] != name:
                 raise BadLogin
-            db.execute("INSERT OR REPLACE INTO devices VALUES(?,?,?,?,?,?)",
-                       (hash_token(token), identifier, user["id"], role, public, time() + LIFETIME))
-        return {"token": token, "device_id": identifier, "account_id": user["id"],
-                "username": user["username"], "owner": bool(user["owner"])}
+            return issue_device(db, user["id"], name, user["owner"], role, public)
 
 
 def bearer(header):

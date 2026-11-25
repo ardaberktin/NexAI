@@ -66,27 +66,25 @@ before publishing a file.
 
 ## Create accounts and connect the Apple clients
 
-Run account management on the host as the Nex service user. Passwords are entered at an interactive prompt.
+On a fresh host, run this command as the Nex service user to print a private, single-use setup link:
+
+```bash
+python3 -m nex --data "$NEX_DATA" account setup-link
+```
+
+Paste the link into Nex on a Mac or iPhone connected to the tailnet. Choose the owner's username and password and finish Touch ID or Face ID registration. The setup link expires in 30 minutes. Once signed in, open **Settings → Nex Account** to share the reusable server link. Use **Manage Users** there to add other accounts. Give each user their own credentials through a trusted channel.
+
+On a paired server, update the archive and live services and the Apple apps. Pause recording and finish syncing the Mac, iPhone, and Watch queues. Then use **Settings → Nex Account → Set Up Owner Account** from an unlocked, paired Mac or iPhone. The new owner inherits the existing archive and legacy device credentials are retired. Sign in on the other client and re-enable Apple Watch in iPhone settings. Unsynced legacy recordings stay in their original local queues.
+
+**Nex Account** lets users rename themselves, change their password and sign out other devices. The owner can appoint administrators. Administrators can create and rename member accounts, reset member passwords, disable or restore access, and set audio limits. Disabling an account signs its devices out and preserves its archive. Additional accounts keep separate archives under `$NEX_DATA/users/` and use server-side models. The host console continues to manage the original archive and shared model configuration.
+
+An account can have one active Mac session and one active iPhone session. Signing in on another device of the same type revokes the previous session. Device sessions expire after 90 days. Apple Watch follows its iPhone's account. The service user can also manage accounts from the Linux terminal for host-side setup and recovery:
 
 ```bash
 python3 -m nex --data "$NEX_DATA" account create alice --owner
-python3 -m nex --data "$NEX_DATA" account create bob
 python3 -m nex --data "$NEX_DATA" account server-link
-```
-
-Give each user the server link and their username and password over a trusted channel. The same link works for every account and contains the Tailscale address and TLS certificate fingerprint. On Mac or iPhone, connect Tailscale, open Nex, enter the link and credentials, and register with Touch ID or Face ID.
-
-`--owner` attaches the existing archive to exactly one account. Other accounts get separate archives under `$NEX_DATA/users/` and their own audio allowance, recording history, Chat, private requests, scheduled goals, and integrations. The host console continues to manage the original archive and shared model configuration. Additional accounts use server-side models and have no access to the owner’s Mac model relay.
-
-**Upgrading a paired server.** Finish syncing the Mac, iPhone, and Watch queues before creating the owner account. Update both server services and all clients. Creating the owner account disables legacy Mac and iPhone credentials. Sign in again on both clients, then enable Apple Watch access again in iPhone settings. Any unsynced legacy recordings stay in their original local queues. The new account won't upload them automatically.
-
-An account can have one active Mac session and one active iPhone session. Signing in on a replacement of the same type revokes the previous session. Device sessions expire after 90 days. The Watch uses its iPhone’s account. Sign-out revokes that device when the server can be reached. Administrators can revoke all devices with a password reset or disable an account while keeping its data.
-
-```bash
 python3 -m nex --data "$NEX_DATA" account list
-python3 -m nex --data "$NEX_DATA" account reset-password bob
-python3 -m nex --data "$NEX_DATA" account disable bob
-python3 -m nex --data "$NEX_DATA" account enable bob
+python3 -m nex --data "$NEX_DATA" account reset-password alice
 ```
 
 ### Legacy pairing

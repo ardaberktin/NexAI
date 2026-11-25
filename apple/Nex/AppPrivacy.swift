@@ -101,10 +101,16 @@ final class AppPrivacy: ObservableObject {
     func signIn(_ link: NexServerLink, username: String, password: String,
                 install: (Pairing, NexAPI) throws -> Void) async throws {
         disconnect()
+        try await registerHosted(install: install) { publicKey in
+            try await link.signIn(username: username, password: password, publicKey: publicKey)
+        }
+    }
+
+    func registerHosted(install: (Pairing, NexAPI) throws -> Void,
+                        open: (Data) async throws -> Pairing) async throws {
         try await withBiometrics("Register this device for your Nex workspace") { context in
             let key = try OwnerKey.load(using: context, slot: UUID().uuidString)
-            let profile = try await link.signIn(username: username, password: password,
-                                                publicKey: key.publicKey.x963Representation)
+            let profile = try await open(key.publicKey.x963Representation)
             let api = try NexAPI(profile)
             do {
                 guard self.context === context, !Task.isCancelled else { throw CancellationError() }

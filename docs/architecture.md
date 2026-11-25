@@ -27,7 +27,7 @@ The shared conversation code lives in `server/nex/conversation/`. `catalog.py` a
 
 ## Storage and privacy
 
-- The account registry stores salted scrypt password verifiers and hashes of random device credentials. Both listeners resolve the credential before choosing an archive. Biometric challenges and workspace sessions are scoped to the authenticated device credential.
+- The account registry stores salted scrypt password verifiers and hashes of random device credentials. Both listeners resolve the credential before choosing an archive. Biometric challenges and workspace sessions are scoped to the authenticated device credential. Account settings require that workspace session. The archive owner can delegate member administration. The account registry rechecks roles and the acting device before each write. A single-use host setup link or an unlocked legacy device can establish the first owner.
 - The host holds shared model settings and assets. The original owner archive stays at the root, and each additional account has a separate archive keyed by an opaque account ID. Each archive owns its SQLite databases, search index, transcripts, recordings, PDFs, integrations, context and scheduled jobs. The local model receives context selected inside that archive. Only the original owner can use the optional host-side Mac relay.
 - Clients stage recordings in account-scoped queues until durable upload acknowledgement. Watch transfers carry the account scope through the iPhone relay. Review upload, recording, and sync behavior together when changing IDs or migrations.
 - The admin console is bound to server loopback. The archive’s private permissions and backup process apply to both the database and the audio store.

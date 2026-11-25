@@ -30,6 +30,7 @@ struct NexServerSignInFields: View {
     @State private var link = ""
     @State private var username = ""
     @State private var password = ""
+    @State private var confirmation = ""
     @State private var submitting = false
     @State private var error: String?
 
@@ -47,21 +48,38 @@ struct NexServerSignInFields: View {
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
                 #endif
-            SecureField("Password", text: $password)
-                .textContentType(.password)
-                .onSubmit(signIn)
+            if creatingOwner {
+                HostedPasswordFields(password: $password, confirmation: $confirmation)
+                Text("This setup link creates the owner of the server.")
+                    .foregroundStyle(.secondary)
+                Button("Sign In Instead") {
+                    if let setup = try? NexServerLink(link),
+                       let regular = NexServerLink.serverLink(address: setup.address, pin: setup.pin) {
+                        link = regular
+                        confirmation = ""
+                        error = nil
+                    }
+                }
+            } else {
+                SecureField("Password", text: $password)
+                    .textContentType(.password)
+                    .onSubmit(signIn)
+            }
             if let message = error ?? model.message {
                 Text(message).foregroundStyle(.secondary)
             }
-            Button(submitting ? "Signing in…" : "Sign In", action: signIn)
+            Button(submitting ? "Connecting…" : creatingOwner ? "Create Owner Account" : "Sign In", action: signIn)
                 .buttonStyle(.borderedProminent)
                 .disabled(!available)
         }
         .disabled(submitting || model.signingOut)
     }
 
+    private var creatingOwner: Bool { (try? NexServerLink(link))?.setup != nil }
+
     private var available: Bool {
-        !submitting && !model.signingOut && !link.isEmpty && !username.isEmpty && !password.isEmpty
+        !submitting && !model.signingOut && !link.isEmpty && !username.isEmpty &&
+            (creatingOwner ? HostedPasswordFields.isValid(password, confirmation) : !password.isEmpty)
     }
 
     private func signIn() {
@@ -70,6 +88,7 @@ struct NexServerSignInFields: View {
         error = nil
         let enteredPassword = password
         password = ""
+        confirmation = ""
         Task {
             defer { submitting = false }
             do {

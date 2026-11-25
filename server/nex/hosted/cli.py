@@ -9,6 +9,7 @@ from getpass import getpass
 
 from ..network import CLIENT_PORT, TailnetEndpoint
 from .auth import Accounts
+from .setup import setup_secret
 
 
 def commands(parser):
@@ -20,20 +21,22 @@ def commands(parser):
             command.add_argument("--owner", action="store_true", help="attach the existing archive to this account")
     operations.add_parser("list")
     operations.add_parser("server-link")
+    operations.add_parser("setup-link", help="issue a one-time link to create the first owner in Nex")
 
 
 def run(root, args):
     if not (root / "access.json").is_file():
         raise ValueError("Initialize the Nex archive first.")
-    if args.operation == "server-link":
+    if args.operation in {"server-link", "setup-link"}:
         endpoint = TailnetEndpoint.current(root)
         der = ssl.PEM_cert_to_DER_cert(endpoint.certificate.read_text())
         pin = base64.urlsafe_b64encode(hashlib.sha256(der).digest()).decode().rstrip("=")
-        print(f"nex://{endpoint.address}:{CLIENT_PORT}/{pin}")
+        query = "?setup=" + setup_secret(Accounts(root)) if args.operation == "setup-link" else ""
+        print(f"nex://{endpoint.address}:{CLIENT_PORT}/{pin}{query}")
         return
     accounts = Accounts(root)
     if args.operation == "list":
-        print(json.dumps([{"username": user.username, "owner": user.owner, "enabled": enabled}
+        print(json.dumps([{"username": user.username, "owner": user.owner, "admin": user.can_manage, "enabled": enabled}
                           for user, enabled in accounts.list()], indent=2))
     elif args.operation in {"disable", "enable"}:
         accounts.set_enabled(args.username, args.operation == "enable")
