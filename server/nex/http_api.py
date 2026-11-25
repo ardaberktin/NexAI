@@ -23,7 +23,7 @@ from .coding.intent import pasted_python
 from .coding.sandbox import MAX_SOURCE
 from .daybook import Daybook, DayContext
 from .hosted import routes as account_routes
-from .hosted.auth import BadLogin, LoginBusy, bearer
+from .hosted.auth import BadLogin, LoginBusy, ResetInProgress, bearer
 from .hosted.setup import claim_owner
 from .models import ModelError
 from .personal_files import PersonalConflict, safe_line
@@ -235,6 +235,8 @@ class API(BaseHTTPRequestHandler):
             self.send({"error": "The username or password could not be verified."}, 401)
         except LoginBusy:
             self.send({"error": "Too many account requests. Try again shortly."}, 429)
+        except ResetInProgress:
+            self.send({"error": "Nex is resetting this account’s data. Try signing in again shortly."}, 503)
         except Problem as exc:
             self.send({"error": exc.message}, exc.status)
         except AccessDenied as exc:

@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS attempts (peer TEXT PRIMARY KEY, count INTEGER NOT NU
 CREATE TABLE IF NOT EXISTS owner_setup (
     singleton INTEGER PRIMARY KEY CHECK(singleton=1), token BLOB NOT NULL, expires REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS account_resets (
+    user_id TEXT PRIMARY KEY REFERENCES users(id)
+);
 """
 
 
@@ -82,7 +85,10 @@ def issue_device(db, identifier, name, owner, role, public):
     token, device_id = secrets.token_urlsafe(32), uuid4().hex
     db.execute("INSERT OR REPLACE INTO devices VALUES(?,?,?,?,?,?)",
                (hash_token(token), device_id, identifier, role, public, time() + LIFETIME))
-    return {"token": token, "device_id": device_id, "account_id": identifier, "username": name, "owner": bool(owner)}
+    # Apple clients use this opaque ID to scope local queues. A reset seals off the previous queue
+    # on every device, including clients that already understand the original sign-in response.
+    scope = db.execute("SELECT archive_id FROM users WHERE id=?", (identifier,)).fetchone()[0] or identifier
+    return {"token": token, "device_id": device_id, "account_id": scope, "username": name, "owner": bool(owner)}
 
 
 class BadLogin(Exception):
@@ -90,6 +96,10 @@ class BadLogin(Exception):
 
 
 class LoginBusy(Exception):
+    pass
+
+
+class ResetInProgress(Exception):
     pass
 
 
@@ -132,8 +142,11 @@ class Accounts:
         with self.connect() as db:
             db.executescript(SCHEMA)
             db.execute("BEGIN IMMEDIATE")
-            if "admin" not in {column[1] for column in db.execute("PRAGMA table_info(users)")}:
+            columns = {column[1] for column in db.execute("PRAGMA table_info(users)")}
+            if "admin" not in columns:
                 db.execute("ALTER TABLE users ADD COLUMN admin INTEGER NOT NULL DEFAULT 0 CHECK(admin IN (0, 1))")
+            if "archive_id" not in columns:
+                db.execute("ALTER TABLE users ADD COLUMN archive_id TEXT")
 
     @contextmanager
     def connect(self, *, write=False):
@@ -176,6 +189,10 @@ class Accounts:
                 raise ValueError("Unknown Nex account.")
             if not enabled:
                 db.execute("DELETE FROM devices WHERE user_id=?", (user["id"],))
+
+    def resets_pending(self):
+        with self.connect() as db:
+            return db.execute("SELECT 1 FROM account_resets LIMIT 1").fetchone() is not None
 
     def list(self, *, active=False):
         with self.connect() as db:
@@ -244,9 +261,15 @@ class Accounts:
             raise BadLogin
         with self.connect(write=True) as db:
             # The compare and replacement are atomic with password resets, renames and disabling an account.
-            current = db.execute("SELECT username,password_hash,disabled FROM users WHERE id=?", (user["id"],)).fetchone()
+            current = db.execute(
+                """SELECT username,password_hash,disabled,
+                          EXISTS(SELECT 1 FROM account_resets WHERE user_id=users.id) AS resetting
+                   FROM users WHERE id=?""", (user["id"],)
+            ).fetchone()
             if not current or current["disabled"] or current["password_hash"] != user["password_hash"] or current["username"] != name:
                 raise BadLogin
+            if current["resetting"]:
+                raise ResetInProgress
             return issue_device(db, user["id"], name, user["owner"], role, public)
 
 

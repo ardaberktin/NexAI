@@ -14,6 +14,7 @@ from .accounts.http import AccountError
 from .accounts.setup import authorize
 from .hosted import cli as account_cli
 from .hosted.browser_setup import BrowserSetupServer
+from .hosted.reset import restart_process, workspace_lock
 from .hosted.workspaces import HostedWorkspaces
 from .http_api import Server
 from .initialize import initialize
@@ -39,13 +40,19 @@ def report_ready():
 
 
 def serve(root, runtime, ssd_audio=None):
-    endpoint = TailnetEndpoint.current(root)
-    credentials = read_access(root)
     if ssd_audio is not None:
         ssd_audio = ssd_audio.resolve()
         ssd_audio.mkdir(mode=0o700, parents=True, exist_ok=True)
         if root.stat().st_dev == ssd_audio.stat().st_dev:
             raise ValueError("The SSD audio directory and data archive must be on separate drives.")
+    with workspace_lock(root, archive=True, ssd_audio=ssd_audio):
+        if run_archive(root, runtime, ssd_audio):
+            restart_process()
+
+
+def run_archive(root, runtime, ssd_audio):
+    endpoint = TailnetEndpoint.current(root)
+    credentials = read_access(root)
     ending = threading.Event()
     hosted = HostedWorkspaces(root, runtime, credentials, ending, ssd_audio=ssd_audio)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -68,11 +75,16 @@ def serve(root, runtime, ssd_audio=None):
     report_ready()
     logger.info("Nex is serving its archive on Tailscale, with a loopback console.")
     logger.info("Browser setup is available over SSH at %s.", setup.path)
-    ending.wait()
+    restart = False
+    while not ending.wait(0.5):
+        if hosted.accounts.resets_pending():
+            restart = True
+            ending.set()
     for server in servers:
         server.shutdown()
         server.server_close()
     hosted.close()
+    return restart
 
 
 def main():

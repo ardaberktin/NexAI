@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import socket
+import sqlite3
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 
 from ..__main__ import read_access
 from ..daybook import DayContext
+from ..hosted.reset import restart_process, workspace_lock
 from ..network import TAILSCALE_INTERFACE, TailnetEndpoint
 from ..recall_dates import time_zone
 from ..workspace_features import is_enabled, off_message
@@ -54,7 +56,23 @@ async def lifespan(app):
         )
         app.state.workspaces = workspaces
         await stack.enter_async_context(workspaces.running())
-        yield
+        maintenance = asyncio.create_task(watch_maintenance(app, workspaces.accounts))
+        try:
+            yield
+        finally:
+            maintenance.cancel()
+            await asyncio.gather(maintenance, return_exceptions=True)
+
+
+async def watch_maintenance(app, accounts):
+    while True:
+        await asyncio.sleep(0.5)
+        try:
+            if await asyncio.to_thread(accounts.resets_pending):
+                app.state.restart_for_maintenance()
+                return
+        except sqlite3.Error as error:
+            logging.getLogger(__name__).warning("Account maintenance check deferred (%s)", type(error).__name__)
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -221,18 +239,29 @@ async def serve_live(ws: WebSocket, device):
 
 
 def main():
+    with workspace_lock(DATA) as accounts:
+        run_live()
+        if accounts.resets_pending():
+            restart_process()
+
+
+def run_live():
+    options = {"access_log": False, "ws_max_size": 32_768, "proxy_headers": False, "timeout_graceful_shutdown": 2}
     if TEST_LOOPBACK:
-        uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("NEX_LIVE_PORT", "18767")),
-                    access_log=False, ws_max_size=32_768, timeout_graceful_shutdown=2)
+        options.update(host="127.0.0.1", port=int(os.environ.get("NEX_LIVE_PORT", "18767")))
+    else:
+        endpoint = TailnetEndpoint.current(DATA)
+        options.update(ssl_certfile=str(endpoint.certificate), ssl_keyfile=str(endpoint.key))
+    server = uvicorn.Server(uvicorn.Config(app, **options))
+    app.state.restart_for_maintenance = lambda: setattr(server, "should_exit", True)
+    if TEST_LOOPBACK:
+        server.run()
         return
-    endpoint = TailnetEndpoint.current(DATA)
-    config = uvicorn.Config(app, ssl_certfile=str(endpoint.certificate), ssl_keyfile=str(endpoint.key),
-                            ws_max_size=32_768, access_log=False, proxy_headers=False, timeout_graceful_shutdown=2)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, TAILSCALE_INTERFACE.encode() + b"\0")
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((endpoint.address, PORT))
-        uvicorn.Server(config).run(sockets=[sock])
+        server.run(sockets=[sock])
 
 
 if __name__ == "__main__":

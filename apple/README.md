@@ -31,6 +31,8 @@ Run with **Nex iOS** and `generic/platform=iOS`, or **Nex Watch** and `generic/p
 
 **Settings → Nex Account** shows your profile, server link and signed-in devices. Use it to change your username or password and sign out another device. Owners and admins can open **Manage Users** here. Signing out pauses recording on that device. When you sign back in to the same account on the same server identity, Nex resumes syncing that account’s queued recordings. Before changing server certificates, finish syncing local queues.
 
+Use **Reset My Data** in **Settings → Nex Account** to erase your workspace data from the server. Enter your current password and confirm **Erase My Data**. Nex signs this account out on every device and erases its pending recording queue on the Mac or iPhone where you confirm. Sign back in with the same account to start fresh.
+
 ## Optional local wake model
 
 Run `./fetch-wake-model.sh` before building if you want local **Hey Nex** detection on Mac and iPhone. The script downloads the pinned upstream keyword-spotting model and verifies its checksum before copying the necessary files. The normal build works without the weights. Manual voice actions are available when the server is configured. See the [wake model provenance](NexVoiceCapture/Sources/NexVoiceCapture/Models/SOURCE.md) for upstream details.
