@@ -184,10 +184,14 @@ class ActivityTests(unittest.TestCase):
         self.assertEqual(interpret(result, "", screen, fallback), Observation("youtube", "screen", screen))
         self.assertEqual(interpret(result, "", "", fallback, [screen]), fallback)
         self.assertEqual(interpret(result, "", "A video is playing.", fallback), fallback)
-        mention = "Find our channel on YouTube after the show."
-        result = json.dumps({"category": "youtube", "quote": mention})
-        self.assertEqual(interpret(result, mention, "", fallback), fallback)
         self.assertEqual(journal_speech("I am watching YouTube."), "I am watching YouTube.")
+
+    def test_platform_classification_accepts_cited_speech_without_specific_phrases(self):
+        for speech in ("Just loaded a race on the PlayStation 5.", "I'm playing PlayStation 5, not Xbox."):
+            with self.subTest(speech=speech):
+                result = json.dumps({"category": "ps5", "quote": speech})
+                fallback = from_sounds([], "ambient", speech)
+                self.assertEqual(interpret(result, speech, "", fallback), Observation("ps5", "speech", speech))
 
     def test_generic_tv_sounds_do_not_identify_a_movie_or_show(self):
         sounds = ["Television", "Background music"]
@@ -199,22 +203,41 @@ class ActivityTests(unittest.TestCase):
             self.assertEqual(interpret(quoted_sound, "See you later.", "", fallback, sounds), fallback)
 
     def test_worker_uses_screen_state_before_accepting_an_activity(self):
-        self.clip(self.start)
-        with self.store.connect() as db:
-            db.execute("UPDATE activity_clips SET screen='A movie is paused.'")
-        self.jobs.save_sounds(self.jobs.next(audio=True), ["Typing", "Computer keyboard"])
+        for offset, (screen, decision) in enumerate((
+            ("A movie is paused.", {"screen_state": "idle", "category": "movie", "evidence": "screen"}),
+            ("The window is indistinct.", {"screen_state": "unclear", "category": "unknown", "evidence": "none"}),
+            ("A window is updating.", {"screen_state": "active", "category": "unknown", "evidence": "none"}),
+        )):
+            with self.subTest(screen=screen):
+                key = self.clip(self.start + timedelta(seconds=30 * offset))
+                with self.store.connect() as db:
+                    db.execute("UPDATE activity_clips SET screen=? WHERE recording_id=?", (screen, key))
+                self.jobs.save_sounds(self.jobs.next(audio=True), ["Typing", "Computer keyboard"])
+                dialogue = Mock(background_text=AsyncMock(side_effect=[json.dumps(decision), json.dumps({
+                    "category": "computer", "source": "sound", "evidence": ["1", "2"],
+                })]))
+                worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+                asyncio.run(worker.analyze(self.jobs.next(), False))
+
+                with_screen, without_screen = [json.loads(call.args[0][-1]["content"])
+                                               for call in dialogue.background_text.await_args_list]
+                self.assertEqual(with_screen["screen"], screen)
+                self.assertEqual(without_screen, {"sound_events": {"1": "Typing", "2": "Computer keyboard"}})
+                self.assertEqual(timeline(self.store, self.context.bounds)["items"][-1]["category"], "computer")
+
+    def test_unresolved_speech_still_allows_the_model_to_classify_detected_sounds(self):
+        sounds, speech = ["Television"], "See you later."
+        fallback = from_sounds(sounds, "ambient", speech)
         dialogue = Mock(background_text=AsyncMock(side_effect=[
-            json.dumps({"screen_state": "idle", "category": "movie", "evidence": "screen"}),
-            json.dumps({"category": "computer", "source": "sound", "evidence": ["1", "2"]}),
+            json.dumps({"category": "unknown", "quote": ""}),
+            json.dumps({"category": "media", "source": "sound", "evidence": ["1"]}),
         ]))
         worker = ActivityWorker(self.store, self.store.root, None, dialogue)
-        asyncio.run(worker.analyze(self.jobs.next(), False))
-
-        with_screen, without_screen = [json.loads(call.args[0][-1]["content"])
-                                       for call in dialogue.background_text.await_args_list]
-        self.assertEqual(with_screen["screen"], "A movie is paused.")
-        self.assertEqual(without_screen, {"sound_events": {"1": "Typing", "2": "Computer keyboard"}})
-        self.assertEqual(timeline(self.store, self.context.bounds)["items"][0]["category"], "computer")
+        result = asyncio.run(worker.classify(speech, "", sounds, fallback))
+        supplied = [json.loads(call.args[0][-1]["content"]) for call in dialogue.background_text.await_args_list]
+        self.assertEqual(supplied[0]["speech"], speech)
+        self.assertEqual(supplied[1], {"sound_events": {"1": "Television"}})
+        self.assertEqual(result, Observation("media", "sound", "Heard Television."))
 
     def test_model_failure_keeps_the_detected_sounds_and_defers_recognition(self):
         key = self.clip(self.start)
@@ -225,9 +248,18 @@ class ActivityTests(unittest.TestCase):
 
         activity = timeline(self.store, self.context.bounds)["items"][0]
         self.assertEqual((activity["category"], activity["detail"]), ("unknown", "Heard Typing, Computer keyboard."))
+        self.assertEqual((activity["title"], activity["confidence"]), ("Typing detected", "Unclear"))
         self.assertIsNone(self.jobs.next())
         with self.store.connect() as db:
             self.assertIsNotNone(db.execute("SELECT due FROM activity_clips WHERE recording_id=?", (key,)).fetchone()[0])
+
+    def test_adjacent_unclassified_detections_keep_their_own_headlines(self):
+        for offset, label in enumerate(("Typing", "Television")):
+            self.clip(self.start + timedelta(seconds=offset * 12))
+            self.jobs.save_sounds(self.jobs.next(audio=True), [label])
+        activities = timeline(self.store, self.context.bounds)["items"]
+        self.assertEqual([(item["title"], item["count"]) for item in activities],
+                         [("Typing detected", 1), ("Television detected", 1)])
 
     def test_audible_interface_prompts_can_identify_the_platform_without_self_narration(self):
         for category, prompt in (

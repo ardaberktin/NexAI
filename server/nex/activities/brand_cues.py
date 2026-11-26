@@ -14,7 +14,6 @@ INTERFACE = {
     "instagram": r"\b(?:reels?[,. ]+(?:tab[, ]+)?selected|"
                  r"swipe (?:up|down) (?:for|to play) (?:the )?next reel)\b",
 }
-CURRENT = re.compile(r"\b(?:i(?:['’]m| am)|we(?:['’]re| are)|right now|currently|şu an)\b", re.IGNORECASE)
 MENTION = re.compile(r"\b(?:not|never|wish|going to|talking about|thinking about|yesterday|"
                      r"how to|tutorial|follow me|sponsored|advertisement)\b", re.IGNORECASE)
 MENU_NAMES = {"ps5": "a PlayStation 5 controller prompt", "tiktok": "TikTok feed navigation",
@@ -34,12 +33,9 @@ def interface_quote(category, text):
     return ""
 
 
-def supports_brand(category, basis, quote):
-    if not re.search(BRANDS[category], quote, re.IGNORECASE):
-        return False
-    if basis == "screen":
-        return True
-    return not MENTION.search(quote) and bool(CURRENT.search(quote) or interface_quote(category, quote))
+def identifies_brand(category, quote):
+    """Verify that cited evidence contains the selected platform's name."""
+    return bool(re.search(BRANDS[category], quote, re.IGNORECASE))
 
 
 def menu_and_speech(text):

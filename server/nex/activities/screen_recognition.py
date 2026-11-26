@@ -4,7 +4,7 @@ import json
 
 from ..model_context import constrained_messages
 from ..personal_files import safe_line
-from .brand_cues import BRANDS, supports_brand
+from .brand_cues import BRANDS, identifies_brand
 from .recognition import (
     CLASSIFIER_CATEGORIES,
     SOUND_CATEGORIES,
@@ -40,23 +40,21 @@ def screen_messages(evidence):
 
 
 def resolve_screen_decision(value, evidence, fallback):
-    """Return the observation and whether an idle screen should be left out on a second pass."""
+    """Accept a cited observation only when its source is available and usable."""
     if value is None or value.get("screen_state") not in SCREEN_STATES:
-        return None, False
+        return None
     category, key = value["category"], value.get("evidence")
-    if value["screen_state"] == "idle" and (key == "screen" or category == "unknown"):
-        return fallback, True
     if category == "unknown" or not isinstance(key, str) or key not in evidence:
-        return fallback, False
+        return fallback
     basis = key if key in ("screen", "speech") else "sound"
     if basis == "screen" and value["screen_state"] != "active":
-        return fallback, False
+        return fallback
     if basis == "sound" and category not in SOUND_CATEGORIES:
-        return fallback, False
+        return fallback
     detail = safe_line(evidence[key], 240)
-    if not detail or (category in BRANDS and not supports_brand(category, basis, detail)):
-        return fallback, False
-    return Observation(category, basis, heard([detail]) if basis == "sound" else detail), False
+    if not detail or (category in BRANDS and not identifies_brand(category, detail)):
+        return fallback
+    return Observation(category, basis, heard([detail]) if basis == "sound" else detail)
 
 
 async def classify_with_screen(dialogue, transcript, screen, sounds, fallback):

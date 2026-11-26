@@ -20,10 +20,12 @@ def confidence(category, basis):
 
 def public_clip(row, start, end):
     category, basis = row["category"], row["basis"]
+    sounds = json.loads(row["sounds"] or "[]")
+    title = f"{sounds[0]} detected" if category == "unknown" and sounds else TITLES[category]
     return {"id": row["id"], "started": start, "ended": end, "device": row["device"],
-            "category": category, "title": TITLES[category], "basis": BASIS_NAMES[basis],
+            "category": category, "title": title, "basis": BASIS_NAMES[basis],
             "confidence": confidence(category, basis), "detail": row["detail"],
-            "sounds": json.loads(row["sounds"] or "[]")}
+            "sounds": sounds}
 
 
 def clipped_rows(store, bounds, exclude=None, as_of=None):
@@ -58,7 +60,8 @@ def timeline(store, bounds, *, source=None, exclude=None, allowed=None, as_of=No
         clip = public_clip(row, time_key(start), time_key(end))
         previous = last.get(device)
         if (previous and previous["category"] == clip["category"] and previous["basis"] == clip["basis"]
-                and (row["basis"] == "sound" or previous["detail"] == clip["detail"])
+                and previous["title"] == clip["title"]
+                and (previous["detail"] == clip["detail"] or (row["basis"] == "sound" and clip["category"] != "unknown"))
                 and start <= datetime.fromisoformat(previous["ended"]) + timedelta(seconds=1)):
             period = previous
             period["ended"] = max(period["ended"], clip["ended"])

@@ -60,15 +60,32 @@ class ActivityWorker:
     async def classify(self, transcript, screen, sounds, fallback):
         if fallback.category == "nex":
             return fallback
+        screen_result = fallback
         if screen:
-            result, reconsider = await classify_with_screen(self.dialogue, transcript, screen, sounds, fallback)
-            if not reconsider:
-                return result
+            screen_result = await classify_with_screen(self.dialogue, transcript, screen, sounds, fallback)
+            if screen_result is not None and screen_result.category != "unknown":
+                return screen_result
         if not (transcript or sounds):
-            return fallback
+            return screen_result
+
+        room = await self.classify_room(transcript, sounds, fallback)
+        if screen_result is None and room is not None and room.category == "unknown":
+            return None
+        return room
+
+    async def classify_room(self, transcript, sounds, fallback):
         messages = classifier_messages(transcript, "", sounds)
-        raw = await self.dialogue.background_text(messages, 110, temperature=None if transcript else 0)
-        return interpret(raw, transcript, "", fallback, sounds)
+        raw = await self.dialogue.background_text(messages, 110, temperature=0)
+        result = interpret(raw, transcript, "", fallback, sounds)
+        if transcript and sounds and (result is None or result.category == "unknown"):
+            messages = classifier_messages("", "", sounds)
+            raw = await self.dialogue.background_text(messages, 110, temperature=0)
+            sound = interpret(raw, "", "", fallback, sounds)
+            if sound is not None and sound.category != "unknown":
+                return sound
+            if sound is None:
+                return None
+        return result
 
     async def consume(self, *, audio):
         last_expiration = float("-inf")
