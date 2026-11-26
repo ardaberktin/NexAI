@@ -177,6 +177,36 @@ class ActivityTests(unittest.TestCase):
                 raw = json.dumps({"category": category, "source": source, "evidence": evidence})
                 self.assertEqual(interpret(raw, "", "", fallback, sounds), fallback)
 
+    def test_youtube_requires_platform_evidence_from_the_screen_or_speech(self):
+        screen = "A YouTube watch page is playing a video."
+        result = json.dumps({"category": "youtube", "quote": screen})
+        fallback = from_sounds(["Television"], "ambient", "")
+        self.assertEqual(interpret(result, "", screen, fallback), Observation("youtube", "screen", screen))
+        self.assertEqual(interpret(result, "", "", fallback, [screen]), fallback)
+        self.assertEqual(interpret(result, "", "A video is playing.", fallback), fallback)
+        mention = "Find our channel on YouTube after the show."
+        result = json.dumps({"category": "youtube", "quote": mention})
+        self.assertEqual(interpret(result, mention, "", fallback), fallback)
+        self.assertEqual(journal_speech("I am watching YouTube."), "I am watching YouTube.")
+
+    def test_worker_uses_screen_state_before_accepting_an_activity(self):
+        self.clip(self.start)
+        with self.store.connect() as db:
+            db.execute("UPDATE activity_clips SET screen='A movie is paused.'")
+        self.jobs.save_sounds(self.jobs.next(audio=True), ["Typing", "Computer keyboard"])
+        dialogue = Mock(background_text=AsyncMock(side_effect=[
+            json.dumps({"screen_state": "idle", "category": "movie", "evidence": "screen"}),
+            json.dumps({"category": "computer", "source": "sound", "evidence": ["1", "2"]}),
+        ]))
+        worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+        asyncio.run(worker.analyze(self.jobs.next(), False))
+
+        with_screen, without_screen = [json.loads(call.args[0][-1]["content"])
+                                       for call in dialogue.background_text.await_args_list]
+        self.assertEqual(with_screen["screen"], "A movie is paused.")
+        self.assertEqual(without_screen, {"sound_events": {"1": "Typing", "2": "Computer keyboard"}})
+        self.assertEqual(timeline(self.store, self.context.bounds)["items"][0]["category"], "computer")
+
     def test_model_failure_keeps_the_detected_sounds_and_defers_recognition(self):
         key = self.clip(self.start)
         self.jobs.save_sounds(self.jobs.next(audio=True), ["Typing", "Computer keyboard"])

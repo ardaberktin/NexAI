@@ -16,6 +16,7 @@ from ..recall_dates import time_key
 from ..settings import Settings
 from .jobs import ActivityJobs
 from .recognition import classifier_messages, from_sounds, interpret
+from .screen_recognition import classify_with_screen
 
 LOG = logging.getLogger(__name__)
 
@@ -53,12 +54,21 @@ class ActivityWorker:
         sounds = json.loads(job["sounds"]) if job["sounds"] is not None else None
         transcript, screen = (job["transcript"] or "")[:1500], job["screen"] or ""
         fallback = from_sounds(sounds, job["mode"], transcript)
-        result = fallback
-        if (transcript or screen or sounds) and fallback.category != "nex":
-            messages = classifier_messages(transcript, screen, sounds)
-            raw = await self.dialogue.background_text(messages, 110, temperature=None if transcript or screen else 0)
-            result = interpret(raw, transcript, screen, fallback, sounds)
+        result = await self.classify(transcript, screen, sounds, fallback)
         await asyncio.to_thread(self.jobs.save, job, result or fallback, due=None if result else retry_time())
+
+    async def classify(self, transcript, screen, sounds, fallback):
+        if fallback.category == "nex":
+            return fallback
+        if screen:
+            result, reconsider = await classify_with_screen(self.dialogue, transcript, screen, sounds, fallback)
+            if not reconsider:
+                return result
+        if not (transcript or sounds):
+            return fallback
+        messages = classifier_messages(transcript, "", sounds)
+        raw = await self.dialogue.background_text(messages, 110, temperature=None if transcript else 0)
+        return interpret(raw, transcript, "", fallback, sounds)
 
     async def consume(self, *, audio):
         last_expiration = float("-inf")

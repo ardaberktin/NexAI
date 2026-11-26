@@ -4,7 +4,7 @@ import re
 
 BRANDS = {
     "ps5": r"\b(?:ps\s*(?:5|five)|play\s?station\s*(?:5|five))\b",
-    "tiktok": r"\btik[ -]?tok\b", "instagram": r"\binstagram\b",
+    "tiktok": r"\btik[ -]?tok\b", "instagram": r"\binstagram\b", "youtube": r"\byoutube\b",
 }
 INTERFACE = {
     "ps5": r"\b(?:press the (?:ps|playstation) button|who(?:['’]s| is) using this controller|"
@@ -23,8 +23,11 @@ MENU_NAMES = {"ps5": "a PlayStation 5 controller prompt", "tiktok": "TikTok feed
 
 def interface_quote(category, text):
     """Keep the app name and audible navigation together in the quoted evidence."""
+    interface = INTERFACE.get(category)
+    if interface is None:
+        return ""
     for brand in re.finditer(BRANDS[category], text, re.IGNORECASE):
-        for cue in re.finditer(INTERFACE[category], text, re.IGNORECASE):
+        for cue in re.finditer(interface, text, re.IGNORECASE):
             start, end = min(brand.start(), cue.start()), max(brand.end(), cue.end())
             if end - start <= 120 and not MENTION.search(text[max(0, start - 45):end]):
                 return text[start:end]
@@ -41,11 +44,12 @@ def supports_brand(category, basis, quote):
 
 def menu_and_speech(text):
     """Separate complete device menu announcements from surrounding spoken sentences."""
-    for category, brand in BRANDS.items():
+    for category, interface in INTERFACE.items():
         if not interface_quote(category, text):
             continue
+        brand = BRANDS[category]
         announcement = rf"(?:(?:welcome (?:back )?to|this is) )?{brand}"
-        navigation = rf"(?:{INTERFACE[category]})(?: to continue)?"
+        navigation = rf"(?:{interface})(?: to continue)?"
         clause = rf"(?:{announcement}|{navigation})"
         menu = re.compile(rf"{clause}(?:[,.!?: ]+(?:and )?{clause})*[.!?]*", re.IGNORECASE)
         sentences = re.split(r"(?<=[.!?])\s+", text.strip())
