@@ -38,6 +38,10 @@ struct GoalDetailView: View {
             }
             if let goal {
                 overview(goal)
+                if let state = goal.planState,
+                   !(state.milestones ?? []).isEmpty || !(state.scratchpad ?? []).isEmpty {
+                    planSection(state)
+                }
                 if let followUp = goal.followUp {
                     GoalFollowUpView(followUp: followUp) { choice in
                         try await model.answerGoalFollowUp(id, followUp: followUp.id, choice: choice)
@@ -138,6 +142,53 @@ struct GoalDetailView: View {
                 Label("Last run · \(NexDate.display(date))", systemImage: "checkmark.circle")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func planSection(_ state: GoalPlanState) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Plan & Progress").font(.headline).accessibilityAddTraits(.isHeader)
+                Spacer()
+                if let phase = state.phase, !phase.isEmpty {
+                    Text(phase.replacingOccurrences(of: "_", with: " ").capitalized)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(state.milestones ?? []) { step in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: milestoneSymbol(step.status))
+                        .foregroundStyle(step.status == "done" ? WorkspaceStyle.accent : .secondary)
+                        .padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(step.title).font(.subheadline.weight(.medium))
+                        if let note = step.note, !note.isEmpty {
+                            Text(note).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            if let notes = state.scratchpad, !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Working notes").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(notes, id: \.self) { note in
+                        Text("• \(note)").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func milestoneSymbol(_ status: String) -> String {
+        switch status {
+        case "done": "checkmark.circle.fill"
+        case "in_progress": "circle.inset.filled"
+        case "blocked": "exclamationmark.circle"
+        default: "circle"
         }
     }
 

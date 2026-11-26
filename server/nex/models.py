@@ -276,23 +276,57 @@ class Engines:
         except ModelError:
             return None
 
-    def generate_warm(self, messages, tokens, *, decision=False, temperature=None):
+    def generate_warm(self, messages, tokens, *, decision=False, temperature=None, on_text=None,
+                      thinking=None, reasoning_effort=None):
         # The live daemon gives its active voice conversation priority over archive clients.
         body = {"messages": messages, "max_tokens": tokens} | response_options(messages)
         if decision:
             body["decision"] = True
         if temperature is not None:
             body["temperature"] = temperature
+        if thinking is not None:
+            body["thinking"] = bool(thinking)
+        if reasoning_effort in {"low", "medium", "high"}:
+            body["reasoning_effort"] = reasoning_effort
+        if on_text is not None and not decision:
+            body["stream"] = True
         try:
             with socket.socket(socket.AF_UNIX) as client:
-                client.settimeout(5 if decision else 34)
+                client.settimeout(5 if decision else 118)
                 client.connect(str(self.live_socket))
                 client.sendall(json.dumps(body, ensure_ascii=False).encode() + b"\n")
                 with client.makefile("rb") as response:
-                    result = json.loads(response.readline(32_768))
+                    if body.get("stream"):
+                        parts = []
+                        while line := response.readline(262_144):
+                            packet = json.loads(line)
+                            if delta := packet.get("delta"):
+                                parts.append(delta)
+                                on_text(delta)
+                            if packet.get("done") or ("text" in packet and "delta" not in packet):
+                                return packet.get("text") or "".join(parts).strip() or None
+                        return "".join(parts).strip() or None
+                    result = json.loads(response.readline(262_144))
             if result.get("text"):
                 return result["text"]
         except (OSError, http.client.HTTPException, ValueError):
+            pass
+        return None
+
+    def embed(self, texts):
+        if not texts:
+            return []
+        try:
+            with socket.socket(socket.AF_UNIX) as client:
+                client.settimeout(8)
+                client.connect(str(self.live_socket))
+                client.sendall(json.dumps({"embed": list(texts)}, ensure_ascii=False).encode() + b"\n")
+                with client.makefile("rb") as response:
+                    result = json.loads(response.readline(1_048_576))
+            vectors = result.get("embeddings")
+            if isinstance(vectors, list) and len(vectors) == len(texts):
+                return vectors
+        except (OSError, ValueError):
             pass
         return None
 
@@ -309,7 +343,7 @@ class Engines:
         return budget.remaining()
 
     def generate(self, messages, tokens, config, *, on_text=None, wait=True, decision=False, temperature=None,
-                 thinking=True):
+                 thinking=True, reasoning_effort=None):
         route = "live" if self.managed_live() else self.route(config)
         if route is None:
             return None
@@ -317,6 +351,8 @@ class Engines:
                    "stream": on_text is not None} | response_options(messages)
         if decision or not thinking:
             options["chat_template_kwargs"] = {"enable_thinking": False}
+        elif reasoning_effort in {"low", "medium", "high"}:
+            options["reasoning_effort"] = reasoning_effort
         if decision:
             options["temperature"] = 0
         if not self.lock.acquire(blocking=wait):
@@ -324,10 +360,11 @@ class Engines:
         try:
             if route == "live":
                 self.stop()
-                answer = self.generate_warm(messages, tokens, decision=decision, temperature=temperature)
+                answer = self.generate_warm(
+                    messages, tokens, decision=decision, temperature=temperature, on_text=on_text,
+                    thinking=thinking, reasoning_effort=reasoning_effort,
+                )
                 self.last_chat_error = None if answer else "The Excalibur model did not answer."
-                if answer and on_text:
-                    on_text(answer)
                 return answer
             if route == "server":
                 self.ensure_model(config)

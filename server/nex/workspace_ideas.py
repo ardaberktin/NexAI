@@ -5,6 +5,7 @@ import json
 from uuid import uuid4
 
 from .accounts.credentials import Credentials
+from .active_memory import ActiveMemory
 from .goal_writing import ask, json_value
 from .goals import Goals
 from .personal_files import safe_line
@@ -75,7 +76,8 @@ def context(store):
         history_on = enabled(db, "daybook")
     goals = Goals(store).overview() if goals_on else []
     active = [safe_line(goal["prompt"], 200) for goal in goals if goal["status"] == "active"][:5]
-    return {
+    bundle = ActiveMemory(store).context_bundle(" ".join(active), limit=4)
+    data = {
         "active_goals": [goal for goal in active if goal], "goals_available": goals_on,
         "feed_interests": safe_line(settings["prompt"] or settings["topics"], 350) if settings else "",
         "saved_stories": [{key: safe_line(story.get(key), 280) for key in ("title", "url")}
@@ -84,6 +86,9 @@ def context(store):
         "connected_accounts": [name for name, state in Credentials(store.root).status().items()
                                if state == "connected"],
     }
+    if bundle:
+        data["active_memory"] = bundle
+    return data
 
 
 def ideas(store, generate):

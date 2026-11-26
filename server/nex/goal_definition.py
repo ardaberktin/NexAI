@@ -1,5 +1,7 @@
 """Validate and describe editable goals."""
 
+import json
+
 GOAL_FIELDS = ("id", "title", "prompt", "zone", "scheduled_at", "status", "revision", "next_run",
                "last_checked", "error", "latest")
 
@@ -36,4 +38,11 @@ def summary(row):
         goal["watch_provider"] = provider
     if instruction := row["pdf_instruction"]:
         goal["pdf_instruction"] = instruction
+    if raw_state := dict(row).get("plan_state"):
+        try:
+            state = json.loads(raw_state)
+            if isinstance(state, dict):
+                goal["plan_state"] = state
+        except ValueError:
+            pass
     return goal

@@ -8,6 +8,7 @@ final class Controller {
     var answer: (String) async throws -> Reply = { _ in throw URLError(.notConnectedToInternet) }
     var requestedAccess = ChatAccess.automatic
     var requestedText = ""
+    var requestedAttachments: [String] = []
 
     func workspaceHistory(cursor: String?, wait: Bool) async throws -> WorkspaceHistory { snapshot }
 
@@ -16,9 +17,11 @@ final class Controller {
         return page
     }
 
-    func ask(_ question: String, id: String, publishReply: Bool, access: ChatAccess) async throws -> Reply {
+    func ask(_ question: String, id: String, publishReply: Bool, access: ChatAccess,
+             attachments: [String] = []) async throws -> Reply {
         requestedAccess = access
         requestedText = question
+        requestedAttachments = attachments
         return try await answer(id)
     }
 }

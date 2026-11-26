@@ -13,6 +13,7 @@ private struct ChatQuestion: Encodable {
     let device_clock: DeviceClockReading?
     let weather_location_supported = true
     var weather_location: WeatherLocationResult?
+    let attachments: [String]?
 }
 
 @MainActor
@@ -36,7 +37,8 @@ extension Controller {
 
     func ask(_ question: String, id: String, context: DaybookContext? = nil, publishReply: Bool = true,
              access: ChatAccess = .automatic, languageOverride: NexLanguage? = nil,
-             timeZoneOverride: String? = nil, clock: DeviceClockReading? = .current) async throws -> Reply {
+             timeZoneOverride: String? = nil, clock: DeviceClockReading? = .current,
+             attachments: [String] = []) async throws -> Reply {
         let api = try connection()
         let opening = privacy.generation
         var request = ChatQuestion(id: id, text: question, language: (languageOverride ?? language).rawValue,
@@ -44,7 +46,8 @@ extension Controller {
                                    daybook_day: context?.day, daybook_source: context?.source,
                                    daybook_focus: context?.focus, access: access.requestValue,
                                    private_reply: access == .privateReply ? true : nil,
-                                   device_clock: clock)
+                                   device_clock: clock,
+                                   attachments: attachments.isEmpty ? nil : attachments)
         var answer: Reply = try await api.send("/v1/chat", body: request, timeout: 220)
         if answer.engine == "weather_location_request", context == nil {
             request.weather_location = await WeatherLocationResult.current(for: id)

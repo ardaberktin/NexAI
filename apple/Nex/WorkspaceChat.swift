@@ -5,6 +5,7 @@ final class WorkspaceChat: ObservableObject {
     @Published var draft = "" {
         didSet { if draft.isEmpty { privateDraftBackup = nil } }
     }
+    @Published var attachments: [String] = []
     @Published var access = ChatAccess.automatic
     @Published private(set) var replyInsertion = 0
     @Published private(set) var messages: [WorkspaceMessage] = []
@@ -183,6 +184,7 @@ final class WorkspaceChat: ObservableObject {
         guard !sending, !value.isEmpty else { return }
         let backup = privateDraftBackup
         let generation = privateDraftGeneration
+        let attached = attachments
         let requestAccess: ChatAccess = replyingPrivately ? .privateReply : access
         let text = web && !replyingPrivately ? WebLookup.request(for: value) : value
         let id = pending.flatMap { $0.text == text && $0.access == requestAccess ? $0.id : nil } ?? nexID()
@@ -191,9 +193,11 @@ final class WorkspaceChat: ObservableObject {
         sending = true
         let date = NexDate.wire()
         draft = ""
+        attachments = []
         defer { sending = false }
         do {
-            let reply = try await model.ask(text, id: id, publishReply: false, access: requestAccess)
+            let reply = try await model.ask(text, id: id, publishReply: false, access: requestAccess,
+                                            attachments: attached)
             guard generation == privateDraftGeneration else { return }
             // Wait for the server to choose the storage path before displaying any local echoes.
             if !requestAccess.requiresPrivateReply && reply.engine != "private_request" {

@@ -23,6 +23,8 @@ SOURCE_GUIDANCE = {
     "archive": "Search the user's recordings with short keywords.",
     "web": "Current public facts. Use public search terms or a public URL. For daily headlines use date "
            "today, yesterday or YYYY-MM-DD. Omit query unless a public topic was named.",
+    "browser": "Render and inspect an explicit public HTTPS webpage in a sandboxed browser. "
+               "url = exact public HTTPS URL. action = open, links, or search_page.",
     "create_pdf": "Publish the requested PDF with the update. Use query for the layout if specified.",
 }
 PLAN = """Select sources for the currently saved goal. Use original_request only for compatible details.
@@ -195,6 +197,12 @@ def read_plan(plan, context=None, mcp_tools=None):
                 tool = normalize_calendar_dates(tool, context["time_zone"], datetime.fromisoformat(context["local_time"]))
             if name == "web" and "date" in tool:
                 validate_news_date(tool["date"])
+            if name == "browser":
+                url = tool.get("url", "")
+                if not isinstance(url, str) or not url.strip().startswith("https://"):
+                    raise ValueError
+                if "action" in tool and tool["action"] not in {"open", "links", "search_page"}:
+                    raise ValueError
             variants = tool.get("terms", [])
             if not isinstance(variants, list) or len(variants) > 3 or any(
                     not isinstance(term, str) or not 1 <= len(term) <= 110 for term in variants):

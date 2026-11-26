@@ -6,12 +6,14 @@ from .catalog import OPTIONS
 from .goal_management_prompts import OPERATIONS
 
 BOOLEAN = {"unread", "priority", "exact", "lists", "access_check", "check_in", "format_only"}
-INTEGER = {"count", "duration_seconds", "frequency", "target"}
+INTEGER = {"count", "duration_seconds", "frequency", "target", "max_links"}
 REQUIRED = {"weather": ("period", "date"), "save_memory": ("query",), "clock": ("operation",),
-            "past_questions": ("count",), "activities": ("mode",), "weather_city": ("operation",)}
+            "past_questions": ("count",), "activities": ("mode",), "weather_city": ("operation",),
+            "browser": ("url",), "skill": ("skill",)}
 SCHEDULED_FIELDS = {"new_calendar": {"start_date", "end_date"}, "new_mail": set(), "create_pdf": set(),
-                    "weather": set()}
+                    "weather": set(), "browser": {"action", "url", "max_links"}}
 VALUES = {
+    ("browser", "action"): ["open", "links", "search_page"],
     ("weather", "period"): ["current", "forecast", "past"],
     ("weather_city", "operation"): ["set", "clear"],
     ("activities", "mode"): ["current", "latest", "range"],
@@ -35,6 +37,8 @@ def argument_schema(name, field):
         return {"type": "integer"}
     if field == "terms":
         return {"type": "array", "items": {"type": "string"}, "maxItems": 3}
+    if field == "arguments":
+        return {"type": "object", "additionalProperties": True}
     return {"type": "string"}
 
 

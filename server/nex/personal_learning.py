@@ -7,6 +7,7 @@ import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
+from .active_memory import ActiveMemory
 from .coding.intent import pasted_python
 from .personal_files import safe_line, time_key
 from .store import excerpt
@@ -97,6 +98,10 @@ class PersonalLearning:
     def applied(self, events, results, revision):
         facts, activity = results
         self.files.learn(facts, revision)
+        if facts:
+            memory = ActiveMemory(self.store)
+            for key, text in facts:
+                memory.upsert(key, text, category="fact", source_id="learned", sync_markdown=False)
         for kind, text, stamped in activity:
             self.files.signal(SLOTS[kind], text, datetime.fromisoformat(stamped))
         with self.store.connect() as db:

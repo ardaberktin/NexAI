@@ -88,6 +88,8 @@ class Turn:
     legacy_mail: dict | None = None
     recalled_chat: dict | None = None
     mcp_tools: dict = field(default_factory=dict)
+    attachments: tuple = ()
+    agent_loop: bool = False
 
     @property
     def language(self):
@@ -171,12 +173,23 @@ def validated(tools):
                 valid = type(value) is int and 1 <= value <= MAX_EXCHANGES
             elif key == "duration_seconds":
                 valid = type(value) is int and 0 < value <= 2**31 - 1
+            elif key == "max_links":
+                valid = type(value) is int and 1 <= value <= 20
+            elif key == "arguments":
+                valid = isinstance(value, dict)
             elif key == "label":
                 valid = isinstance(value, str) and len(value) <= 120
             else:
                 valid = isinstance(value, str) and len(value) <= (1200 if name == "goal" else 420)
             if not valid:
                 raise ValueError("Invalid tool argument.")
+        if name == "browser":
+            if not tool.get("url", "").strip().startswith("https://"):
+                raise ValueError("browser requires an explicit https:// URL.")
+            if "action" in tool and tool["action"] not in {"open", "links", "search_page"}:
+                raise ValueError("Unknown browser action.")
+        if name == "skill" and not tool.get("skill", "").strip():
+            raise ValueError("skill requires a nonempty skill name.")
         if name == "weather" and tool.get("period", "current") not in {"current", "past", "forecast"}:
             raise ValueError("Unknown weather period.")
         if name in {"memory", "save_memory"} and tool.get("file", "memory") not in (

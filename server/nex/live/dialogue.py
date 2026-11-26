@@ -1,6 +1,7 @@
 """Keep interactive generation separate from queued archive work."""
 
 import asyncio
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
@@ -45,6 +46,7 @@ class Dialogue:
         self.memory = memory
         self.local = self.client(local_socket)
         self.mac = self.client(mac_socket) if mac_socket else None
+        self.local_context = DEFAULT_CONTEXT
         self.background_slot = asyncio.Lock()
         self.priority_waiters = 0
         self.priority_done = asyncio.Event()
@@ -69,6 +71,12 @@ class Dialogue:
         for _ in range(120):
             try:
                 await self.health(self.local)
+                try:
+                    props = await self.local.get("/props", timeout=2)
+                    if props.is_success:
+                        self.local_context = context_size(props.json(), DEFAULT_CONTEXT)
+                except (httpx.HTTPError, ValueError):
+                    pass
                 await self.complete(self.local, [{"role": "user", "content": "Say ready."}], 4)
                 return
             except httpx.HTTPError:
@@ -97,14 +105,17 @@ class Dialogue:
             self.idle.set()
 
     @staticmethod
-    def request(messages, limit, *, stream=False, thinking=False):
+    def request(messages, limit, *, stream=False, thinking=False, reasoning_effort=None):
         result = {"messages": messages, "max_tokens": limit, "temperature": 0.4, "stream": stream} | response_options(messages)
         if not thinking:
             result["chat_template_kwargs"] = {"enable_thinking": False}
+        elif reasoning_effort in {"low", "medium", "high"}:
+            result["reasoning_effort"] = reasoning_effort
         return result
 
-    async def complete(self, client, messages, limit, *, temperature=None):
-        options = self.request(messages, limit, thinking=client is self.mac)
+    async def complete(self, client, messages, limit, *, temperature=None, thinking=None, reasoning_effort=None):
+        use_thinking = (client is self.mac) if thinking is None else thinking
+        options = self.request(messages, limit, thinking=use_thinking, reasoning_effort=reasoning_effort)
         if temperature is not None:
             options["temperature"] = temperature
         started = monotonic()
@@ -115,8 +126,54 @@ class Dialogue:
         log_completion("mac" if client is self.mac else "live", started, payload)
         return payload["choices"][0]["message"]["content"].strip()
 
+    async def stream_complete(self, client, messages, limit, on_delta, *, temperature=None, thinking=None,
+                              reasoning_effort=None):
+        use_thinking = (client is self.mac) if thinking is None else thinking
+        options = self.request(messages, limit, stream=True, thinking=use_thinking, reasoning_effort=reasoning_effort)
+        if temperature is not None:
+            options["temperature"] = temperature
+        started = monotonic()
+        options = await self.budget_completion(client, options)
+        parts = []
+        async with client.stream("POST", "/v1/chat/completions", json=options,
+                                 headers={"Accept": "text/event-stream"}) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    choices = json.loads(payload).get("choices", [])
+                except ValueError:
+                    continue
+                text = choices[0].get("delta", {}).get("content") if choices else None
+                if text:
+                    parts.append(text)
+                    await on_delta(text)
+        log_completion("mac" if client is self.mac else "live", started, None)
+        return "".join(parts).strip()
+
+    async def embed(self, texts):
+        if not texts:
+            return []
+        clients = [client for client in (self.mac, self.local) if client is not None]
+        for client in clients:
+            try:
+                response = await client.post("/v1/embeddings", json={"input": list(texts)}, timeout=6)
+                if not response.is_success:
+                    continue
+                data = response.json().get("data", [])
+                vectors = [item.get("embedding") for item in data if isinstance(item, dict)]
+                if len(vectors) == len(texts) and all(isinstance(vec, list) and vec for vec in vectors):
+                    return vectors
+            except (httpx.HTTPError, ValueError, KeyError, TypeError):
+                continue
+        return None
+
     async def budget_completion(self, client, options):
-        capacity = DEFAULT_CONTEXT
+        capacity = self.local_context
         if client is self.mac:
             try:
                 props = await client.get("/props", timeout=2)
@@ -140,7 +197,7 @@ class Dialogue:
         self.update_priority()
         try:
             async with asyncio.timeout(3.5):
-                return await self.complete(self.local, messages, 4, temperature=0)
+                return await self.complete(self.local, messages, 4, temperature=0, thinking=False)
         except (TimeoutError, httpx.HTTPError, KeyError, ValueError, IndexError, TypeError):
             return ""
         finally:
@@ -150,12 +207,41 @@ class Dialogue:
     async def live_reply(self, turn, history, emit, *, locate=None, read_clock=None):
         return await public_reply(self, turn, history, emit, locate, read_clock=read_clock), False
 
-    async def background_text(self, messages, limit, *, temperature=None):
+    async def background_text(self, messages, limit, *, temperature=None, thinking=None, reasoning_effort=None):
         self.priority_waiters += 1
         self.priority_done.clear()
         try:
             async with self.background_slot:
-                return await self.complete_background(messages, limit, temperature=temperature)
+                return await self.complete_background(
+                    messages, limit, temperature=temperature, thinking=thinking, reasoning_effort=reasoning_effort,
+                )
+        finally:
+            self.priority_waiters -= 1
+            if self.priority_waiters == 0:
+                self.priority_done.set()
+
+    async def stream_background(self, messages, limit, on_delta, *, temperature=None, thinking=None,
+                                reasoning_effort=None):
+        self.priority_waiters += 1
+        self.priority_done.clear()
+        try:
+            async with self.background_slot:
+                if self.mac:
+                    try:
+                        await self.health(self.mac)
+                        return await self.stream_complete(
+                            self.mac, messages, limit, on_delta,
+                            temperature=temperature, thinking=thinking, reasoning_effort=reasoning_effort,
+                        )
+                    except (httpx.HTTPError, KeyError, ValueError):
+                        pass
+                await self.idle.wait()
+                return await self.stream_complete(
+                    self.local, messages, limit, on_delta,
+                    temperature=temperature, thinking=thinking, reasoning_effort=reasoning_effort,
+                )
+        except (httpx.HTTPError, KeyError, ValueError):
+            return ""
         finally:
             self.priority_waiters -= 1
             if self.priority_waiters == 0:
@@ -169,16 +255,22 @@ class Dialogue:
                     continue
                 return await self.complete_background(messages, limit, temperature=temperature)
 
-    async def complete_background(self, messages, limit, *, temperature=None):
+    async def complete_background(self, messages, limit, *, temperature=None, thinking=None, reasoning_effort=None):
         if self.mac:
             try:
                 await self.health(self.mac)
-                return await self.complete(self.mac, messages, limit, temperature=temperature)
+                return await self.complete(
+                    self.mac, messages, limit, temperature=temperature,
+                    thinking=thinking, reasoning_effort=reasoning_effort,
+                )
             except (httpx.HTTPError, KeyError, ValueError):
                 pass
         while True:
             await self.idle.wait()
-            request = asyncio.create_task(self.complete(self.local, messages, limit, temperature=temperature))
+            request = asyncio.create_task(self.complete(
+                self.local, messages, limit, temperature=temperature,
+                thinking=thinking, reasoning_effort=reasoning_effort,
+            ))
             interrupt = asyncio.create_task(self.become_busy.wait())
             try:
                 await asyncio.wait((request, interrupt), return_when=asyncio.FIRST_COMPLETED)

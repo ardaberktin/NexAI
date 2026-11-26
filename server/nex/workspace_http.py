@@ -4,6 +4,7 @@ import re
 from datetime import date
 
 from . import goal_follow_ups, shared_weather, workspace_features
+from .active_memory import ActiveMemory
 from .clock_alerts import ClockAlerts
 from .feed import Feed
 from .goals import IDENTIFIER, Goals
@@ -12,6 +13,8 @@ from .mcp.routes import request as mcp_request
 from .pdf.artifacts import content as pdf_content
 from .privacy import chat_settings
 from .push_queue import PushQueue
+from .sentinel import PendingActions
+from .skills_sandbox import SkillsManager
 from .workspace_chat_pages import chat_page, paged_chat_snapshot
 from .workspace_content import artifacts, chat_snapshot
 from .workspace_ideas import WorkspaceIdeas
@@ -32,6 +35,36 @@ def workspace_request(api, method, path, query, device, problem):
         if path.endswith("/fix"):
             return shared_weather.update(store, device, data)
         return shared_weather.clear(store, device, data)
+    if path == "/v1/workspace/pending-actions" and method == "GET":
+        status = query.get("status", "pending")
+        return {"items": PendingActions(store).list(status=status or None)}
+    if method == "POST" and (pending := re.fullmatch(r"/v1/workspace/pending-actions/(" + IDENTIFIER + ")", path)):
+        data = api.object(512)
+        try:
+            return PendingActions(store).decide(pending[1], data.get("decision"))
+        except LookupError as exc:
+            raise problem(404, str(exc)) from exc
+    if path == "/v1/workspace/skills":
+        skills = SkillsManager(store)
+        if method == "GET":
+            return {"items": skills.list(approved_only=query.get("approved") == "1")}
+        if method == "POST":
+            data = api.object(24_000)
+            return skills.propose(data.get("name"), data.get("description"), data.get("source"),
+                                  parameters=data.get("parameters"))
+    if skill_match := re.fullmatch(r"/v1/workspace/skills/(" + IDENTIFIER + ")(/approve)?", path):
+        skills = SkillsManager(store)
+        try:
+            if method == "POST" and skill_match[2] == "/approve":
+                api.object(128)
+                return skills.approve(skill_match[1])
+            if method == "DELETE" and skill_match[2] is None:
+                return skills.delete(skill_match[1])
+        except LookupError as exc:
+            raise problem(404, str(exc)) from exc
+    if path == "/v1/workspace/active-memory" and method == "GET":
+        query_text = query.get("q", "")[:500]
+        return ActiveMemory(store).recall(query_text, limit=12, include_now=True)
     if path == "/v1/workspace/features":
         if method == "GET":
             return workspace_features.settings(store)

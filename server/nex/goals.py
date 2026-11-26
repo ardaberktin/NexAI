@@ -1,6 +1,7 @@
 """Manage scheduled and on-demand AI goals."""
 
 import fcntl
+import json
 import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -180,9 +181,33 @@ class Goals:
                 db.execute("DELETE FROM goal_seen WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM mcp_goal_runs WHERE goal_id=?", (identifier,))
                 db.execute("DELETE FROM goal_mail_review WHERE goal_id=?", (identifier,))
+                db.execute("DELETE FROM pending_actions WHERE goal_id=?", (identifier,))
+                db.execute("DELETE FROM goal_action_grants WHERE goal_id=?", (identifier,))
                 goal_follow_ups.delete(db, identifier)
                 db.execute("DELETE FROM goals WHERE id=?", (identifier,))
         return {"deleted": True}
+
+    @staticmethod
+    def save_plan_state(store, identifier, state):
+        if not isinstance(state, dict):
+            return
+        serialized = json.dumps(state, ensure_ascii=False)[:4_096]
+        with store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE goals SET plan_state=?, updated=? WHERE id=?",
+                       (serialized, stamp(datetime.now(UTC)), identifier))
+
+    @staticmethod
+    def wake(store, identifier, anchor=None):
+        """Event-driven wakeup: request an immediate run of an active goal without waiting for poll cadence."""
+        now = stamp(anchor or datetime.now(UTC))
+        with store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            updated = db.execute(
+                "UPDATE goals SET next_run=?, requested=1, error=NULL WHERE id=? AND status='active'",
+                (now, identifier),
+            )
+            return bool(updated.rowcount)
 
     def action(self, identifier, action, version, anchor=None):
         anchor = anchor or datetime.now(UTC)
