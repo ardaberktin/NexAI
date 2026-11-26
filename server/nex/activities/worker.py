@@ -71,29 +71,40 @@ class ActivityWorker:
         sounds = json.loads(job["sounds"]) if job["sounds"] is not None else None
         audio_context = json.loads(job["audio_context"]) if job["audio_context"] else None
         device_context = json.loads(job["device_context"]) if job["device_context"] else None
+        nearby = await asyncio.to_thread(self.jobs.nearby_sounds, job)
+        recent = self.jobs.recent_activities(nearby)
         transcript, screen = (job["transcript"] or "")[:1500], job["screen"] or ""
         fallback = from_sounds(sounds, job["mode"], transcript)
-        result = await self.classify(transcript, screen, sounds, fallback, device_context=device_context)
-        result = await self.review_voices(job, result, transcript, sounds, audio_context, device_context, fallback)
+        result = await self.classify(
+            transcript, screen, sounds, fallback,
+            recording_device=job["device"], audio_context=audio_context,
+            device_context=device_context, recent=recent,
+        )
+        result = await self.review_voices(
+            job, result, transcript, sounds, nearby, recent, audio_context, device_context, fallback,
+        )
         if (result is not None and result.category == "unknown"
                 and device_context and device_context.get("media_playing")):
-            device_result = await self.classify_device_playback(device_context, fallback)
+            device_result = await self.classify_device_playback(device_context, fallback, recent=recent)
             if device_result is not None:
                 result = device_result
         await asyncio.to_thread(self.jobs.save, job, result or fallback, due=None if result else retry_time())
 
-    async def review_voices(self, job, result, transcript, sounds, audio_context, device_context, fallback):
+    async def review_voices(self, job, result, transcript, sounds, nearby, recent,
+                            audio_context, device_context, fallback):
         if (result is None or result.basis == "screen" or result.category not in ("unknown", "speech", "conversation")
                 or not (transcript or sounds)):
             return result
         if result.category == "unknown" and not (transcript or VOICE_LABELS.intersection(sounds or ())):
             return result
-        nearby = await asyncio.to_thread(self.jobs.nearby_sounds, job)
-        evidence = source_evidence(transcript, sounds, nearby,
-                                   audio_context=audio_context, device_context=device_context)
+        evidence = source_evidence(
+            transcript, sounds, nearby,
+            recording_device=job["device"], audio_context=audio_context,
+            device_context=device_context, recent=recent,
+        )
         if (result.category == "unknown"
                 and not (transcript or evidence["current_playback"] or evidence["earlier_playback"]
-                         or evidence.get("device_playback"))):
+                         or evidence.get("device_playback") or evidence.get("recent_activities"))):
             return result
         reviewed = await review_voice_origin(self.dialogue, evidence, fallback)
         if reviewed is not None:
@@ -102,7 +113,8 @@ class ActivityWorker:
             return Observation("speech", result.basis, result.detail) if transcript else fallback
         return result
 
-    async def classify(self, transcript, screen, sounds, fallback, *, device_context=None):
+    async def classify(self, transcript, screen, sounds, fallback, *,
+                       recording_device=None, audio_context=None, device_context=None, recent=None):
         if fallback.category == "nex":
             return fallback
         screen_result = fallback
@@ -112,23 +124,32 @@ class ActivityWorker:
                 return screen_result
         if not (transcript or sounds):
             if device_context and device_context.get("media_playing"):
-                return await self.classify_device_playback(device_context, fallback)
+                return await self.classify_device_playback(device_context, fallback, recent=recent)
             return screen_result
 
-        room = await self.classify_room(transcript, sounds, fallback)
+        room = await self.classify_room(
+            transcript, sounds, fallback,
+            recording_device=recording_device, audio_context=audio_context,
+            device_context=device_context, recent=recent,
+        )
         if screen_result is None and room is not None and room.category == "unknown":
             return None
         return room
 
-    async def classify_device_playback(self, device_context, fallback):
-        messages = device_playback_messages(device_context)
-        raw = await self.dialogue.background_text(messages, 48, temperature=0)
-        return interpret_device_playback(raw, device_context, fallback)
+    async def classify_device_playback(self, device_context, fallback, *, recent=None):
+        messages = device_playback_messages(device_context, recent=recent)
+        raw = await self.dialogue.background_text(messages, 64, temperature=0)
+        return interpret_device_playback(raw, device_context, fallback, recent=recent)
 
-    async def classify_room(self, transcript, sounds, fallback):
-        messages = classifier_messages(transcript, "", sounds)
+    async def classify_room(self, transcript, sounds, fallback, *,
+                            recording_device=None, audio_context=None, device_context=None, recent=None):
+        messages = classifier_messages(
+            transcript, "", sounds,
+            recording_device=recording_device, audio_context=audio_context,
+            device_context=device_context, recent=recent,
+        )
         raw = await self.dialogue.background_text(messages, 110, temperature=0)
-        result = interpret(raw, transcript, "", fallback, sounds)
+        result = interpret(raw, transcript, "", fallback, sounds, device_context=device_context, recent=recent)
         if transcript and sounds and (result is None or result.category == "unknown"):
             messages = classifier_messages("", "", sounds)
             raw = await self.dialogue.background_text(messages, 110, temperature=0)

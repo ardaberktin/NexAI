@@ -108,8 +108,9 @@ class PlaybackReviewTests(unittest.IsolatedAsyncioTestCase):
 
         review_input = json.loads(dialogue.background_text.await_args_list[1].args[0][-1]["content"])
         self.assertEqual(review_input["audio_profile"], profile)
-        self.assertEqual(review_input["media_cues"], ["Laughter"])
+        self.assertEqual(review_input["current_sounds"], ["Speech", "Conversation", "Laughter"])
         self.assertEqual(review_input["device_playback"], {"media_playing": True, "device": "iphone"})
+        self.assertEqual(review_input["recording_device"], "iphone")
         item = timeline(self.store, (time_key(now - timedelta(minutes=5)), time_key(now + timedelta(minutes=5))))["items"][0]
         self.assertEqual((item["category"], item["basis"], item["confidence"]), ("media", "Device playback", "Likely"))
         reply = current_activity_reply(self.store, "What am I doing right now?", "en", now + timedelta(seconds=15))
@@ -156,17 +157,78 @@ class PlaybackReviewTests(unittest.IsolatedAsyncioTestCase):
         requeued = self.jobs.next(wait_for_sounds=True)
         self.assertEqual(requeued["recording_id"], later)
 
-    def test_source_observation_supports_media_cues_and_audio_profile(self):
+    def test_source_observation_supports_recent_activity_and_audio_profile(self):
+        recent = [{"seconds_before": 6, "category": "ps5", "title": "Playing PS5", "sounds": ["Video game music"]}]
         evidence = source_evidence(
-            "Check this out", ["Speech", "Narration, monologue"], [],
-            audio_context={"speaker_count": 1, "speaker_turns": 0, "speech_ratio": 0.9, "owner_speaking": False},
+            "Watch out behind you!", ["Speech", "Conversation"], [],
+            audio_context={"speaker_count": 2, "speaker_turns": 1, "speech_ratio": 0.9, "owner_speaking": False},
+            recent=recent,
         )
-        fallback = from_sounds(["Speech", "Narration, monologue"], "ambient", "Check this out")
-        media = source_observation(json.dumps({"origin": "recorded_playback", "evidence": "media_cues"}), evidence, fallback)
-        self.assertEqual(media, Observation("media", "sound", "Heard Narration, monologue."))
+        fallback = from_sounds(["Speech", "Conversation"], "ambient", "Watch out behind you!")
+        continued = source_observation(
+            json.dumps({"origin": "recorded_playback", "evidence": "recent_activities"}), evidence, fallback,
+        )
+        self.assertEqual(continued.category, "ps5")
+        self.assertIn("playing ps5", continued.detail.lower())
         speech = source_observation(json.dumps({"origin": "uncertain_speech", "evidence": "audio_profile"}), evidence, fallback)
-        self.assertEqual(speech, Observation("speech", "sound", "Heard Speech, Narration, monologue."))
+        self.assertEqual(speech, Observation("speech", "sound", "Heard Speech, Conversation."))
         self.assertTrue(recorder_operation("PUT", "/v1/context/device"))
+
+    async def test_ps5_and_tv_continuity_and_open_ended_activities(self):
+        first = self.clip(self.start)
+        with self.store.connect() as db:
+            db.execute("UPDATE recordings SET transcript=?,state='ready' WHERE id=?",
+                       ("Welcome back to PlayStation 5. Press the PS button.", first))
+        self.jobs.save_sounds(self.jobs.next(audio=True), ["Speech", "Video game music"])
+        dialogue = Mock(background_text=AsyncMock(return_value=json.dumps({
+            "category": "ps5", "quote": "Welcome back to PlayStation 5.",
+        })))
+        worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+        await worker.analyze(self.jobs.next(wait_for_sounds=True), False)
+
+        # Next clip is an in-game cutscene without repeating "PlayStation 5".
+        second = self.clip(self.start + timedelta(seconds=14))
+        with self.store.connect() as db:
+            db.execute("UPDATE recordings SET transcript=?,state='ready' WHERE id=?",
+                       ("Watch out behind you! Reloading now.", second))
+        self.jobs.save_sounds(
+            self.jobs.next(audio=True), ["Speech", "Conversation"],
+            audio_context={"speaker_count": 2, "speaker_turns": 1, "speech_ratio": 0.85, "owner_speaking": False},
+        )
+        dialogue = Mock(background_text=AsyncMock(return_value=json.dumps({
+            "category": "ps5", "quote": "Watch out behind you! Reloading now.",
+        })))
+        worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+        await worker.analyze(self.jobs.next(wait_for_sounds=True), False)
+        supplied = json.loads(dialogue.background_text.await_args.args[0][-1]["content"])
+        self.assertEqual(supplied["recent_activities"][0]["category"], "ps5")
+        self.assertEqual(timeline(self.store, self.context.bounds, source=second)["items"][-1]["category"], "ps5")
+
+        # Watching TV from room audio.
+        tv_clip = self.clip(self.start + timedelta(minutes=5))
+        self.jobs.save_sounds(self.jobs.next(audio=True), ["Television", "Music"])
+        dialogue = Mock(background_text=AsyncMock(return_value=json.dumps({
+            "category": "tv", "source": "sound", "evidence": ["1"],
+        })))
+        worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+        await worker.analyze(self.jobs.next(wait_for_sounds=True), False)
+        tv_item = timeline(self.store, self.context.bounds, source=tv_clip)["items"][-1]
+        self.assertEqual((tv_item["category"], tv_item["title"]), ("tv", "Watching TV"))
+
+        # Open-ended activity outside fixed categories.
+        guitar_clip = self.clip(self.start + timedelta(minutes=10))
+        self.jobs.save_sounds(self.jobs.next(audio=True), ["Guitar", "Acoustic guitar"])
+        dialogue = Mock(background_text=AsyncMock(return_value=json.dumps({
+            "category": "other", "title": "Playing guitar", "source": "sound", "evidence": ["1", "2"],
+        })))
+        worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+        await worker.analyze(self.jobs.next(wait_for_sounds=True), False)
+        guitar_item = timeline(self.store, self.context.bounds, source=guitar_clip)["items"][-1]
+        self.assertEqual((guitar_item["category"], guitar_item["title"]), ("other", "Playing guitar"))
+        reply = current_activity_reply(
+            self.store, "What am I doing right now?", "en", self.start + timedelta(minutes=10, seconds=14),
+        )
+        self.assertIn("playing guitar", reply["text"])
 
     @unittest.skipUnless(
         all(importlib.util.find_spec(module) for module in ("cryptography", "numpy")),
@@ -212,4 +274,4 @@ class PlaybackReviewTests(unittest.IsolatedAsyncioTestCase):
         upgraded = Store(self.store.root, 0, 2**20)
         with upgraded.connect() as db:
             cols = {col["name"] for col in db.execute("PRAGMA table_info(activity_clips)")}
-            self.assertTrue({"audio_context", "device_context", "clip_media_playing"}.issubset(cols))
+            self.assertTrue({"title", "audio_context", "device_context", "clip_media_playing"}.issubset(cols))

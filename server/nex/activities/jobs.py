@@ -4,10 +4,10 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from ..daybook_schedule import schedule_recordings
-from ..live import PLAYBACK_LABELS
+from ..live import VOICE_LABELS
 from ..recall_dates import time_key
 from ..workspace_features import enabled, revision
-from .recognition import from_sounds
+from .recognition import TITLES, from_sounds
 from .schema import DEVICE_FRESHNESS, SCREEN_FRESHNESS, attach_device_context, attach_screen, interval
 
 SCREEN_RETENTION = timedelta(minutes=20)
@@ -85,9 +85,10 @@ class ActivityJobs:
         lower = start - SOUND_CONTEXT_WINDOW
         with self.store.connect() as db:
             rows = db.execute(
-                """SELECT r.started,r.duration,a.sounds FROM activity_clips a
+                """SELECT r.started,r.duration,a.sounds,a.category,a.title FROM activity_clips a
                    JOIN recordings r ON r.id=a.recording_id
-                   WHERE r.device=? AND r.started>=? AND r.started<? AND json_array_length(a.sounds)>0
+                   WHERE r.device=? AND r.started>=? AND r.started<?
+                     AND (json_array_length(a.sounds)>0 OR a.category IS NOT NULL)
                    ORDER BY r.started DESC,r.id DESC LIMIT 4""",
                 (job["device"], time_key(lower - timedelta(seconds=65)), job["started"]),
             )
@@ -96,9 +97,31 @@ class ActivityJobs:
                 _, end = interval(row)
                 if end < lower or end > start:
                     continue
-                context.append({"seconds_before": round((start - end).total_seconds()),
-                                "labels": json.loads(row["sounds"])})
+                labels = json.loads(row["sounds"] or "[]")
+                entry = {"seconds_before": round((start - end).total_seconds()), "labels": labels}
+                category = row["category"]
+                if category and category not in ("unknown", "speech"):
+                    entry["category"] = category
+                    entry["title"] = row["title"] or TITLES.get(category, "Activity")
+                if labels or "category" in entry:
+                    context.append(entry)
             return context
+
+    @staticmethod
+    def recent_activities(nearby):
+        items = []
+        for clip in nearby:
+            if "category" not in clip:
+                continue
+            item = {
+                "seconds_before": clip["seconds_before"],
+                "category": clip["category"],
+                "title": clip["title"],
+            }
+            if clip["labels"]:
+                item["sounds"] = clip["labels"]
+            items.append(item)
+        return items
 
     def save_sounds(self, job, sounds, *, audio_context=None):
         with self.store.connect() as db:
@@ -120,7 +143,7 @@ class ActivityJobs:
                 self.write(db, latest, from_sounds(sounds, latest["mode"], latest["transcript"]), None)
             if sounds or latest["transcript"] or latest["screen"] or latest["device_context"]:
                 db.execute("UPDATE activity_clips SET due='' WHERE recording_id=?", (job["recording_id"],))
-            if PLAYBACK_LABELS.intersection(sounds or ()):
+            if any(label not in VOICE_LABELS for label in (sounds or ())):
                 _, end = interval(latest)
                 db.execute(
                     """UPDATE activity_clips SET due='',version=version+1
@@ -150,10 +173,10 @@ class ActivityJobs:
 
     @staticmethod
     def write(db, job, observation, due):
-        values = observation.category, observation.basis, observation.detail
-        db.execute("UPDATE activity_clips SET category=?,basis=?,detail=?,due=? WHERE recording_id=?",
+        values = observation.category, observation.basis, observation.detail, observation.title
+        db.execute("UPDATE activity_clips SET category=?,basis=?,detail=?,title=?,due=? WHERE recording_id=?",
                    (*values, due, job["recording_id"]))
-        if tuple(job[key] for key in ("category", "basis", "detail")) != values:
+        if tuple(job[key] for key in ("category", "basis", "detail", "title")) != values:
             schedule_recordings(db, [job])
 
     def expire_screens(self):

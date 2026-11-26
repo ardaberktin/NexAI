@@ -10,7 +10,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS activity_clips (
     recording_id TEXT PRIMARY KEY, started TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
     due TEXT DEFAULT '', sound_due TEXT DEFAULT '', sounds TEXT, screen TEXT, category TEXT, basis TEXT, detail TEXT,
-    audio_context TEXT, device_context TEXT, clip_media_playing INTEGER NOT NULL DEFAULT 0
+    title TEXT, audio_context TEXT, device_context TEXT, clip_media_playing INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS activity_due ON activity_clips(started DESC) WHERE due IS NOT NULL;
 CREATE INDEX IF NOT EXISTS activity_sound_due ON activity_clips(started DESC) WHERE sound_due IS NOT NULL;
@@ -55,6 +55,8 @@ def initialize(db):
     db.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + seed + REQUEUE_SOUND_OBSERVATIONS + "\nCOMMIT;")
     with db:
         columns = {column["name"] for column in db.execute("PRAGMA table_info(activity_clips)")}
+        if "title" not in columns:
+            db.execute("ALTER TABLE activity_clips ADD COLUMN title TEXT")
         if "audio_context" not in columns:
             db.execute("ALTER TABLE activity_clips ADD COLUMN audio_context TEXT")
         if "device_context" not in columns:

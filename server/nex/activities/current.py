@@ -7,7 +7,7 @@ from .brand_cues import BRANDS, MENU_NAMES, interface_quote
 from .recall import FRESH, current_question, recent_periods
 
 PHRASES = {
-    "ps5": "playing on a PS5", "media": "watching or listening to media",
+    "ps5": "playing on a PS5", "tv": "watching TV", "media": "watching or listening to media",
     "livestream": "watching a livestream",
     "conversation": "having a conversation", "housework": "doing housework",
 }
