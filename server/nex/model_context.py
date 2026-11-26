@@ -6,13 +6,14 @@ from time import monotonic
 
 LOG = logging.getLogger(__name__)
 INPUT_TOKENS_PATH = "/v1/chat/completions/input_tokens"
-DEFAULT_CONTEXT = 4096
+DEFAULT_CONTEXT = 12288
 TEMPLATE_MARGIN = 8
 LARGE_REPLY_FLOOR = 900
 HISTORY_FIELDS = ("history", "recent", "earlier_answers", "conversation")
-EVIDENCE_FIELDS = ("tools", "evidence", "cited_pages", "other_tools", "recalled_chat")
-EXCERPT_FIELDS = {"body", "content", "excerpt", "preview", "text"}
+EVIDENCE_FIELDS = ("tools", "evidence", "cited_pages", "other_tools", "recalled_chat", "active_memory", "goal_state")
+EXCERPT_FIELDS = {"body", "content", "excerpt", "preview", "text", "note"}
 RECEIPT_TOOLS = {"clock", "create_pdf", "goal", "manage_goal", "save_memory", "weather_city"}
+IMAGE_TOKEN_ESTIMATE = 512
 
 
 class ContextLimit(ValueError):
@@ -47,9 +48,25 @@ def context_size(payload, default=DEFAULT_CONTEXT):
     return value if type(value) is int and value > 0 else default
 
 
+def _content_tokens(content):
+    if isinstance(content, str):
+        return (len(content.encode("utf-8")) + 1) // 2
+    if isinstance(content, list):
+        total = 0
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") == "text" and isinstance(part.get("text"), str):
+                total += (len(part["text"].encode("utf-8")) + 1) // 2
+            elif part.get("type") == "image_url":
+                total += IMAGE_TOKEN_ESTIMATE
+        return total
+    return 0
+
+
 def estimate_tokens(options):
     # Older relays may lack token counting. Keep an extra margin for their unknown template.
-    return 48 + sum(8 + (len(item["content"].encode("utf-8")) + 1) // 2 for item in options["messages"])
+    return 48 + sum(8 + _content_tokens(item.get("content", "")) for item in options["messages"])
 
 
 def log_completion(backend, started, payload, *, status="ok"):
@@ -72,35 +89,57 @@ def shorten_excerpts(value, limit):
     return value
 
 
+def _compact_json_text(text, *, keep_history, evidence_limit=None):
+    if not isinstance(text, str) or not text.startswith("{"):
+        return text
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return text
+    if not isinstance(data, dict):
+        return text
+    compact = dict(data)
+    for key in HISTORY_FIELDS:
+        if isinstance(compact.get(key), list):
+            compact[key] = compact[key][-keep_history:] if keep_history else []
+    if evidence_limit:
+        for key in EVIDENCE_FIELDS:
+            value = compact.get(key)
+            if key == "tools" and isinstance(value, dict):
+                compact[key] = {name: result if name in RECEIPT_TOOLS else shorten_excerpts(result, evidence_limit)
+                                for name, result in value.items()}
+            elif value is not None:
+                compact[key] = shorten_excerpts(value, evidence_limit)
+    if compact != data:
+        return json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+    return text
+
+
 def compact_prompt(options, *, keep_history, evidence_limit=None):
     messages = []
     for item in options["messages"]:
-        if item["role"] != "user" or not item["content"].startswith("{"):
+        content = item.get("content")
+        if item.get("role") != "user":
             messages.append(item)
             continue
-        try:
-            data = json.loads(item["content"])
-        except ValueError:
+        if isinstance(content, str):
+            updated = _compact_json_text(content, keep_history=keep_history, evidence_limit=evidence_limit)
+            messages.append({**item, "content": updated} if updated != content else item)
+        elif isinstance(content, list):
+            parts = []
+            changed = False
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    updated = _compact_json_text(part.get("text"), keep_history=keep_history,
+                                                 evidence_limit=evidence_limit)
+                    if updated != part.get("text"):
+                        changed = True
+                        parts.append({**part, "text": updated})
+                        continue
+                parts.append(part)
+            messages.append({**item, "content": parts} if changed else item)
+        else:
             messages.append(item)
-            continue
-        if not isinstance(data, dict):
-            messages.append(item)
-            continue
-        compact = dict(data)
-        for key in HISTORY_FIELDS:
-            if isinstance(compact.get(key), list):
-                compact[key] = compact[key][-keep_history:] if keep_history else []
-        if evidence_limit:
-            for key in EVIDENCE_FIELDS:
-                value = compact.get(key)
-                if key == "tools" and isinstance(value, dict):
-                    compact[key] = {name: result if name in RECEIPT_TOOLS else shorten_excerpts(result, evidence_limit)
-                                    for name, result in value.items()}
-                elif value is not None:
-                    compact[key] = shorten_excerpts(value, evidence_limit)
-        if compact != data:
-            item = {**item, "content": json.dumps(compact, ensure_ascii=False, separators=(",", ":"))}
-        messages.append(item)
     return {**options, "messages": messages}
 
 

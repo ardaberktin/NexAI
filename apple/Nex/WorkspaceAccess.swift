@@ -104,4 +104,25 @@ extension Controller {
         guard !Task.isCancelled, privacy.unlocked, privacy.generation == opening else { throw CancellationError() }
         return data
     }
+
+    func pendingActions() async throws -> [PendingAction] {
+        let result: ListResponse<PendingAction> = try await connection().get(
+            "/v1/workspace/pending-actions", query: [.init(name: "status", value: "pending")]
+        )
+        return result.items
+    }
+
+    func decidePendingAction(_ id: String, decision: String) async throws -> PendingAction {
+        struct Request: Encodable { let decision: String }
+        return try await connection().send("/v1/workspace/pending-actions/" + id, body: Request(decision: decision))
+    }
+
+    func workspaceSkills() async throws -> [WorkspaceSkill] {
+        let result: ListResponse<WorkspaceSkill> = try await connection().get("/v1/workspace/skills")
+        return result.items
+    }
+
+    func approveSkill(_ id: String) async throws -> WorkspaceSkill {
+        try await connection().send("/v1/workspace/skills/" + id + "/approve", body: [String: String]())
+    }
 }

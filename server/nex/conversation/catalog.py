@@ -18,6 +18,10 @@ CATALOG = {
     "web": "Search public information. query = standalone public search terms or an explicit public URL. "
            "For daily news and headlines, set date (today, yesterday, or YYYY-MM-DD). With date, omit query for general "
            "headlines or copy the user's public topic in query.",
+    "browser": "Render and inspect an explicit public HTTPS webpage in a sandboxed browser. "
+               "url = exact public HTTPS URL. action = open, links, or search_page. query = search text on page.",
+    "skill": "Run an owner-approved reusable workspace Python skill. skill = exact skill name. "
+             "arguments = optional JSON input object.",
     "python": "Offline computation or running requested code. query = the task in words, not Python source.",
     "agenda": "The user's combined schedule, calendar and tasks unless a specific service is named. "
               "Use start_date and optional exclusive end_date (YYYY-MM-DD), or a relative day in query.",
@@ -47,11 +51,13 @@ CATALOG = {
     "manage_goal": "Look up goals privately. Optional operation: complete, edit, delete, keep, remove_pdf. Use alone.",
     "screen": "Inspect the shared Mac screen. Use alone.",
 }
-PUBLIC = {"weather", "web", "python"}
+PUBLIC = {"weather", "web", "python", "browser"}
 OPTIONS = {
     "clock": CLOCK_FIELDS,
     "create_pdf": {"goal_query"},
     "web": {"date"},
+    "browser": {"action", "url", "max_links"},
+    "skill": {"skill", "arguments"},
     "weather_city": {"operation"}, "weather": {"period", "date"}, "gmail": {"unread", "priority", "terms", "exact"},
     "agenda": {"start_date", "end_date"}, "calendar": {"start_date", "end_date"},
     "ticktick": {"lists", "access_check", "start_date", "end_date"}, "daybook": {"date"},

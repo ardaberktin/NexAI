@@ -11,6 +11,8 @@ struct WorkspaceChatView: View {
     @State private var source: MemoryItem?
     @State private var sourceError: String?
     @State private var pdf: NexArtifact?
+    @State private var pendingActions: [PendingAction] = []
+    @State private var decidingActionID: String?
     #if os(iOS)
     @State private var selection: ChatTextSelection?
     #endif
@@ -21,6 +23,9 @@ struct WorkspaceChatView: View {
         VStack(spacing: 0) {
             if model.workspaceFeatureEnabled(.activities) {
                 RecordingChatActivity(model: model, capture: model.capture, open: openActivities)
+            }
+            if privacy.unlocked && privacy.connected && !pendingActions.isEmpty {
+                pendingApprovalsBar
             }
             #if os(macOS)
             if messages.isEmpty && !chat.sending && model.liveState == nil {
@@ -60,7 +65,17 @@ struct WorkspaceChatView: View {
         .sheet(item: $selection) { ChatSelectionSheet(selection: $0) }
         #endif
         .task(id: privacy.connected) {
-            if privacy.connected { try? await model.refreshStatus() }
+            if privacy.connected {
+                try? await model.refreshStatus()
+                await refreshPendingActions()
+            } else {
+                pendingActions = []
+            }
+        }
+        .onChange(of: chat.messages.count) {
+            if privacy.unlocked && privacy.connected {
+                Task { await refreshPendingActions() }
+            }
         }
         .onChange(of: privacy.generation) {
             pdf = nil
@@ -176,5 +191,64 @@ struct WorkspaceChatView: View {
 
     private var voiceIssue: String? {
         model.voiceUnrecognized && model.liveState == nil ? "Nex couldn’t hear that clearly. Try again." : nil
+    }
+
+    private var pendingApprovalsBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(pendingActions) { action in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Label("Action approval required", systemImage: "shield.lefthalf.filled")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(WorkspaceStyle.accent)
+                        Spacer()
+                        Text(action.serverName).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text(action.summary).font(.subheadline.weight(.medium))
+                    if !action.reason.isEmpty {
+                        Text(action.reason).font(.caption).foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 8) {
+                        Button("Allow once") { decide(action, "approve_once") }
+                            .buttonStyle(.borderedProminent).controlSize(.small)
+                        if action.goalId != nil {
+                            Button("Allow for goal") { decide(action, "approve_goal") }
+                                .buttonStyle(.bordered).controlSize(.small)
+                        }
+                        Button("Deny", role: .destructive) { decide(action, "deny") }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
+                    .disabled(decidingActionID == action.id)
+                }
+                .padding(10)
+                .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .padding(.horizontal, WorkspaceStyle.inset)
+        .padding(.vertical, 8)
+    }
+
+    private func refreshPendingActions() async {
+        guard privacy.unlocked && privacy.connected else {
+            pendingActions = []
+            return
+        }
+        if let items = try? await model.pendingActions() {
+            pendingActions = items
+        }
+    }
+
+    private func decide(_ action: PendingAction, _ decision: String) {
+        guard decidingActionID == nil else { return }
+        decidingActionID = action.id
+        Task {
+            defer { decidingActionID = nil }
+            do {
+                _ = try await model.decidePendingAction(action.id, decision: decision)
+                await refreshPendingActions()
+            } catch {
+                sourceError = error.localizedDescription
+            }
+        }
     }
 }

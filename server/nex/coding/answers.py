@@ -65,7 +65,7 @@ async def execute_python(request, language, generate, *, today=None):
         return await run_python(request.source), ""
     messages = generation_messages(request, language, today)
     result = Run("no_program"), ""
-    for _ in range(2):
+    for _ in range(3):
         authored = program_from(await generate(messages))
         if not authored:
             break

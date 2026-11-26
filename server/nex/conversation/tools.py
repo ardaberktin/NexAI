@@ -7,8 +7,10 @@ from ..accounts.agenda import agenda_evidence
 from ..accounts.http import AccountError
 from ..accounts.intent import AccountIntent, mail_variants, search_topic
 from ..accounts.read import prepare_account
+from ..active_memory import ActiveMemory
 from ..activities.recall import activity_evidence, selected_activity
 from ..age_intent import AgeRequest, age_request, units_in
+from ..browser_tool import inspect_page
 from ..conversation_history import recent_dialogue
 from ..conversation_recall import recent_question_reply, selected_questions
 from ..daybook import Daybook, DayContext
@@ -109,17 +111,37 @@ def goal_result(store, turn, tool):
     return Evidence(receipt, engine="goal_created", goal_id=identifier)
 
 
+def browser_result(store, turn, tool):
+    url = tool.get("url", "").strip()
+    if not url or not url.startswith("https://"):
+        raise WebReadError("Provide a public HTTPS page address to inspect.")
+    page = inspect_page(
+        url, action=tool.get("action", "open"), query=tool.get("query", ""),
+        max_links=tool.get("max_links", 12),
+    )
+    return Evidence(page, [page["url"]], "browser")
+
+
 def memory_result(store, turn, tool):
     name, query = tool["name"], tool.get("query", "")
     files, key = PersonalFiles(store.root), tool.get("file", "memory")
+    active = ActiveMemory(store)
     if name == "memory":
         with files.locked():
             item = files.current(datetime.now(UTC)) if key == "now" else files.read(key)
-        return Evidence(context_excerpt(key, item["markdown"], query))
+        markdown_excerpt = context_excerpt(key, item["markdown"], query)
+        if key == "memory" and active.count() > 0:
+            recalled = active.recall(query or turn.text, limit=8)
+            if recalled:
+                return Evidence({"markdown": markdown_excerpt, "active_facts": recalled})
+        return Evidence(markdown_excerpt)
     content = safe_line(query, 500)
     if not content:
         raise ValueError("Missing content to save.")
     files.append(key, content, heading="## Saved on request" if key == "memory" else "## Owner preferences")
+    active.upsert(excerpt(content, 48).rstrip("…"), content,
+                  category="preference" if key == "soul" else "fact",
+                  source_id=turn.id, sync_markdown=False)
     return Evidence({"saved_in": key, "content": content})
 
 
@@ -196,6 +218,8 @@ def fetch(store, turn, tool, *, private, coordinates):
     try:
         if name == "web":
             return web_result(store, turn, tool)
+        if name == "browser":
+            return browser_result(store, turn, tool)
         if name == "weather":
             return weather_result(store, turn, tool, coordinates)
         if private:

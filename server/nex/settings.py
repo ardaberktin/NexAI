@@ -64,8 +64,8 @@ class Settings:
                     if key in {"llama_server", "ffmpeg", "whisper_cli", "piper"} and not os.access(path, os.X_OK):
                         raise ValueError(f"The runtime for {key} must be executable.")
                 else:
-                    minimum, maximum = {"threads": (1, 6), "gpu_layers": (0, 99),
-                                        "context_size": (2048, 8192)}[key]
+                    minimum, maximum = {"threads": (1, 16), "gpu_layers": (0, 99),
+                                        "context_size": (2048, 65536)}[key]
                     if type(value) is not int or not minimum <= value <= maximum:
                         raise ValueError(f"{key} must be between {minimum} and {maximum}.")
             for keys in (("llama_server", "language_model"), ("whisper_cli", "whisper_model")):

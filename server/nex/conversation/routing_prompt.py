@@ -9,8 +9,8 @@ from ..mcp.tool import catalog_menu
 
 LOG = logging.getLogger(__name__)
 GENERAL_CAPABILITIES = {
-    "weather", "web", "python", "agenda", "gmail", "calendar", "ticktick", "archive", "age", "past_questions",
-    "activities", "daybook", "memory", "save_memory", "weather_city", "screen",
+    "weather", "web", "browser", "python", "skill", "agenda", "gmail", "calendar", "ticktick", "archive", "age",
+    "past_questions", "activities", "daybook", "memory", "save_memory", "weather_city", "screen",
 }
 DEDICATED_WORKFLOWS = {
     "answer", "clarify", "clock", "schedule", "recurring", "check_in", "mail_watch", "document",
@@ -79,6 +79,7 @@ ROUTE_CAPABILITIES = """
 answer = explain or converse without tools, or answer the device's current clock or date.
 clarify = the speech or reference is unclear.
 weather = outdoor conditions now, earlier, or in the future. web = current public facts or explicit public search.
+browser = open and inspect an explicit public webpage or its links. skill = run an approved workspace skill.
 python = run code or perform a calculation. agenda = the user's schedule, appointments or generic calendar.
 calendar = the named Google Calendar service. ticktick = the named TickTick service.
 gmail = read existing emails. archive = search the user's recordings or prior conversations by topic.

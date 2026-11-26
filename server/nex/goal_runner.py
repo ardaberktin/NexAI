@@ -8,6 +8,13 @@ from .accounts.agenda import agenda_evidence
 from .accounts.http import AccountError
 from .accounts.intent import AccountIntent, mail_variants, search_topic, validate_scope
 from .accounts.read import prepare_account
+from .active_memory import ActiveMemory
+from .browser_tool import inspect_page
+from .conversation.agent import (
+    GOAL_STATE_PROMPT,
+    GOAL_STATE_SCHEMA,
+    sanitize_goal_state,
+)
 from .conversation.calendar_scope import (
     CALENDAR_READS,
     RESOLVE_SCOPE,
@@ -42,6 +49,12 @@ from .pdf.render import ValidatedPDF
 from .pdf.scheduled import VERIFY_SKIP_PDF, prepare_pdf
 from .recall_dates import recall_dates, time_key, time_zone
 from .scheduled_plan import plan_for
+from .sentinel import (
+    PendingActions,
+    TurnTaint,
+    parse_sentinel_verdict,
+    sentinel_review_messages,
+)
 from .store import excerpt
 from .tool_dates import date_selection, local_bounds
 from .weather import Weather
@@ -141,6 +154,12 @@ def evidence_for(store, goal, anchor, tool):
         bounds = tuple(map(time_key, local_bounds(selection, goal["zone"]))) if selection else None
         rows = store.search(query, limit=6, evidence_only=True, bounds=bounds or (scope.bounds if scope else None))
         return [{"date": row["started"], "text": excerpt(row["text"], 380)} for row in rows]
+    if name == "browser":
+        url = tool.get("url", "").strip()
+        if not url or url not in goal["prompt"]:
+            raise WebReadError("Use an explicit public HTTPS address from the goal prompt.")
+        return inspect_page(url, action=tool.get("action", "open"), query=query,
+                            max_links=tool.get("max_links", 12))
     return web_evidence(goal, anchor, tool)
 
 
@@ -165,7 +184,7 @@ def scoped_tool(tool, goal, anchor, generate):
     return tool
 
 
-def scheduled_mcp(store, goal, call, generate, write_run, evidence):
+def scheduled_mcp(store, goal, call, generate, write_run, evidence, *, taint=None):
     alias = call["name"]
     server, tool, access = call_profile(store, alias, scheduled=True)
     approval = None
@@ -178,13 +197,32 @@ def scheduled_mcp(store, goal, call, generate, write_run, evidence):
         if account_write_already_attempted(alias, receipts):
             return {"status": "skipped", "tool": tool.name, "server": server,
                     "detail": "This connected account already had a write attempt for this goal run."}
-        context = {name: format_evidence(name, value) for name, value in evidence.items()}
-        message = review_messages(goal["prompt"], server, tool, review_arguments(call), access, evidence=context)
-        operation = reviewed_operation(generate(message, 12) if generate else None, access)
-        if operation is None:
-            raise MCPError("Nex could not authorize this operation for the goal and tool access.")
-        approval = CallApproval(tool, operation)
+        pending_mgr = PendingActions(store)
+        if taint and taint.tainted and not pending_mgr.has_goal_grant(goal["id"], alias):
+            args = review_arguments(call)
+            message = sentinel_review_messages(goal["prompt"], server, tool, args, access, tainted=True)
+            verdict = parse_sentinel_verdict(generate(message, 12) if generate else None, access, tainted=True)
+            if verdict == "APPROVE":
+                pending = pending_mgr.create(
+                    source_type="goal", source_id=goal["id"], goal_id=goal["id"],
+                    tool_alias=alias, server_name=server, tool_name=tool.name, operation="write",
+                    arguments=args, summary=f"{server}: {tool.name}",
+                    tainted=True, reason="Scheduled goal read external untrusted content before writing.",
+                )
+                return {"status": "approval_required", "tool": tool.name, "server": server, "pending_action": pending}
+            if verdict != "READ":
+                raise MCPError("Sentinel blocked this scheduled write after reading untrusted external content.")
+            approval = CallApproval(tool, access.READ)
+        else:
+            context = {name: format_evidence(name, value) for name, value in evidence.items()}
+            message = review_messages(goal["prompt"], server, tool, review_arguments(call), access, evidence=context)
+            operation = reviewed_operation(generate(message, 12) if generate else None, access)
+            if operation is None:
+                raise MCPError("Nex could not authorize this operation for the goal and tool access.")
+            approval = CallApproval(tool, operation)
     result = execute_mcp(store, call, scheduled=True, approval=approval, write_run=write_run)
+    if taint and tool.read_only:
+        taint.mark(alias, read_only_mcp=True)
     if tool.read_only and result["status"] != "ok":
         raise MCPError(f'The MCP tool {tool.name} could not supply data for this goal.')
     return result
@@ -235,11 +273,23 @@ def run_goal(store, goal, anchor, generate, classify, write_run):
     if unavailable and not evidence:
         return PromptResult(error=" ".join(unavailable.values()))
     has_mail = bool(evidence.keys() & {"gmail", "new_mail"})
+    goal_state = None
+    if raw_state := goal.get("plan_state"):
+        try:
+            parsed = json.loads(raw_state) if isinstance(raw_state, str) else raw_state
+            if isinstance(parsed, dict):
+                goal_state = parsed
+        except ValueError:
+            goal_state = None
     context = data | {
         "evidence": {key: format_evidence(key, value) for key, value in evidence.items()},
         "unavailable": unavailable,
         "previous_update": excerpt(goal["latest"] or "", 550),
     }
+    if goal_state:
+        context["goal_state"] = goal_state
+    if active_mem := ActiveMemory(store).context_bundle(goal["prompt"], limit=4):
+        context["active_memory"] = active_mem
     instructions = MAIL_EXECUTE if has_mail else EXECUTE
     if pdf_tool:
         instructions += ("\nWrite the content for the requested PDF now. The scheduler has already evaluated "
@@ -252,6 +302,13 @@ def run_goal(store, goal, anchor, generate, classify, write_run):
     if update and evidence.get("web") and not verify_web_update(generate, data, evidence, update):
         return PromptResult(error="Nex couldn’t verify the web findings for this goal.")
     result.text = update
+    if update and goal_state is not None and generate is not None:
+        state_payload = {"goal": goal["prompt"], "previous_state": goal_state, "latest_update": excerpt(update, 900)}
+        updated = sanitize_goal_state(ask(generate, GOAL_STATE_PROMPT, state_payload, 260, schema=GOAL_STATE_SCHEMA),
+                                      goal_state)
+        if updated and updated != goal_state:
+            from .goals import Goals
+            Goals.save_plan_state(store, goal["id"], updated)
     if update and pdf_copy:
         result.pdf_copy = pdf_copy
     if pdf_tool:
@@ -277,15 +334,19 @@ def run_goal(store, goal, anchor, generate, classify, write_run):
 def collect_evidence(store, goal, anchor, generate, tools, watches, write_run, data):
     evidence = {name: list(watch.evidence) for name, watch in watches.items()}
     unavailable = {}
+    taint = TurnTaint()
+    for name in watches:
+        taint.mark(name)
     for tool in tools:
         name = tool["name"]
         if name in WATCH_TOOLS or name == "create_pdf":
             continue
         try:
             if is_alias(name):
-                value = scheduled_mcp(store, goal, tool, generate, write_run, evidence)
+                value = scheduled_mcp(store, goal, tool, generate, write_run, evidence, taint=taint)
             else:
                 value = evidence_for(store, goal, anchor, scoped_tool(tool, goal, anchor, generate))
+                taint.mark(name)
             if name == "gmail" and tool.get("priority") and isinstance(value, list):
                 value = prioritize_mail(value, data, generate)
                 if value is None:

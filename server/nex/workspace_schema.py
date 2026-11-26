@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS goals (
     status TEXT NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL,
     revision INTEGER NOT NULL DEFAULT 1, next_run TEXT, last_checked TEXT, error TEXT, latest TEXT,
     requested INTEGER NOT NULL DEFAULT 0, watch_provider TEXT,
-    original_request TEXT NOT NULL DEFAULT '', reply_language TEXT, pdf_instruction TEXT
+    original_request TEXT NOT NULL DEFAULT '', reply_language TEXT, pdf_instruction TEXT,
+    plan_state TEXT
 )"""
 GOALS_INDEX = "CREATE INDEX IF NOT EXISTS goals_due ON goals(status, next_run)"
 
@@ -116,6 +117,84 @@ CREATE TABLE IF NOT EXISTS shared_weather_locations (
     device TEXT PRIMARY KEY, consent TEXT NOT NULL,
     latitude REAL, longitude REAL, observed REAL
 );
+CREATE TABLE IF NOT EXISTS pending_actions (
+    id TEXT PRIMARY KEY,
+    source_type TEXT NOT NULL CHECK(source_type IN ('chat','goal')),
+    source_id TEXT NOT NULL,
+    goal_id TEXT,
+    tool_alias TEXT NOT NULL,
+    server_name TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    arguments_json TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    tainted INTEGER NOT NULL DEFAULT 0,
+    reason TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL CHECK(status IN ('pending','approved_once','approved_goal','denied','executed','failed')),
+    receipt_json TEXT,
+    created TEXT NOT NULL,
+    updated TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS pending_actions_status ON pending_actions(status, created DESC);
+CREATE INDEX IF NOT EXISTS pending_actions_source ON pending_actions(source_type, source_id);
+CREATE TABLE IF NOT EXISTS goal_action_grants (
+    goal_id TEXT NOT NULL,
+    tool_alias TEXT NOT NULL,
+    granted TEXT NOT NULL,
+    PRIMARY KEY(goal_id, tool_alias)
+);
+CREATE TABLE IF NOT EXISTS memory_facts (
+    id TEXT PRIMARY KEY,
+    fact_key TEXT UNIQUE NOT NULL,
+    display_key TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'fact',
+    content TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    source_id TEXT NOT NULL DEFAULT '',
+    created TEXT NOT NULL,
+    updated TEXT NOT NULL,
+    expires_at TEXT,
+    active INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS memory_facts_active ON memory_facts(active, updated DESC);
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_facts_fts USING fts5(
+    display_key, content, category,
+    content='memory_facts', content_rowid='rowid',
+    tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS memory_facts_ai AFTER INSERT ON memory_facts BEGIN
+    INSERT INTO memory_facts_fts(rowid, display_key, content, category)
+    VALUES (new.rowid, new.display_key, new.content, new.category);
+END;
+CREATE TRIGGER IF NOT EXISTS memory_facts_ad AFTER DELETE ON memory_facts BEGIN
+    INSERT INTO memory_facts_fts(memory_facts_fts, rowid, display_key, content, category)
+    VALUES ('delete', old.rowid, old.display_key, old.content, old.category);
+END;
+CREATE TRIGGER IF NOT EXISTS memory_facts_au AFTER UPDATE OF display_key, content, category ON memory_facts BEGIN
+    INSERT INTO memory_facts_fts(memory_facts_fts, rowid, display_key, content, category)
+    VALUES ('delete', old.rowid, old.display_key, old.content, old.category);
+    INSERT INTO memory_facts_fts(rowid, display_key, content, category)
+    VALUES (new.rowid, new.display_key, new.content, new.category);
+END;
+CREATE TABLE IF NOT EXISTS memory_vectors (
+    fact_id TEXT PRIMARY KEY REFERENCES memory_facts(id) ON DELETE CASCADE,
+    dim INTEGER NOT NULL,
+    model TEXT NOT NULL,
+    vector BLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workspace_skills (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    description TEXT NOT NULL,
+    parameters_json TEXT NOT NULL DEFAULT '{}',
+    source TEXT NOT NULL,
+    approved INTEGER NOT NULL DEFAULT 0,
+    created TEXT NOT NULL,
+    updated TEXT NOT NULL,
+    last_run TEXT,
+    run_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS workspace_skills_approved ON workspace_skills(approved, name);
 """
 
 
@@ -168,6 +247,8 @@ def migrate_goal_context(db):
         db.execute("UPDATE goals SET reply_language=(SELECT language FROM goal_follow_up_work WHERE goal_id=goals.id)")
     if "pdf_instruction" not in columns:
         db.execute("ALTER TABLE goals ADD COLUMN pdf_instruction TEXT")
+    if "plan_state" not in columns:
+        db.execute("ALTER TABLE goals ADD COLUMN plan_state TEXT")
 
 
 def migrate_goal_activity(db):

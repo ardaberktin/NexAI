@@ -5,11 +5,20 @@ private struct ExcaliburModels: Decodable {
         let id: String
         let name: String
         let available: Bool
+        var multimodal: Bool? = nil
+        var reasoning: Bool? = nil
     }
 
     let active: String?
     let device: String?
+    var contextSize: Int? = nil
+    var multimodal: Bool? = nil
     let models: [Option]
+
+    enum CodingKeys: String, CodingKey {
+        case active, device, multimodal, models
+        case contextSize = "context_size"
+    }
 }
 
 struct ExcaliburModelSettings: View {
@@ -32,6 +41,12 @@ struct ExcaliburModelSettings: View {
                 }
                 .disabled(pending || model.serverProfile?.account.owner == false)
                 if let device = status.device { LabeledContent("Running on", value: device) }
+                if let contextSize = status.contextSize {
+                    LabeledContent("Context window", value: "\(contextSize.formatted()) tokens")
+                }
+                if status.multimodal == true {
+                    LabeledContent("Vision", value: "Enabled")
+                }
             }
             if pending { ProgressView(status == nil ? "Checking models…" : "Switching model…") }
             if let error {

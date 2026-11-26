@@ -49,7 +49,7 @@ async def lifespan(app):
         speech = await asyncio.to_thread(Speech, ASSETS)
         room = await asyncio.to_thread(RoomContext.load, ASSETS)
         assets = Path(os.environ.get("NEX_WHISPER_ASSETS", str(DATA / "assets")))
-        mac = None if TEST_LOOPBACK or models else RUNTIME.parent / "nex" / "mac-model.sock"
+        mac = None if TEST_LOOPBACK else RUNTIME.parent / "nex" / "mac-model.sock"
         workspaces = LiveWorkspaces(
             DATA, RUNTIME, read_access(DATA)["keys"]["admin"], speech, room, Verifier(assets, RUNTIME),
             models.socket if models else RUNTIME / "model.sock", mac,

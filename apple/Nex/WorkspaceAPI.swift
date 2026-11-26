@@ -56,6 +56,42 @@ enum GoalStatus: String, Decodable {
     case active, paused, completed
 }
 
+struct GoalMilestone: Decodable, Identifiable, Equatable {
+    let id: String
+    let title: String
+    let status: String
+    var note: String? = nil
+}
+
+struct GoalPlanState: Decodable, Equatable {
+    var phase: String? = nil
+    var milestones: [GoalMilestone]? = nil
+    var scratchpad: [String]? = nil
+}
+
+struct PendingAction: Decodable, Identifiable, Equatable {
+    let id: String
+    let sourceType: String
+    let sourceId: String
+    let goalId: String?
+    let serverName: String
+    let toolName: String
+    let operation: String
+    let summary: String
+    let tainted: Bool
+    let reason: String
+    let status: String
+    let created: String
+}
+
+struct WorkspaceSkill: Decodable, Identifiable, Equatable {
+    let id: String
+    let name: String
+    let description: String
+    let approved: Bool
+    let runCount: Int
+}
+
 struct NexGoal: Decodable, Identifiable {
     let id: String
     let status: GoalStatus
@@ -72,6 +108,7 @@ struct NexGoal: Decodable, Identifiable {
     let activity: [GoalActivity]?
     let artifactCount: Int?
     let followUp: GoalFollowUp?
+    var planState: GoalPlanState? = nil
 
     var frequency: GoalFrequency {
         guard scheduledAt != nil else { return .onDemand }

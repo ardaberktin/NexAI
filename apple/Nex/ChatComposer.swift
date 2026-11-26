@@ -1,16 +1,40 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ChatComposer: View {
     @ObservedObject var model: Controller
     @ObservedObject var chat: WorkspaceChat
     let send: (Bool) -> Void
     @FocusState private var focused: Bool
+    @State private var pickingImage = false
 
     private var canSend: Bool {
         !chat.sending && !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !chat.attachments.isEmpty {
+                HStack(spacing: 8) {
+                    Label("\(chat.attachments.count) image\(chat.attachments.count == 1 ? "" : "s") attached",
+                          systemImage: "photo")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(WorkspaceStyle.accent)
+                    Button("Clear", role: .destructive) { chat.attachments.removeAll() }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                }
+                .padding(.horizontal, WorkspaceStyle.inset)
+            }
+            composerBar
+        }
+        .fileImporter(isPresented: $pickingImage, allowedContentTypes: [.jpeg, .png, .webP]) { result in
+            guard case .success(let url) = result else { return }
+            attachImage(url)
+        }
+    }
+
+    @ViewBuilder private var composerBar: some View {
         #if os(macOS)
         HStack(alignment: .bottom, spacing: 10) {
             options
@@ -60,6 +84,8 @@ struct ChatComposer: View {
                 }
                 .disabled(chat.sending || chat.replyingPrivately)
             }
+            Button("Attach image…", systemImage: "photo") { pickingImage = true }
+                .disabled(chat.sending || chat.attachments.count >= 3)
             Button("Search the web", systemImage: "globe") { submit(web: true) }
                 .disabled(!canSend || chat.replyingPrivately)
             if model.playing { Button("Stop playback", systemImage: "stop.fill", action: model.stopPlayback) }
@@ -108,6 +134,16 @@ struct ChatComposer: View {
         focused = false
         #endif
         send(web)
+    }
+
+    private func attachImage(_ url: URL) {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), data.count <= 1_400_000 else { return }
+        let ext = url.pathExtension.lowercased()
+        let mime = ext == "png" ? "image/png" : (ext == "webp" ? "image/webp" : "image/jpeg")
+        let encoded = "data:\(mime);base64,\(data.base64EncodedString())"
+        if chat.attachments.count < 3 { chat.attachments.append(encoded) }
     }
 }
 

@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .accounts.credentials import Credentials
 from .accounts.http import AccountError
+from .active_memory import ActiveMemory
 from .activities.current import current_snapshot
 from .activities.jobs import record_device_context, record_screen
 from .activities.recall import activity_evidence, activity_question
@@ -97,6 +98,21 @@ def valid_language(value):
     if value not in ("auto", "en", "tr"):
         raise ValueError("Choose auto, en, or tr.")
     return value
+
+
+def chat_attachments(data):
+    raw = data.get("attachments")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or len(raw) > 3:
+        raise ValueError("Attach up to three images per message.")
+    accepted = []
+    for item in raw:
+        if (not isinstance(item, str) or len(item) > 2_000_000
+                or not item.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,"))):
+            raise ValueError("Attachments must be JPEG, PNG, or WebP images under 1.5 MB.")
+        accepted.append(item)
+    return tuple(accepted)
 
 
 def chat_message(data):
@@ -452,8 +468,9 @@ class API(BaseHTTPRequestHandler):
         self.send(result)
 
     def chat_request(self, device, *, lookup_only):
-        data = self.object(80_000)  # Includes JSON escaping for pasted programs.
+        data = self.object(6_500_000)  # Includes pasted programs and up to three inline image attachments.
         message, identifier = chat_message(data), data.get("id")
+        attachments = chat_attachments(data)
         if not isinstance(identifier, str) or not re.fullmatch(UUID, identifier):
             raise ValueError("Invalid question ID.")
         zone = time_zone(data.get("time_zone", "UTC")).key
@@ -475,6 +492,8 @@ class API(BaseHTTPRequestHandler):
                                   followups=self.chat_followups, location=data.get("weather_location"),
                                   ask_location=data.get("weather_location_supported") is True,
                                   device_clock=data.get("device_clock"),
+                                  attachments=attachments,
+                                  agent_loop=bool(data.get("agent_loop", True)) and not lookup_only,
                                   session=self.headers.get("X-Nex-Workspace") if device != "console" else None)
             if result and result["engine"] == "private_chat_disabled":
                 raise Problem(409, "Private Chat is off. Turn it on in Privacy & Security settings.")
@@ -507,7 +526,10 @@ class API(BaseHTTPRequestHandler):
         elif path == "/v1/context" and method == "PUT":
             body = self.object(100_000)
             try:
-                self.send(files.edit(body.get("name"), body.get("revision"), body.get("markdown")))
+                saved = files.edit(body.get("name"), body.get("revision"), body.get("markdown"))
+                if body.get("name") == "memory":
+                    ActiveMemory(self.app.store).sync_from_markdown()
+                self.send(saved)
             except PersonalConflict as exc:
                 raise Problem(409, str(exc)) from None
         elif path == "/v1/context/screen" and method == "PUT":

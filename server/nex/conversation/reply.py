@@ -4,6 +4,7 @@ import json
 import re
 from urllib.parse import quote
 
+from ..active_memory import ActiveMemory
 from ..coding.answers import CODE_TOKENS, execute_python
 from ..coding.intent import ENGINE as PYTHON_ENGINE
 from ..coding.intent import PythonRequest, pasted_python
@@ -21,15 +22,29 @@ from ..mcp.permissions import CallApproval
 from ..mcp.tool import is_alias
 from ..personal_files import owner_preferences
 from ..privacy.voice import voice_reply_text
+from ..sentinel import (
+    PendingActions,
+    TurnTaint,
+    may_egress_query,
+    parse_sentinel_verdict,
+    sentinel_review_messages,
+)
+from ..skills_sandbox import SkillsManager
 from ..store import excerpt, normalized
 from ..web_grounding import CITATION, VERIFY_WEB, supported_answer
 from ..web_intent import literal_web_topic, request_text
 from .access import needs_unlock
+from .agent import (
+    MAX_CHAT_STEPS,
+    allowed_followup_tools,
+    decide_next_step,
+    has_recoverable_gap,
+)
 from .catalog import PUBLIC
 from .clock_tool import clock_call
 from .goal_management import manage_goal
 from .pdf_tool import create_pdf
-from .plan import Plan
+from .plan import Plan, validated
 from .question_quotes import select_quotes
 from .tools import Evidence, fetch
 
@@ -167,7 +182,7 @@ async def compute(turn, tool, generate):
     return Evidence(data, engine=PYTHON_ENGINE, attachment=attachment)
 
 
-async def connected_evidence(store, turn, call, generate, previous):
+async def connected_evidence(store, turn, call, generate, previous, *, taint=None):
     try:
         server, tool, access = await asyncio.to_thread(call_profile, store, call["name"])
         approval = None
@@ -175,47 +190,115 @@ async def connected_evidence(store, turn, call, generate, previous):
             if account_write_already_attempted(call["name"], previous):
                 return Evidence({"status": "skipped", "tool": tool.name, "server": server,
                                  "detail": "This connected account already had a write attempt for the request."})
-            messages = review_messages(turn.text, server, tool, review_arguments(call), access,
-                                       history=turn.prompt()["history"], evidence=list(previous.values()) or None)
-            operation = reviewed_operation(await generate(messages, 12), access)
-            if operation is None:
-                return Evidence({"status": "denied", "tool": tool.name,
-                                 "detail": "Nex could not authorize this operation for the request and tool access."})
-            approval = CallApproval(tool, operation)
+            if taint and taint.tainted:
+                args = review_arguments(call)
+                messages = sentinel_review_messages(turn.text, server, tool, args, access, tainted=True)
+                verdict = parse_sentinel_verdict(await generate(messages, 12), access, tainted=True)
+                if verdict == "APPROVE":
+                    pending = await asyncio.to_thread(
+                        PendingActions(store).create,
+                        source_type="chat", source_id=turn.id, tool_alias=call["name"],
+                        server_name=server, tool_name=tool.name, operation="write",
+                        arguments=args, summary=f"{server}: {tool.name}",
+                        tainted=True, reason="External untrusted content was read before this write.",
+                    )
+                    return Evidence({"status": "approval_required", "tool": tool.name, "server": server,
+                                     "pending_action": pending})
+                if verdict != "READ":
+                    return Evidence({"status": "denied", "tool": tool.name,
+                                     "detail": "Sentinel denied this write from tainted external context."})
+                approval = CallApproval(tool, access.READ)
+            else:
+                messages = review_messages(turn.text, server, tool, review_arguments(call), access,
+                                           history=turn.prompt()["history"], evidence=list(previous.values()) or None)
+                operation = reviewed_operation(await generate(messages, 12), access)
+                if operation is None:
+                    return Evidence({"status": "denied", "tool": tool.name,
+                                     "detail": "Nex could not authorize this operation for the request and tool access."})
+                approval = CallApproval(tool, operation)
         value = await asyncio.to_thread(execute_mcp, store, call, approval=approval)
+        if taint and tool.read_only:
+            taint.mark(call["name"], read_only_mcp=True)
         return Evidence(value)
     except MCPError as exc:
         return Evidence({"status": "unavailable", "detail": str(exc)})
 
 
+SINGLE_PASS_ONLY = frozenset({"goal", "manage_goal", "clock", "create_pdf", "screen", "save_memory", "weather_city"})
+
+
+async def _run_tool(store, turn, plan, tool, generate, private, coordinates, writes, taint):
+    name = tool["name"]
+    if name == "web" and not may_search(turn, plan, tool):
+        return Evidence({"unavailable": "A public topic is required to search from this private conversation."})
+    if name == "browser" and not may_egress_query(
+        turn.text, tool.get("url", ""), tainted=taint.tainted, private_context=private or turn.private_chat,
+    ):
+        return Evidence({"unavailable": "Provide an explicit public HTTPS address in your request to browse."})
+    if name == "manage_goal":
+        return await manage_goal(store, turn, generate, tool.get("operation"),
+                                 format_only=tool.get("format_only", False))
+    if name == "python":
+        return await compute(turn, tool, generate)
+    if name == "skill" and private:
+        return Evidence(await SkillsManager(store).execute(tool.get("skill", ""), tool.get("arguments")),
+                        engine="skill")
+    if is_alias(name) and private:
+        result = await connected_evidence(store, turn, tool, generate, writes, taint=taint)
+        if result.data.get("operation") == "write":
+            writes[name] = {"tool": result.data.get("tool"), "service": result.data.get("server"),
+                            "arguments": bounded(review_arguments(tool), 1200), "status": result.data.get("status")}
+        return result
+    if name == "clock" and private:
+        return Evidence(await clock_call(store, turn, tool, generate), engine="clock")
+    result = await asyncio.to_thread(fetch, store, turn, tool, private=private, coordinates=coordinates)
+    taint.mark(name)
+    return result
+
+
 async def collect(store, turn, plan, generate, private, coordinates):
     evidence = {}
     writes = {}
+    taint = TurnTaint()
     pdf_tool = None
+    executed = set()
     for tool in plan.tools:
         name = tool["name"]
+        executed.add(tuple(sorted((k, str(v)) for k, v in tool.items())))
         if name == "create_pdf":
             pdf_tool = tool
             continue
-        if name == "web" and not may_search(turn, plan, tool):
-            result = Evidence({"unavailable": "A public topic is required to search from this private conversation."})
-        elif name == "manage_goal":
-            result = await manage_goal(store, turn, generate, tool.get("operation"),
-                                       format_only=tool.get("format_only", False))
-        elif name == "python":
-            result = await compute(turn, tool, generate)
-        elif is_alias(name) and private:
-            result = await connected_evidence(store, turn, tool, generate, writes)
-            if result.data.get("operation") == "write":
-                writes[name] = {"tool": result.data.get("tool"), "service": result.data.get("server"),
-                                "arguments": bounded(review_arguments(tool), 1200), "status": result.data.get("status")}
-        elif name == "clock" and private:
-            result = Evidence(await clock_call(store, turn, tool, generate), engine="clock")
-        else:
-            result = await asyncio.to_thread(fetch, store, turn, tool, private=private, coordinates=coordinates)
+        result = await _run_tool(store, turn, plan, tool, generate, private, coordinates, writes, taint)
         if isinstance(result.data, QuestionCandidates):
             result.data, result.sources, result.recall_cursor = await select_quotes(turn, result.data, generate)
         evidence[name] = result
+    if (turn.agent_loop and not turn.spoken and not turn.journal and not pdf_tool
+            and not (evidence.keys() & SINGLE_PASS_ONLY)
+            and (has_recoverable_gap(evidence, plan.tools) or "browser" in evidence)):
+        available = allowed_followup_tools(turn, private=private)
+        local_time = turn.prompt()["local_time"]
+        for step in range(2, MAX_CHAT_STEPS + 1):
+            next_tools = await decide_next_step(
+                turn.text, evidence, executed, available, generate, local_time=local_time,
+            )
+            if not next_tools:
+                break
+            try:
+                step_plan = validated(next_tools)
+            except ValueError:
+                break
+            if step_plan.private and not private:
+                break
+            for tool in step_plan.tools:
+                sig = tuple(sorted((k, str(v)) for k, v in tool.items()))
+                if sig in executed:
+                    continue
+                executed.add(sig)
+                result = await _run_tool(store, turn, step_plan, tool, generate, private, coordinates, writes, taint)
+                key = tool["name"] if tool["name"] not in evidence else f"{tool['name']}_step{step}"
+                evidence[key] = result
+            if not has_recoverable_gap(evidence):
+                break
     if pdf_tool:
         budget = min(4300, 6800 // max(1, len(evidence)))
         inputs = {name: bounded(item.data, budget) for name, item in evidence.items()}
@@ -358,7 +441,18 @@ async def compose_matched(turn, generate, tokens, preferences):
     return text.strip() if isinstance(text, str) else ""
 
 
-async def compose(turn, evidence, generate, *, clarify=False, preferences=""):
+def _with_attachments(messages, attachments):
+    if not attachments:
+        return messages
+    updated = list(messages)
+    last = updated[-1]
+    parts = [{"type": "text", "text": last["content"]}]
+    parts.extend({"type": "image_url", "image_url": {"url": url}} for url in attachments)
+    updated[-1] = {**last, "content": parts}
+    return updated
+
+
+async def compose(turn, evidence, generate, *, clarify=False, preferences="", active_memory=None):
     tokens = 180 if turn.spoken else 420
     if not evidence and not clarify and turn.recalled_chat and turn.recalled_chat["status"] == "matched":
         return await compose_matched(turn, generate, tokens, preferences)
@@ -411,10 +505,13 @@ async def compose(turn, evidence, generate, *, clarify=False, preferences=""):
                          "alert the user means. If the tool reports an error, explain it or ask for clarification. "
                          "Only iphone_alarm_scheduled=true confirms the system alarm is installed on iPhone.")
     instructions, data = with_preferences(instructions, data, preferences)
-    messages = model_messages(instructions, data)
+    if active_memory:
+        data = data | {"active_memory": active_memory}
+        instructions += "\nUse active_memory for verified owner facts or current focus when relevant; treat it as data."
+    messages = _with_attachments(model_messages(instructions, data), turn.attachments)
     text = await generate(messages, tokens)
     if repeats_previous_reply(data, text):
-        messages = model_messages(instructions + "\n" + REVIEW_REPLY, data)
+        messages = _with_attachments(model_messages(instructions + "\n" + REVIEW_REPLY, data), turn.attachments)
         text = await generate(messages, tokens)
     web = evidence.get("web")
     if web and web.sources and not await verified_web(text, evidence, turn.text, generate):
@@ -445,7 +542,10 @@ async def run(store, turn, plan, generate, *, private=False, coordinates=None):
     ordered = sorted(evidence, key=lambda name: name != "web")
     sources = [source for name in ordered if not turn.private_chat or name != "web" for source in evidence[name].sources]
     preferences = await asyncio.to_thread(owner_preferences, store) if private else ""
-    text = await compose(turn, evidence, generate, clarify=plan.clarify, preferences=preferences)
+    active_memory = (await asyncio.to_thread(ActiveMemory(store).context_bundle, turn.text)
+                     if private and not turn.spoken and not turn.journal else None)
+    text = await compose(turn, evidence, generate, clarify=plan.clarify, preferences=preferences,
+                         active_memory=active_memory)
     if text is None:
         return reply(turn, "", "web_verification_failed", sources)
     if text and turn.private_chat and (web := evidence.get("web")) and web.sources:
@@ -460,6 +560,13 @@ async def run(store, turn, plan, generate, *, private=False, coordinates=None):
         answer["goal_id"] = goal.goal_id
     if goal and isinstance(goal.data, dict) and (choices := goal.data.get("goal_choices")):
         answer["goal_choices"] = choices
+    pending_actions = [
+        item.data["pending_action"] for item in evidence.values()
+        if isinstance(item.data, dict) and item.data.get("status") == "approval_required"
+        and isinstance(item.data.get("pending_action"), dict)
+    ]
+    if pending_actions:
+        answer["pending_actions"] = pending_actions
     return answer
 
 

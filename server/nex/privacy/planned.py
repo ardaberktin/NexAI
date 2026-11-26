@@ -9,7 +9,8 @@ def approved_reply(assistant, identifier, device, data, asked_at, coordinates):
     context = DayContext(**data["journal"]) if data.get("journal") else None
     turn = make_turn(identifier, device, data["text"], data["language"], data["zone"], asked_at=asked_at,
                      history=data.get("history", ()), journal=context, exclude=data.get("exclude") or identifier,
-                     device_clock=DeviceClock.read(data.get("device_clock")), recalled_chat=data.get("recalled_chat"))
+                     device_clock=DeviceClock.read(data.get("device_clock")), recalled_chat=data.get("recalled_chat"),
+                     attachments=tuple(data.get("attachments") or ()), agent_loop=data.get("agent_loop") is True)
     turn.private_chat = data.get("private_chat") is True
     if "tools" in data:
         plan = Plan(validated(data["tools"]).tools, data.get("plan_error", ""), data.get("clarify", False))
