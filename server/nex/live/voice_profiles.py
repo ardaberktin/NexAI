@@ -66,6 +66,44 @@ class VoiceProfiles:
                     continue
         return "unverified"
 
+    def owner_present(self, samples, segments):
+        with self.state.transaction() as db:
+            rows = db.execute("SELECT template FROM voices").fetchall()
+        if not rows or self.room is None or not segments:
+            return None
+        templates = []
+        for row in rows:
+            try:
+                templates.append(np.array(json.loads(self.cipher.decrypt(row[0]))))
+            except (InvalidToken, ValueError, TypeError):
+                continue
+        if not templates:
+            return None
+        by_speaker = {}
+        for segment in segments:
+            start = max(0, int(segment.start * INPUT_RATE))
+            end = min(len(samples), int(segment.end * INPUT_RATE))
+            if end > start:
+                by_speaker.setdefault(segment.speaker, []).append(samples[start:end])
+        checked = False
+        max_samples = 12 * INPUT_RATE
+        for chunks in by_speaker.values():
+            speaker_audio = np.concatenate(chunks)[:max_samples]
+            if len(speaker_audio) < int(INPUT_RATE * 0.9):
+                continue
+            try:
+                with self.room.lock:
+                    vector = self.room.voice(speaker_audio)
+            except (ValueError, RuntimeError):
+                continue
+            if vector is None:
+                continue
+            checked = True
+            for known in templates:
+                if known.shape == vector.shape and float(known @ vector) >= MATCH_THRESHOLD:
+                    return True
+        return False if checked else None
+
 
 def enrollment_subject(raw):
     return "enroll-" + hashlib.sha256(raw).hexdigest()

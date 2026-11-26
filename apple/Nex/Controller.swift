@@ -72,8 +72,15 @@ final class Controller: ObservableObject {
     @Published var recognizedSpeaker = false
     private let recordingReporter = RecordingReporter()
     #if os(macOS)
+    @Published var shareMacActivityContext = true {
+        didSet {
+            saved.set(shareMacActivityContext, forKey: "shareMacActivityContext")
+            updateMacActivityContext()
+        }
+    }
     let gemma: MacGemmaControl
     let screenSharing: ScreenSharing
+    private let macActivityContext = MacActivityContext()
     #endif
     private let spoolRoot: Spool
     private var spool: Spool
@@ -112,6 +119,9 @@ final class Controller: ObservableObject {
         useDeviceTranscription = saved.bool(forKey: "deviceTranscription")
         liveVoice = saved.object(forKey: "liveVoice") as? Bool ?? true
         continuousListening = saved.object(forKey: "continuousListening") as? Bool ?? true
+        #if os(macOS)
+        shareMacActivityContext = saved.object(forKey: "shareMacActivityContext") as? Bool ?? true
+        #endif
         capture.language = language
         if let profile {
             do {
@@ -220,6 +230,7 @@ final class Controller: ObservableObject {
         if playing { stopPlayback() }
         #if os(macOS)
         screenSharing.stop()
+        macActivityContext.configure(connection: nil, enabled: false)
         #endif
     }
 
@@ -257,6 +268,7 @@ final class Controller: ObservableObject {
         savingWorkspaceFeature = false
         recordingReporter.start(capture, connection: connection)
         #if os(macOS)
+        updateMacActivityContext()
         screenSharing.contextChanged = { [weak self, weak connection] summary, date in
             Task {
                 guard let self, let connection, self.api === connection else { return }
@@ -565,7 +577,19 @@ final class Controller: ObservableObject {
         if !workspaceFeatureEnabled(.goals) {
             Task { await GoalNotifications.removeAll() }
         }
+        #if os(macOS)
+        updateMacActivityContext()
+        #endif
     }
+
+    #if os(macOS)
+    private func updateMacActivityContext() {
+        macActivityContext.configure(
+            connection: api,
+            enabled: shareMacActivityContext && workspaceFeatureEnabled(.activities)
+        )
+    }
+    #endif
 
     private func syncOnce() async {
         let spool = self.spool

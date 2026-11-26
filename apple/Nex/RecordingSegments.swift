@@ -1,5 +1,44 @@
 import AVFoundation
+#if os(macOS)
+import CoreAudio
+#endif
 import Foundation
+
+enum DeviceAudioPlayback {
+    static var isPlaying: Bool {
+        #if os(iOS)
+        return AVAudioSession.sharedInstance().isOtherAudioPlaying
+        #elseif os(macOS)
+        var deviceID = AudioObjectID(kAudioObjectSystemObject)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID
+        ) == noErr, deviceID != kAudioObjectUnknown else {
+            return false
+        }
+        var running: UInt32 = 0
+        size = UInt32(MemoryLayout<UInt32>.size)
+        var runningAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectGetPropertyData(
+            deviceID, &runningAddress, 0, nil, &size, &running
+        ) == noErr else {
+            return false
+        }
+        return running != 0
+        #else
+        return false
+        #endif
+    }
+}
 
 struct RecordingOptions: Sendable {
     let mode: CaptureMode
@@ -82,6 +121,9 @@ final class RecordingSegments {
         try segment.handle.close()
         var clip = segment.clip
         if suppressWake { clip.wake = false }
+        if clip.mode == .ambient && clip.mediaPlaying != true && DeviceAudioPlayback.isPlaying {
+            clip.mediaPlaying = true
+        }
         if try SegmentAudio.recover(clip: clip, in: spool) {
             clipReady()
         } else {
@@ -98,7 +140,8 @@ final class RecordingSegments {
         let timestamp = started.addingTimeInterval(Double(framesWritten) / sampleRate)
         let clip = Clip(id: nexID(), started: timestamp, mode: options.mode, wake: options.wake,
                         language: options.language, sampleRate: sampleRate, timeZone: NexDate.timeZone,
-                        openingChimed: options.openingChimed ? true : nil)
+                        openingChimed: options.openingChimed ? true : nil,
+                        mediaPlaying: options.mode == .ambient && DeviceAudioPlayback.isPlaying ? true : nil)
         try spool.save(clip)
         let raw = spool.pcm(clip.id)
         let created = spool.fm.createFile(atPath: raw.path, contents: nil, attributes: [.posixPermissions: 0o600])

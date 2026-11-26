@@ -7,7 +7,7 @@ from threading import Lock
 import numpy as np
 import sherpa_onnx
 
-from . import INPUT_RATE, PLAYBACK_LABELS
+from . import INPUT_RATE, PLAYBACK_LABELS, VOICE_LABELS
 
 LOG = logging.getLogger(__name__)
 ASSETS = ("model.int8.onnx", "class_labels_indices.csv", "segmentation.onnx", "speaker.onnx")
@@ -104,6 +104,10 @@ class RoomContext:
         return self.tagger.compute(stream)
 
     def sound_labels(self, pcm):
+        labels, _, _, _ = self.clip_audio(pcm, diarize=False)
+        return labels
+
+    def clip_audio(self, pcm, *, diarize=True):
         samples = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768
         scores = {}
         window = 10 * INPUT_RATE
@@ -113,4 +117,29 @@ class RoomContext:
             for event in events:
                 if event.prob >= 0.2:
                     scores[event.name] = max(scores.get(event.name, 0), event.prob)
-        return sorted(scores, key=scores.get, reverse=True)[:8]
+        labels = sorted(scores, key=scores.get, reverse=True)[:8]
+        if not diarize or not VOICE_LABELS.intersection(labels) or len(samples) < INPUT_RATE:
+            return labels, None, samples, ()
+        with self.lock:
+            segments = list(self.speakers.process(samples).sort_by_start_time())
+        durations = defaultdict(float)
+        for segment in segments:
+            durations[segment.speaker] += max(0.0, segment.end - segment.start)
+        active = {speaker for speaker, duration in durations.items() if duration >= 0.5}
+        if not active:
+            active = {speaker for speaker, duration in durations.items() if duration >= 0.35}
+        turns, previous = 0, None
+        for segment in segments:
+            if segment.speaker not in active or segment.end - segment.start < 0.35:
+                continue
+            if previous is not None and segment.speaker != previous:
+                turns += 1
+            previous = segment.speaker
+        total_speech = sum(durations[speaker] for speaker in active)
+        clip_seconds = max(len(samples) / INPUT_RATE, 0.001)
+        profile = {
+            "speaker_count": len(active),
+            "speaker_turns": turns,
+            "speech_ratio": round(min(1.0, total_speech / clip_seconds), 2),
+        }
+        return labels, profile, samples, segments

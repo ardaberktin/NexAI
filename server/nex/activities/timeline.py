@@ -9,13 +9,14 @@ from .recognition import TITLES
 from .schema import interval
 
 BASIS_NAMES = {"sound": "Room audio", "speech": "Recorded speech", "screen": "Shared Mac screen",
-               "voice": "Nex voice session"}
+               "device": "Device playback", "voice": "Nex voice session"}
 
 
 def confidence(category, basis):
     if category == "unknown":
         return "Unclear"
-    return {"sound": "Possible", "speech": "Likely", "screen": "Visible on Mac", "voice": "Observed"}[basis]
+    return {"sound": "Possible", "speech": "Likely", "screen": "Visible on Mac",
+            "device": "Likely", "voice": "Observed"}[basis]
 
 
 def public_clip(row, start, end):

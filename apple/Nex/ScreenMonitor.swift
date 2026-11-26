@@ -59,10 +59,11 @@ final class ScreenMonitor {
 
     private func inspect(_ frames: ScreenFrames) async {
         timeline.prune(asOf: .now)
+        let now = Date.now
         let needsCaption = latestDescription == nil && caption == nil && !answering
-            && Date.now.timeIntervalSince(lastCaption) >= 60
+            && now.timeIntervalSince(lastCaption) >= 35
         guard let frame = await frames.snapshot(after: needsCaption ? nil : lastRevision) else {
-            if let latestDescription, Date.now.timeIntervalSince(lastReport) >= 45,
+            if let latestDescription, now.timeIntervalSince(lastReport) >= 45,
                await frames.hasVisibleFrame(revision: lastRevision), !Task.isCancelled {
                 report(latestDescription, at: .now)
             }
@@ -71,9 +72,9 @@ final class ScreenMonitor {
         guard !Task.isCancelled else { return }
         lastRevision = frame.revision
         guard let reading = await ScreenReader.read(frame.jpeg), !Task.isCancelled else { return }
-        if timeline.record(reading, at: frame.time) != nil {
+        let changed = timeline.record(reading, at: frame.time) != nil
+        if changed {
             observed(frame.time)
-            latestDescription = nil
         } else if let latestDescription {
             if frame.time.timeIntervalSince(lastReport) >= 45 {
                 report(latestDescription, at: frame.time)
@@ -81,8 +82,11 @@ final class ScreenMonitor {
             return
         }
 
+        if let latestDescription, frame.time.timeIntervalSince(lastReport) >= 45 {
+            report(latestDescription, at: frame.time)
+        }
         guard let id = timeline.entries.last?.id, !answering, caption == nil,
-              Date.now.timeIntervalSince(lastCaption) >= 60 else { return }
+              Date.now.timeIntervalSince(lastCaption) >= 35 else { return }
         lastCaption = .now
         caption = Task(priority: .utility) { [weak self] in
             guard let self else { return }
@@ -91,11 +95,7 @@ final class ScreenMonitor {
                   !Task.isCancelled else { return }
             let summary = String(description.prefix(360))
             self.timeline.annotate(id, with: summary)
-            if self.timeline.entries.last?.id == id {
-                self.report(summary, at: frame.time)
-            } else {
-                self.activity?(summary, frame.time)
-            }
+            self.report(summary, at: frame.time)
         }
     }
 

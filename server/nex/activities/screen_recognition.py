@@ -21,7 +21,8 @@ First consider whether the screen shows active use or idle content. Active playb
 a paused or idle player is not. The audio may come from the active playback. A narration about doing an activity is not
 evidence the viewer is doing it. If the screen is idle, use the distinctive sound activity if one exists.
 When a platform is clearly in active use, choose the named category. YouTube videos and YouTube Shorts both use youtube.
-For an active console game use ps5 only with PlayStation 5 evidence. For generic TV playback use media, and use show
+Use livestream when a live stream or live broadcast (such as Twitch, Kick, or YouTube Live) is actively playing.
+For an active console game use ps5 only with PlayStation 5 evidence. For generic TV or video playback use media, and use show
 for an episode recap. Pick the supporting evidence key. Return a JSON object. Available categories: """ + ", ".join(
     f"{key} ({TITLES[key]})" for key in CLASSIFIER_CATEGORIES
 )

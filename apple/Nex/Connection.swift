@@ -332,6 +332,7 @@ final class NexAPI {
             "X-Nex-Time-Zone": clip.timeZone ?? "UTC",
             "X-Nex-Live": clip.liveHandled == true ? "1" : "0"
         ]
+        if clip.mediaPlaying == true { headers["X-Nex-Media-Playing"] = "1" }
         if fromWatch { headers["X-Nex-Watch-Conversation"] = clip.watchConversation }
         let bytes = try await bytes(path + clip.id, method: "PUT", body: data, headers: headers, timeout: 25)
         return try decoder.decode(Recording.self, from: bytes)

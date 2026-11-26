@@ -138,6 +138,7 @@
 		7EF000000000000000002702 /* ScreenReading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002701; };
 		7EF000000000000000002802 /* ScreenVisionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002801; };
 		7EF000000000000000002902 /* ScreenMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000002901; };
+		7EF400000000000000000702 /* MacActivityContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF400000000000000000701; };
 		7EF000000000000000003002 /* AmbientSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003001; };
 		7EF000000000000000003003 /* AmbientSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003001; };
 		7EF000000000000000003102 /* AutomaticVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF000000000000000003101; };
@@ -423,6 +424,7 @@
 		7EF000000000000000002701 /* ScreenReading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenReading.swift; sourceTree = "<group>"; };
 		7EF000000000000000002801 /* ScreenVisionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenVisionPrompt.swift; sourceTree = "<group>"; };
 		7EF000000000000000002901 /* ScreenMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMonitor.swift; sourceTree = "<group>"; };
+		7EF400000000000000000701 /* MacActivityContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacActivityContext.swift; sourceTree = "<group>"; };
 		7EF000000000000000003001 /* AmbientSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientSpeech.swift; sourceTree = "<group>"; };
 		7EF000000000000000003101 /* AutomaticVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomaticVoice.swift; sourceTree = "<group>"; };
 		7EFA00000000000000003101 /* ContinuousVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousVoice.swift; sourceTree = "<group>"; };
@@ -678,6 +680,7 @@
 				7EF300000000000000000301 /* MacGemmaSettings.swift */,
 				7EF300000000000000000401 /* ScreenVisionInference.swift */,
 				7EF000000000000000002901 /* ScreenMonitor.swift */,
+				7EF400000000000000000701 /* MacActivityContext.swift */,
 				7EF000000000000000002801 /* ScreenVisionPrompt.swift */,
 				7EF000000000000000002701 /* ScreenReading.swift */,
 				7EF000000000000000002601 /* ScreenActivity.swift */,
@@ -1164,6 +1167,7 @@
 				7EF300000000000000000302 /* MacGemmaSettings.swift in Sources */,
 				7EF300000000000000000402 /* ScreenVisionInference.swift in Sources */,
 				7EF000000000000000002902 /* ScreenMonitor.swift in Sources */,
+				7EF400000000000000000702 /* MacActivityContext.swift in Sources */,
 				7EF000000000000000002802 /* ScreenVisionPrompt.swift in Sources */,
 				7EF000000000000000002702 /* ScreenReading.swift in Sources */,
 				7EF000000000000000002602 /* ScreenActivity.swift in Sources */,

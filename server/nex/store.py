@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from functools import cached_property
 from pathlib import Path
 
-from .activities.schema import attach_screen
+from .activities.schema import attach_device_context, attach_screen
 from .activities.schema import initialize as initialize_activities
 from .audio_archive import AudioArchive
 from .daybook_schedule import schedule_recordings
@@ -218,7 +218,7 @@ class Store:
         return self.archive.path(identifier)
 
     def save_recording(self, identifier, device, started, duration, mode, wake, language, audio, zone="UTC", *,
-                       live_handled=False, watch_conversation=None):
+                       live_handled=False, watch_conversation=None, media_playing=False):
         sha = hashlib.sha256(audio).hexdigest()
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -242,6 +242,7 @@ class Store:
             )
             row = db.execute("SELECT * FROM recordings WHERE id=?", (identifier,)).fetchone()
             attach_screen(db, row)
+            attach_device_context(db, row, media_playing=bool(media_playing))
             return self.public_recording(row), True
 
     @staticmethod

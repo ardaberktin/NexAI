@@ -8,6 +8,7 @@ from .recall import FRESH, current_question, recent_periods
 
 PHRASES = {
     "ps5": "playing on a PS5", "media": "watching or listening to media",
+    "livestream": "watching a livestream",
     "conversation": "having a conversation", "housework": "doing housework",
 }
 
@@ -37,6 +38,8 @@ def describe(period):
     phrase = PHRASES.get(category, title[:1].lower() + title[1:])
     if basis == "Shared Mac screen":
         return f"Your shared Mac screen suggests you’re {phrase}."
+    if basis == "Device playback":
+        return f"Active playback on your device suggests you’re {phrase}."
     if basis == "Recorded speech":
         detail = period["detail"]
         if category in BRANDS and interface_quote(category, detail):

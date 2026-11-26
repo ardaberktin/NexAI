@@ -2,24 +2,33 @@
 
 import json
 
-from ..live import PLAYBACK_LABELS
+from ..live import MEDIA_CUE_LABELS, PLAYBACK_LABELS
 from ..model_context import constrained_messages
 from ..personal_files import safe_line
 from .playback_continuity import playback_continuity
-from .recognition import Observation, heard, read_object
+from .recognition import Observation, device_playback_detail, heard, read_object
 
 ORIGINS = {"uncertain_speech": "speech", "recorded_playback": "media", "room_conversation": "conversation"}
 
 INSTRUCTION = """Identify where the current audible voices came from. Use captured facts, not guesses.
 The measured playback fields summarize acoustic model detections of devices such as radio or television.
+If device_playback reports that media audio is actively playing on the device, choose recorded_playback unless words
+clearly show a live call or people directly conversing in the room.
 If playback was detected in the current clip and explains the voices, choose recorded_playback.
 If playback was detected a few seconds earlier and voices continue, choose recorded_playback unless the current
-evidence shows a new activity or that playback stopped. A video host addressing viewers also indicates recorded playback.
-Conversation from the room requires evidence of people directly exchanging turns in the current clip.
-Use uncertain_speech for ordinary speech with no established source, and no_voices when there is no voice cue.
+evidence shows a new activity or that playback stopped.
+media_cues lists media-correlated room sounds (such as narration, background music, game music, applause, or laughter).
+audio_profile summarizes speaker diarization and whether the enrolled owner's voice was heard. When owner_speaking is
+false and speech is continuous or single-speaker, prefer recorded_playback (if playback/media/host cues exist) or
+uncertain_speech rather than room_conversation.
+A video host, streamer addressing chat or viewers, or broadcast commentary indicates recorded_playback even when reading
+questions aloud and answering them.
+Conversation from the room requires clear evidence in words of people directly exchanging turns in the current clip.
+An acoustic "Conversation" tag alone never establishes room_conversation.
+Use uncertain_speech for ordinary or ambiguous speech with no established source, and no_voices when there is no voice cue.
 Cite the evidence supporting the decision. Current recorded words and current measured sounds can resolve earlier clues.
-For recorded playback using a measurement, cite current_playback or earlier_playback.
-Do not cite a playback field that has no measured cue. Return the origin and one evidence field."""
+For recorded playback using a measurement, cite device_playback, current_playback, earlier_playback, or media_cues.
+Do not cite a field that has no measured cue. Return the origin and one evidence field."""
 
 EXAMPLES = (
     ({"current_sounds": ["Speech"], "current_playback": [], "earlier_playback": [], "words": "The notebook is over there."},
@@ -28,8 +37,15 @@ EXAMPLES = (
      "recorded_playback", "current_playback"),
     ({"current_sounds": ["Speech"], "current_playback": [], "earlier_playback": [{"seconds_before": 4, "labels": ["Radio"]}]},
      "recorded_playback", "earlier_playback"),
+    ({"current_sounds": ["Speech", "Conversation"], "current_playback": [], "earlier_playback": [],
+      "device_playback": {"media_playing": True, "app": "Google Chrome"},
+      "words": "Wait did you see that play? Yeah that was wild."}, "recorded_playback", "device_playback"),
     ({"current_sounds": ["Speech"], "current_playback": [], "earlier_playback": [],
       "words": "In today's video we'll look at five quick ways to reuse old containers. Subscribe for the next episode."},
+     "recorded_playback", "words"),
+    ({"current_sounds": ["Speech", "Conversation"], "current_playback": [], "earlier_playback": [],
+      "audio_profile": {"speaker_count": 1, "speaker_turns": 0, "speech_ratio": 0.88, "owner_speaking": False},
+      "words": "Chat someone just asked why I picked that build, and honestly it feels faster on this patch."},
      "recorded_playback", "words"),
     ({"current_sounds": ["Speech", "Conversation"], "current_playback": [],
       "earlier_playback": [{"seconds_before": 6, "labels": ["Radio"]}],
@@ -37,7 +53,7 @@ EXAMPLES = (
 )
 
 
-def source_evidence(transcript, sounds, nearby):
+def source_evidence(transcript, sounds, nearby, *, audio_context=None, device_context=None):
     earlier = []
     for clip in nearby:
         labels = [label for label in clip["labels"] if label in PLAYBACK_LABELS]
@@ -46,6 +62,13 @@ def source_evidence(transcript, sounds, nearby):
     current = sounds or []
     evidence = {"current_sounds": current, "current_playback": [label for label in current if label in PLAYBACK_LABELS],
                 "earlier_playback": earlier}
+    media_cues = [label for label in current if label in MEDIA_CUE_LABELS]
+    if media_cues:
+        evidence["media_cues"] = media_cues
+    if audio_context:
+        evidence["audio_profile"] = audio_context
+    if device_context and device_context.get("media_playing"):
+        evidence["device_playback"] = device_context
     if transcript:
         evidence["words"] = transcript
     return evidence
@@ -82,6 +105,15 @@ def source_observation(raw, evidence, fallback):
         return fallback
     if category == "media" and reference == "current_sounds":
         return None
+    if reference == "device_playback":
+        if category == "media":
+            return Observation("media", "device", device_playback_detail(selected))
+        return None
+    if reference == "audio_profile":
+        if category == "speech":
+            detail = heard(evidence["current_sounds"][:3]) if evidence["current_sounds"] else "Speech was captured."
+            return Observation("speech", "sound", detail)
+        return None
     if reference == "words":
         detail = safe_line(selected, 240)
         return Observation(category, "speech", detail) if detail else None
@@ -89,6 +121,8 @@ def source_observation(raw, evidence, fallback):
         if not (evidence["current_sounds"] or evidence.get("words")):
             return fallback
         return earlier_playback_observation(evidence) if category == "media" else None
+    if reference == "media_cues":
+        return Observation(category, "sound", heard(selected[:3])) if category == "media" else None
     return Observation(category, "sound", heard(selected[:3]))
 
 
@@ -100,7 +134,8 @@ def earlier_playback_observation(evidence):
 
 
 async def review_voice_origin(dialogue, evidence, fallback):
-    if evidence["earlier_playback"] and not evidence["current_playback"] and evidence.get("words"):
+    if (evidence["earlier_playback"] and not evidence["current_playback"]
+            and not evidence.get("device_playback") and evidence.get("words")):
         continuity = await playback_continuity(dialogue, evidence)
         if continuity == "continues":
             return earlier_playback_observation(evidence)

@@ -9,8 +9,8 @@ from .brand_cues import BRANDS, identifies_brand
 
 TITLES = {
     "ps5": "Playing PS5", "gaming": "Playing a game", "movie": "Watching a movie",
-    "show": "Watching a show", "media": "Media playback", "short_video": "Watching short videos",
-    "youtube": "Watching YouTube",
+    "show": "Watching a show", "livestream": "Watching a livestream", "media": "Media playback",
+    "short_video": "Watching short videos", "youtube": "Watching YouTube",
     "tiktok": "Using TikTok", "instagram": "Using Instagram", "phone": "Using a phone",
     "call": "On a call", "computer": "Using a computer", "music": "Listening to music",
     "conversation": "Conversation", "speech": "Speech nearby", "nex": "Talking with Nex",
@@ -20,7 +20,9 @@ TITLES = {
 
 CLASSIFIER_CATEGORIES = tuple(key for key in TITLES if key != "nex")
 SOUND_CATEGORIES = ("unknown", *(key for key in CLASSIFIER_CATEGORIES
-                                 if key not in BRANDS and key not in ("movie", "show", "unknown")))
+                                 if key not in BRANDS
+                                 and key not in ("movie", "show", "livestream", "conversation", "unknown")))
+DEVICE_CATEGORIES = ("unknown", "media", "music", "livestream", "youtube", "gaming", "computer")
 
 SOUND_INSTRUCTION = """Infer the broad activity suggested by these sound detections from a microphone.
 Use the most distinctive sound. Some labels can refer to the same event.
@@ -84,7 +86,10 @@ an activity or an audible interface in use can establish current activity. Use t
 the cited evidence shows actual use and names the platform. If the only evidence is a promotion, a suggestion
 to use a platform later, or a reference in unrelated dialogue, classify what is actually audible instead.
 When playback is evident, a tutorial or dialogue describes media content rather than what the viewer is doing.
-Generic TV or video playback supports media. An episode introduction or recap can establish show.
+A livestreamer, video host, podcast, or broadcast commentary is media or livestream rather than a room conversation.
+Use conversation only when people in the room are directly exchanging turns; generic speech or an audio tag alone is not enough.
+Generic TV or video playback supports media. A live broadcast or streamer addressing chat supports livestream.
+An episode introduction or recap can establish show.
 Use a broad activity when there is a distinctive cue, including sound detections. Choose unknown when evidence
 does not support a category. An idle or unrelated shared screen provides weak evidence.
 Return only JSON with category and quote. Give a short exact quote from the applicable evidence, or one exact
@@ -94,6 +99,47 @@ sound label for a general activity. Use an empty quote for unknown. Categories: 
     return [{"role": "system", "content": instruction}, {"role": "user", "content": json.dumps(
         {"speech": transcript, "screen": screen, "sound_events": sounds}, ensure_ascii=False,
     )}]
+
+
+def device_playback_detail(device_context):
+    app = safe_line(device_context.get("app"), 120) if isinstance(device_context, dict) else ""
+    device = device_context.get("device") if isinstance(device_context, dict) else None
+    location = "Mac" if device == "mac" else "this device"
+    if app:
+        return f"Media audio was playing on {location} ({app})."
+    return f"Media audio was playing on {location}."
+
+
+def device_playback_messages(device_context):
+    instruction = """Classify the current activity from active device media playback metadata.
+Audio playback is actively running on the device. Use music only for dedicated music apps (such as Music or Spotify),
+gaming only for game apps, youtube only when the app name explicitly identifies YouTube, livestream only when the app
+explicitly identifies a livestream app, and media for browsers, video players, or unspecified active playback.
+Return JSON with category from: """ + ", ".join(f"{key} ({TITLES[key]})" for key in DEVICE_CATEGORIES)
+    messages = [
+        {"role": "system", "content": instruction},
+        {"role": "user", "content": json.dumps({"device_playback": device_context}, ensure_ascii=False)},
+    ]
+    schema = {
+        "type": "object",
+        "properties": {"category": {"enum": list(DEVICE_CATEGORIES)}},
+        "required": ["category"],
+        "additionalProperties": False,
+    }
+    return constrained_messages(messages, schema)
+
+
+def interpret_device_playback(raw, device_context, fallback):
+    value = read_object(raw)
+    if value is None or not isinstance(value.get("category"), str):
+        return None
+    category = value["category"]
+    if category not in DEVICE_CATEGORIES or category == "unknown":
+        return fallback
+    app = safe_line(device_context.get("app"), 120) if isinstance(device_context, dict) else ""
+    if category in BRANDS and not identifies_brand(category, app):
+        return Observation("media", "device", device_playback_detail(device_context))
+    return Observation(category, "device", device_playback_detail(device_context))
 
 
 def sound_observation(category, value, sounds, fallback):

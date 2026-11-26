@@ -4,17 +4,20 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from ..daybook_schedule import schedule_recordings
+from ..live import PLAYBACK_LABELS
 from ..recall_dates import time_key
 from ..workspace_features import enabled, revision
 from .recognition import from_sounds
-from .schema import SCREEN_FRESHNESS, attach_screen, interval
+from .schema import DEVICE_FRESHNESS, SCREEN_FRESHNESS, attach_device_context, attach_screen, interval
 
 SCREEN_RETENTION = timedelta(minutes=20)
 SOUND_CONTEXT_WINDOW = timedelta(seconds=45)
 
 
 def expire_samples(db, anchor):
-    db.execute("DELETE FROM activity_screen_samples WHERE observed<?", (time_key(anchor - SCREEN_RETENTION),))
+    cutoff = time_key(anchor - SCREEN_RETENTION)
+    db.execute("DELETE FROM activity_screen_samples WHERE observed<?", (cutoff,))
+    db.execute("DELETE FROM activity_device_samples WHERE observed<?", (cutoff,))
 
 
 def record_screen(store, observed, summary):
@@ -34,6 +37,28 @@ def record_screen(store, observed, summary):
             attach_screen(db, row)
 
 
+def record_device_context(store, device, observed, app, media_playing):
+    anchor = datetime.now(UTC)
+    if not anchor - SCREEN_RETENTION < observed <= anchor + timedelta(minutes=2):
+        return
+    payload = None
+    if media_playing or app:
+        payload = json.dumps({"media_playing": bool(media_playing), **({"app": app} if app else {})},
+                             ensure_ascii=False)
+    with store.connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        if not enabled(db, "activities"):
+            return
+        expire_samples(db, anchor)
+        db.execute("INSERT OR REPLACE INTO activity_device_samples VALUES(?,?,?)",
+                   (device, time_key(observed), payload))
+        rows = db.execute("SELECT id,device,started,duration FROM recordings WHERE started>=? AND started<=?",
+                          (time_key(observed - timedelta(seconds=65)), time_key(observed + DEVICE_FRESHNESS)))
+        for row in rows:
+            if row["device"] == device or device == "mac":
+                attach_device_context(db, row)
+
+
 class ActivityJobs:
     def __init__(self, store):
         self.store = store
@@ -42,7 +67,8 @@ class ActivityJobs:
         condition = "a.sound_due<=? AND r.audio_state='available'" if audio else "a.due<=?"
         if wait_for_sounds:
             condition += (" AND (a.sounds IS NOT NULL OR r.audio_state!='available'"
-                          " OR a.screen IS NOT NULL OR COALESCE(r.transcript,'')!='')")
+                          " OR a.screen IS NOT NULL OR a.device_context IS NOT NULL"
+                          " OR COALESCE(r.transcript,'')!='')")
         with self.store.connect() as db:
             feature_revision = revision(db, "activities")
             if feature_revision is None:
@@ -74,23 +100,38 @@ class ActivityJobs:
                                 "labels": json.loads(row["sounds"])})
             return context
 
-    def save_sounds(self, job, sounds):
+    def save_sounds(self, job, sounds, *, audio_context=None):
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             if revision(db, "activities") != job["feature_revision"]:
                 return
             latest = db.execute(
-                """SELECT a.*,r.duration,r.time_zone,r.mode,r.transcript FROM activity_clips a
+                """SELECT a.*,r.device,r.duration,r.time_zone,r.mode,r.transcript FROM activity_clips a
                    JOIN recordings r ON r.id=a.recording_id WHERE recording_id=?""", (job["recording_id"],),
             ).fetchone()
             if latest is None:
                 return
-            db.execute("UPDATE activity_clips SET sounds=?,sound_due=NULL,version=version+1 WHERE recording_id=?",
-                       (json.dumps(sounds), job["recording_id"]))
+            profile = json.dumps(audio_context, ensure_ascii=False) if audio_context else None
+            db.execute(
+                "UPDATE activity_clips SET sounds=?,audio_context=?,sound_due=NULL,version=version+1 WHERE recording_id=?",
+                (json.dumps(sounds), profile, job["recording_id"]),
+            )
             if latest["category"] is None:
                 self.write(db, latest, from_sounds(sounds, latest["mode"], latest["transcript"]), None)
-            if sounds or latest["transcript"] or latest["screen"]:
+            if sounds or latest["transcript"] or latest["screen"] or latest["device_context"]:
                 db.execute("UPDATE activity_clips SET due='' WHERE recording_id=?", (job["recording_id"],))
+            if PLAYBACK_LABELS.intersection(sounds or ()):
+                _, end = interval(latest)
+                db.execute(
+                    """UPDATE activity_clips SET due='',version=version+1
+                       WHERE recording_id IN (
+                           SELECT a.recording_id FROM activity_clips a
+                           JOIN recordings r ON r.id=a.recording_id
+                           WHERE r.device=? AND r.started>? AND r.started<=?
+                             AND (a.category IS NULL OR a.category IN ('unknown','speech','conversation'))
+                       )""",
+                    (latest["device"], latest["started"], time_key(end + SOUND_CONTEXT_WINDOW)),
+                )
 
     def defer_audio(self, job, due):
         with self.store.connect() as db:

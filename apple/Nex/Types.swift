@@ -59,6 +59,7 @@ struct Clip: Codable, Identifiable, Sendable {
     var liveHandled: Bool?
     var openingChimed: Bool?
     var watchConversation: String?
+    var mediaPlaying: Bool? = nil
 }
 
 struct Gap: Codable, Identifiable {

@@ -15,7 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 from .accounts.credentials import Credentials
 from .accounts.http import AccountError
 from .activities.current import current_snapshot
-from .activities.jobs import record_screen
+from .activities.jobs import record_device_context, record_screen
 from .activities.recall import activity_evidence, activity_question
 from .activities.timeline import timeline
 from .audio_files import open_audio
@@ -71,6 +71,7 @@ def recorder_operation(method, path):
                           ("GET", "/v1/workspace/clock-alerts"),
                           ("PUT", "/v1/workspace/clock-alerts"),
                           ("PUT", "/v1/workspace/iphone-recording"), ("PUT", "/v1/workspace/recording-status"),
+                          ("PUT", "/v1/context/device"),
                           ("POST", "/v1/speech"),
                           ("PUT", "/v1/workspace/weather-location/fix"),
                           ("PUT", "/v1/workspace/weather-location/clear")}:
@@ -334,7 +335,7 @@ class API(BaseHTTPRequestHandler):
         if (method, path) == ("POST", "/v1/web/read"):
             self.web_read()
             return
-        if path in {"/v1/context", "/v1/context/screen"}:
+        if path in {"/v1/context", "/v1/context/screen", "/v1/context/device"}:
             self.context_request(method, path, device, query)
             return
         if path in {"/v1/accounts/setup", "/v1/accounts/start", "/v1/accounts/finish", "/v1/accounts/disconnect",
@@ -520,6 +521,21 @@ class API(BaseHTTPRequestHandler):
             files.signal("Mac screen", summary or "Screen sharing is paused or stopped.", observed)
             record_screen(self.app.store, observed, safe_line(summary, 360) or None)
             self.send({"ok": True})
+        elif path == "/v1/context/device" and method == "PUT":
+            if device not in {"mac", "iphone"}:
+                raise Problem(403, "Only a signed-in Mac or iPhone can report device activity.")
+            body = self.object(2_000)
+            observed = datetime.fromisoformat(timestamp(body.get("observed")))
+            app = body.get("app")
+            if app is not None and (not isinstance(app, str) or len(app) > 120):
+                raise ValueError("Use a short application name.")
+            media_playing = body.get("media_playing")
+            if media_playing is not None and type(media_playing) is not bool:
+                raise ValueError("media_playing must be a boolean.")
+            record_device_context(
+                self.app.store, device, observed, safe_line(app, 120) or None, bool(media_playing),
+            )
+            self.send({"ok": True})
         else:
             raise Problem(405, "Use GET or PUT for personal context.")
 
@@ -619,6 +635,7 @@ class API(BaseHTTPRequestHandler):
         zone = time_zone(self.headers.get("X-Nex-Time-Zone", "UTC")).key
         wake = self.headers.get("X-Nex-Wake") == "1"
         live_handled = self.headers.get("X-Nex-Live") == "1" and mode == "voice"
+        media_playing = self.headers.get("X-Nex-Media-Playing") == "1"
         conversation = self.headers.get("X-Nex-Watch-Conversation")
         if conversation is not None and (device != "watch" or mode != "voice" or live_handled
                                          or not re.fullmatch(UUID, conversation)):
@@ -632,7 +649,7 @@ class API(BaseHTTPRequestHandler):
             raise ValueError("The recording is missing its MPEG-4 header.")
         row, fresh = self.app.store.save_recording(
             identifier, device, start, duration, mode, wake, language, data, zone=zone, live_handled=live_handled,
-            watch_conversation=conversation,
+            watch_conversation=conversation, media_playing=media_playing,
         )
         self.app.worker.wake.set()
         self.send(recorder_receipt(row), 201 if fresh else 200)

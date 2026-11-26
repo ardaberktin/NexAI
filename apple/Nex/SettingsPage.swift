@@ -19,6 +19,17 @@ struct SettingsPage: View {
             case .privacy:
                 AuthenticationSettings(autoLock: model.privacy.autoLock, lock: model.lockWorkspace)
                 ChatPrivacySettings(model: model, privacy: model.privacy)
+                #if os(macOS)
+                if model.serverProfile != nil {
+                    Section {
+                        Toggle("Share active Mac app and playback status", isOn: $model.shareMacActivityContext)
+                    } header: {
+                        Text("Mac activity context")
+                    } footer: {
+                        Text("Shares your active app name and whether your Mac is playing audio so Nex can distinguish media from room conversation without screen sharing.")
+                    }
+                }
+                #endif
                 if model.serverProfile != nil {
                     WeatherSharingSettings(model: model, sharing: model.weatherSharing)
                 }

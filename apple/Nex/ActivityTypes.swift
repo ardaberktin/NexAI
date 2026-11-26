@@ -56,6 +56,8 @@ extension ActivityAppearance {
         case "ps5", "gaming": "gamecontroller.fill"
         case "movie": "film"
         case "show", "media": "tv"
+        case "livestream": "dot.radiowaves.left.and.right"
+        case "youtube": "play.rectangle.fill"
         case "short_video", "tiktok", "instagram": "play.rectangle.on.rectangle"
         case "phone": "iphone"
         case "call": "phone.fill"
@@ -73,8 +75,8 @@ extension ActivityAppearance {
 
     var tint: Color {
         switch category {
-        case "ps5", "gaming", "movie", "show", "media": .indigo
-        case "short_video", "tiktok", "instagram", "music": .pink
+        case "ps5", "gaming", "movie", "show", "livestream", "media": .indigo
+        case "youtube", "short_video", "tiktok", "instagram", "music": .pink
         case "conversation", "speech", "call", "nex": .blue
         case "unknown": .secondary
         default: .accentColor

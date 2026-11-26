@@ -16,7 +16,14 @@ from ..models import Engines, ModelError
 from ..recall_dates import time_key
 from ..settings import Settings
 from .jobs import ActivityJobs
-from .recognition import classifier_messages, from_sounds, interpret
+from .recognition import (
+    Observation,
+    classifier_messages,
+    device_playback_messages,
+    from_sounds,
+    interpret,
+    interpret_device_playback,
+)
 from .screen_recognition import classify_with_screen
 from .voice_origin import review_voice_origin, source_evidence
 
@@ -28,11 +35,11 @@ def retry_time():
 
 
 class ActivityWorker:
-    def __init__(self, store, runtime, room, dialogue, *, settings_root=None):
+    def __init__(self, store, runtime, room, dialogue, *, settings_root=None, voices=None):
         self.jobs = ActivityJobs(store)
         self.audio = AudioFiles(store.root / "audio")
         self.settings_root, self.runtime = settings_root or store.root, runtime
-        self.room, self.dialogue = room, dialogue
+        self.room, self.dialogue, self.voices = room, dialogue, voices
 
     def listen(self, job):
         # Read the archive service's current decoder configuration, including changes made since launch.
@@ -41,38 +48,61 @@ class ActivityWorker:
         with TemporaryDirectory(dir=self.runtime) as directory:
             path = decoder.decode(self.audio.path(job["recording_id"]), Path(directory), settings.read())
             with wave.open(str(path), "rb") as stream:
-                return self.room.sound_labels(stream.readframes(stream.getnframes()))
+                pcm = stream.readframes(stream.getnframes())
+        if hasattr(self.room, "clip_audio"):
+            sounds, profile, samples, segments = self.room.clip_audio(pcm)
+            if profile is not None and self.voices is not None and segments:
+                owner = self.voices.owner_present(samples, segments)
+                if owner is not None:
+                    profile["owner_speaking"] = owner
+            return sounds, profile
+        return self.room.sound_labels(pcm), None
 
     async def analyze(self, job, audio):
         if audio:
             try:
-                sounds = await asyncio.to_thread(self.listen, job)
+                sounds, audio_context = await asyncio.to_thread(self.listen, job)
             except (ModelError, OSError, wave.Error, RuntimeError, ValueError) as error:
                 await asyncio.to_thread(self.jobs.defer_audio, job, retry_time())
                 LOG.warning("Activity audio deferred (%s)", type(error).__name__)
             else:
-                await asyncio.to_thread(self.jobs.save_sounds, job, sounds)
+                await asyncio.to_thread(self.jobs.save_sounds, job, sounds, audio_context=audio_context)
             return
         sounds = json.loads(job["sounds"]) if job["sounds"] is not None else None
+        audio_context = json.loads(job["audio_context"]) if job["audio_context"] else None
+        device_context = json.loads(job["device_context"]) if job["device_context"] else None
         transcript, screen = (job["transcript"] or "")[:1500], job["screen"] or ""
         fallback = from_sounds(sounds, job["mode"], transcript)
-        result = await self.classify(transcript, screen, sounds, fallback)
-        result = await self.review_voices(job, result, transcript, sounds, fallback)
+        result = await self.classify(transcript, screen, sounds, fallback, device_context=device_context)
+        result = await self.review_voices(job, result, transcript, sounds, audio_context, device_context, fallback)
+        if (result is not None and result.category == "unknown"
+                and device_context and device_context.get("media_playing")):
+            device_result = await self.classify_device_playback(device_context, fallback)
+            if device_result is not None:
+                result = device_result
         await asyncio.to_thread(self.jobs.save, job, result or fallback, due=None if result else retry_time())
 
-    async def review_voices(self, job, result, transcript, sounds, fallback):
+    async def review_voices(self, job, result, transcript, sounds, audio_context, device_context, fallback):
         if (result is None or result.basis == "screen" or result.category not in ("unknown", "speech", "conversation")
                 or not (transcript or sounds)):
             return result
         if result.category == "unknown" and not (transcript or VOICE_LABELS.intersection(sounds or ())):
             return result
         nearby = await asyncio.to_thread(self.jobs.nearby_sounds, job)
-        evidence = source_evidence(transcript, sounds, nearby)
-        if result.category == "unknown" and not (transcript or evidence["current_playback"] or evidence["earlier_playback"]):
+        evidence = source_evidence(transcript, sounds, nearby,
+                                   audio_context=audio_context, device_context=device_context)
+        if (result.category == "unknown"
+                and not (transcript or evidence["current_playback"] or evidence["earlier_playback"]
+                         or evidence.get("device_playback"))):
             return result
-        return await review_voice_origin(self.dialogue, evidence, fallback) or result
+        reviewed = await review_voice_origin(self.dialogue, evidence, fallback)
+        if reviewed is not None:
+            return reviewed
+        if result.category == "conversation":
+            return Observation("speech", result.basis, result.detail) if transcript else fallback
+        return result
 
-    async def classify(self, transcript, screen, sounds, fallback):
+    async def classify(self, transcript, screen, sounds, fallback, *, device_context=None):
         if fallback.category == "nex":
             return fallback
         screen_result = fallback
@@ -81,12 +111,19 @@ class ActivityWorker:
             if screen_result is not None and screen_result.category != "unknown":
                 return screen_result
         if not (transcript or sounds):
+            if device_context and device_context.get("media_playing"):
+                return await self.classify_device_playback(device_context, fallback)
             return screen_result
 
         room = await self.classify_room(transcript, sounds, fallback)
         if screen_result is None and room is not None and room.category == "unknown":
             return None
         return room
+
+    async def classify_device_playback(self, device_context, fallback):
+        messages = device_playback_messages(device_context)
+        raw = await self.dialogue.background_text(messages, 48, temperature=0)
+        return interpret_device_playback(raw, device_context, fallback)
 
     async def classify_room(self, transcript, sounds, fallback):
         messages = classifier_messages(transcript, "", sounds)
