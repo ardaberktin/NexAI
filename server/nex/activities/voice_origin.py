@@ -17,8 +17,9 @@ Weigh all available evidence together:
 - recent_activities lists activities and sounds observed in immediately preceding clips on the same microphone
   (such as watching TV, playing PS5/games, movies, shows, YouTube, or livestreams). Dialogue scenes in ongoing
   media, TV, or game cutscenes are recorded_playback unless evidence shows it stopped or someone in the room started talking.
-- device_playback reports active media audio playing on a device. Compare its device with recording_device when present
-  before assuming the microphone is hearing that device rather than TV, a console, or the room.
+- device_playback reports active media audio playing on the user's device (including an active Mac while recording on
+  iPhone in the same room). When media_playing is true, audible voices and background sounds are very likely
+  recorded_playback unless words clearly show people in the room directly conversing.
 - audio_profile summarizes speaker diarization and whether the enrolled owner's voice was heard. When owner_speaking is
   false and speech is continuous or single-speaker, prefer recorded_playback (if playback, media, host, or recent media
   evidence exists) or uncertain_speech rather than room_conversation.
@@ -37,8 +38,8 @@ EXAMPLES = (
      "recorded_playback", "current_playback"),
     ({"current_sounds": ["Speech"], "current_playback": [], "earlier_playback": [{"seconds_before": 4, "labels": ["Radio"]}]},
      "recorded_playback", "earlier_playback"),
-    ({"current_sounds": ["Speech", "Conversation"], "current_playback": [], "earlier_playback": [],
-      "recording_device": "mac", "device_playback": {"media_playing": True, "app": "Google Chrome", "device": "mac"},
+    ({"current_sounds": ["Speech", "Conversation", "Vehicle"], "current_playback": [], "earlier_playback": [],
+      "recording_device": "iphone", "device_playback": {"media_playing": True, "app": "Browser", "device": "mac"},
       "words": "Wait did you see that play? Yeah that was wild."}, "recorded_playback", "device_playback"),
     ({"current_sounds": ["Speech"], "current_playback": [], "earlier_playback": [],
       "words": "In today's video we'll look at five quick ways to reuse old containers. Subscribe for the next episode."},
@@ -125,10 +126,9 @@ def source_observation(raw, evidence, fallback):
         prior_category = latest.get("category")
         prior_title = latest.get("title")
         current = heard(evidence["current_sounds"][:3]) if evidence["current_sounds"] else "Speech was captured."
-        if prior_category and prior_category not in ("unknown", "speech", "conversation", "nex"):
+        if prior_category and prior_category not in ("unknown", "speech", "conversation", "nex", "other"):
             detail = f"{current} Continued from recent {prior_title.lower()}." if prior_title else current
-            custom = prior_title if prior_category == "other" else None
-            return Observation(prior_category, "sound", detail, title=custom)
+            return Observation(prior_category, "sound", detail)
         return Observation("media", "sound", current)
     if reference == "words":
         detail = safe_line(selected, 240)

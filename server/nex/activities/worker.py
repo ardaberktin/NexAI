@@ -150,7 +150,8 @@ class ActivityWorker:
         )
         raw = await self.dialogue.background_text(messages, 110, temperature=0)
         result = interpret(raw, transcript, "", fallback, sounds, device_context=device_context, recent=recent)
-        if transcript and sounds and (result is None or result.category == "unknown"):
+        if (transcript and sounds and not (device_context and device_context.get("media_playing"))
+                and (result is None or result.category == "unknown")):
             messages = classifier_messages("", "", sounds)
             raw = await self.dialogue.background_text(messages, 110, temperature=0)
             sound = interpret(raw, "", "", fallback, sounds)

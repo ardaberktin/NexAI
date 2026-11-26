@@ -93,19 +93,26 @@ If the only evidence is a promotion, a suggestion to use a platform later, or a 
 classify what is actually happening instead.
 Weigh all available evidence together:
 - sound_events lists acoustic detections from the room microphone.
+- device_playback reports active media audio playback and foreground app on a device (for example, a browser or media
+  player on Mac or iPhone). When media_playing is true, sounds and speech in the clip—such as cars, engines, music,
+  narration, dialogue, game sounds, or topics mentioned in speech—are very likely coming from that playing media rather
+  than the user physically doing what the media depicts or talks about. Only override active device_playback when room
+  evidence directly shows a distinct physical activity by the user (such as typing on a keyboard, cooking, or an
+  in-room conversation) or a clearly different source (such as PlayStation 5 or TV).
 - audio_profile summarizes speaker diarization and whether the enrolled owner's voice was heard. When owner_speaking
   is false, speech is often from TV, a video, a livestream, a game cutscene, or nearby people rather than the user
   having a conversation.
-- device_playback reports active media audio playback and foreground app on a device. Compare its device against
-  recording_device (for example, Mac playback may not explain TV or PS5 audio captured by an iPhone in another room).
 - recent_activities lists observations from the immediately preceding clips on the same microphone so ongoing TV,
   PS5/gaming, movies, shows, YouTube videos, livestreams, or other activities do not falsely flip to conversation
   during dialogue scenes.
 - Use conversation only when evidence shows people in the room directly exchanging turns; an acoustic "Conversation"
   tag or media/game/stream dialogue alone is not enough.
 - Use tv for watching television, ps5 for PlayStation 5, gaming for video games, livestream for live broadcasts/streams,
-  youtube for YouTube, movie/show when supported, media for general playback, or other with a concise title (2-4 words)
-  if a clear activity does not fit the named categories. Choose unknown when evidence does not support an activity.
+  youtube for YouTube, movie/show when supported, or media for general video/audio playback.
+- Use other with a concise title (2-4 words) ONLY for a distinct physical activity the user is clearly doing (such as
+  playing an instrument or showering) that does not fit any named category. Never use other to summarize a topic being
+  discussed in speech or media (for example, talking about cars or a car wash is not a car wash activity).
+- Choose unknown when evidence does not support an activity.
 An idle or unrelated shared screen provides weak evidence.
 Return only JSON with category, quote, and (only when category is other) title. Give a short exact quote from speech
 or screen, an exact sound label from sound_events, or "device_playback" when citing active device playback.
@@ -236,7 +243,7 @@ def interpret(raw, transcript, screen, fallback, sounds=(), *, device_context=No
         return fallback
     recent_categories = {item.get("category") for item in (recent or ()) if isinstance(item, dict)}
     if (device_context and device_context.get("media_playing")
-            and quote.casefold() in {"device_playback", safe_line(device_context.get("app"), 120).casefold()}):
+            and quote.casefold() in {"device_playback", "media_playing", safe_line(device_context.get("app"), 120).casefold()}):
         app = safe_line(device_context.get("app"), 120)
         if category in BRANDS and not identifies_brand(category, app) and category not in recent_categories:
             return fallback
