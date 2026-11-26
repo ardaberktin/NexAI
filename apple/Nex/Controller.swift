@@ -9,6 +9,8 @@ final class Controller: ObservableObject {
     @Published private(set) var signOutError: String?
     @Published var status: ServerStatus?
     @Published private(set) var workspaceFeatures: WorkspaceFeatures?
+    @Published private(set) var chatPrivacy: ChatPrivacy?
+    @Published private(set) var savingChatPrivacy = false
     @Published private(set) var savingWorkspaceFeature = false
     @Published private(set) var statusUnavailable = false
     @Published var message: String?
@@ -90,6 +92,7 @@ final class Controller: ObservableObject {
     private var seenReplies: Set<String> = []
     private var lastStatus = Date.distantPast
     private var workspaceFeatureVersion = 0
+    private var chatPrivacyVersion = 0
     private var workspaceFeatureCacheKey: String?
     private var lastSpeechIssue = Date.distantPast
     private var lastSpeechLanguage: NexLanguage?
@@ -223,6 +226,8 @@ final class Controller: ObservableObject {
     private func resetConnectionStatus() {
         lastStatus = .distantPast
         status = nil
+        chatPrivacy = nil
+        savingChatPrivacy = false
         statusUnavailable = false
         connectSince = .now
         seenReplies.removeAll()
@@ -487,12 +492,18 @@ final class Controller: ObservableObject {
     func refreshStatus() async throws {
         guard let connection = api else { return }
         let featureVersion = workspaceFeatureVersion
+        let privacyVersion = chatPrivacyVersion
+        let opening = privacy.generation
         do {
             let remote: ServerStatus = try await connection.get("/v1/status")
             guard api === connection else { return }
             status = remote
             if featureVersion == workspaceFeatureVersion && !savingWorkspaceFeature {
                 applyWorkspaceFeatures(remote.workspaceFeatures)
+            }
+            if opening == privacy.generation && privacyVersion == chatPrivacyVersion &&
+                !savingChatPrivacy && remote.chatPrivacy != chatPrivacy {
+                chatPrivacy = remote.chatPrivacy
             }
             statusUnavailable = false
             lastStatus = .now
@@ -504,6 +515,25 @@ final class Controller: ObservableObject {
 
     func workspaceFeatureEnabled(_ feature: WorkspaceFeature) -> Bool {
         workspaceFeatures?[feature] ?? true
+    }
+
+    func setChatPrivacy(_ setting: ChatPrivacy.Setting, enabled: Bool) async throws {
+        guard !savingChatPrivacy else { return }
+        let connection = try connection()
+        let opening = privacy.generation
+        savingChatPrivacy = true
+        chatPrivacyVersion += 1
+        defer {
+            if api === connection {
+                savingChatPrivacy = false
+                chatPrivacyVersion += 1
+            }
+        }
+        struct Request: Encodable { let setting: String; let enabled: Bool }
+        let settings: ChatPrivacy = try await connection.send("/v1/workspace/chat-privacy", method: "PUT",
+                                                              body: Request(setting: setting.rawValue, enabled: enabled))
+        guard api === connection, privacy.generation == opening else { return }
+        chatPrivacy = settings
     }
 
     func setWorkspaceFeature(_ feature: WorkspaceFeature, enabled: Bool) async throws {

@@ -8,7 +8,8 @@ struct WatchChatView: View {
     var day: DaybookContext?
     @State private var draft = ""
     @State private var messages: [WorkspaceMessage] = []
-    @State private var clockExchanges: [PrivateAnswer] = []
+    @State private var privateExchanges: [PrivateAnswer] = []
+    @State private var chatPrivacy: ChatPrivacy?
     @State private var nextBefore: String?
     @State private var reply: Reply?
     @State private var failure: String?
@@ -50,7 +51,8 @@ struct WatchChatView: View {
                 draft = ""
                 reply = nil
                 messages = []
-                clockExchanges = []
+                privateExchanges = []
+                chatPrivacy = nil
             }
         }
     }
@@ -69,10 +71,15 @@ struct WatchChatView: View {
             if question != nil {
                 ProgressView("Waiting for Nex…")
             } else {
-                Button("Send", systemImage: "arrow.up.circle.fill") { send(privately: false) }
+                Button("Send", systemImage: "arrow.up.circle.fill") { send(.automatic) }
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Button("Ask privately", systemImage: "lock") { send(privately: true) }
+                if day == nil && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if chatPrivacy?[.enabled] != false {
+                        Button("Ask privately", systemImage: "lock") { send(.privateMessage) }
+                    }
+                    if chatPrivacy?.hasPrivateDefaults == true {
+                        Button("Send to Chat history", systemImage: "tray") { send(.standard) }
+                    }
                 }
             }
             if day == nil {
@@ -97,7 +104,7 @@ struct WatchChatView: View {
     }
 
     private var history: some View {
-        let timeline = WorkspaceMessage.timeline(messages, privateItems: clockExchanges)
+        let timeline = WorkspaceMessage.timeline(messages, privateItems: privateExchanges)
         return Section("Recent messages") {
             if timeline.isEmpty, loaded {
                 Text("No messages yet.").foregroundStyle(.secondary)
@@ -128,7 +135,12 @@ struct WatchChatView: View {
                     .modifier(WatchPrivateScreen())
                 } label: {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(message.role == .user ? "You" : message.title ?? "Nex").font(.caption).foregroundStyle(.secondary)
+                        Label {
+                            Text(message.role == .user ? "You" : message.title ?? "Nex")
+                        } icon: {
+                            if message.isPrivate { Image(systemName: "lock.fill").accessibilityLabel("Private") }
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
                         if let clock = message.privateRequest?.clockAlert {
                             ClockAlertCard(alert: clock)
                         } else {
@@ -158,7 +170,7 @@ struct WatchChatView: View {
         }
     }
 
-    private func send(privately: Bool) {
+    private func send(_ access: ChatAccess) {
         guard question == nil else { return }
         let text = draft
         failure = nil
@@ -166,7 +178,7 @@ struct WatchChatView: View {
         question = Task {
             defer { question = nil }
             do {
-                let answer = try await workspace.ask(text, day: day, privately: privately)
+                let answer = try await workspace.ask(text, day: day, access: access)
                 draft = ""
                 reply = answer
                 if day == nil { await load() }
@@ -193,14 +205,21 @@ struct WatchChatView: View {
                 messages = previous + page.items
             }
             if older { nextBefore = page.nextBefore }
-            if !older, let inbox: ListResponse<PrivateAnswer> = try? await workspace.get(WatchRequest(.inbox)),
-               !Task.isCancelled, workspace.features != nil {
-                clockExchanges = inbox.items.filter { $0.clockAlert != nil }
+            if !older {
+                await refreshPrivacy()
             }
             loaded = true
             if question == nil { failure = nil }
         } catch is CancellationError { }
         catch { if failure == nil { failure = error.localizedDescription } }
+    }
+
+    private func refreshPrivacy() async {
+        let inbox: ListResponse<PrivateAnswer>? = try? await workspace.get(WatchRequest(.inbox))
+        let settings: ChatPrivacy? = try? await workspace.get(WatchRequest(.chatPrivacy))
+        guard !Task.isCancelled, workspace.features != nil else { return }
+        if let inbox { privateExchanges = inbox.items }
+        if let settings { chatPrivacy = settings }
     }
 }
 

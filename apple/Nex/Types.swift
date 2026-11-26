@@ -181,6 +181,24 @@ struct WorkspaceFeatures: Codable, Equatable {
     subscript(feature: WorkspaceFeature) -> Bool { values[feature.rawValue] ?? true }
 }
 
+struct ChatPrivacy: Decodable, Equatable {
+    enum Setting: String, CaseIterable {
+        case enabled, general, web, python, weather
+    }
+
+    private let values: [String: Bool]
+
+    init(from decoder: Decoder) throws {
+        values = try decoder.singleValueContainer().decode([String: Bool].self)
+    }
+
+    subscript(setting: Setting) -> Bool { values[setting.rawValue] ?? (setting == .enabled) }
+
+    var hasPrivateDefaults: Bool {
+        self[.enabled] && Setting.allCases.contains { $0 != .enabled && self[$0] }
+    }
+}
+
 struct ServerStatus: Decodable {
     let recordings: [String: Int]
     let remainingBytes: Int
@@ -188,6 +206,7 @@ struct ServerStatus: Decodable {
     let connections: [String: String]?
     let accountWriteAccess: [String: Bool]?
     let workspaceFeatures: WorkspaceFeatures?
+    let chatPrivacy: ChatPrivacy?
 }
 
 struct DeviceClockReading: Codable, Sendable {

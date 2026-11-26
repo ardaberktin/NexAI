@@ -48,9 +48,18 @@ struct ChatComposer: View {
 
     private var options: some View {
         Menu {
-            Button("Ask privately", systemImage: "lock") {
-                Task { await chat.send(model, privately: true) }
-            }.disabled(!canSend)
+            if model.chatPrivacy?[.enabled] != false || chat.access != .automatic {
+                Picker("Message privacy", selection: $chat.access) {
+                    Label("Automatic", systemImage: "sparkle").tag(ChatAccess.automatic)
+                    if model.chatPrivacy?[.enabled] != false || chat.access == .privateMessage {
+                        Label("Private", systemImage: "lock").tag(ChatAccess.privateMessage)
+                    }
+                    if model.chatPrivacy?.hasPrivateDefaults == true || chat.access == .standard {
+                        Label("Chat history", systemImage: "tray").tag(ChatAccess.standard)
+                    }
+                }
+                .disabled(chat.sending || chat.replyingPrivately)
+            }
             Button("Search the web", systemImage: "globe") { submit(web: true) }
                 .disabled(!canSend || chat.replyingPrivately)
             if model.playing { Button("Stop playback", systemImage: "stop.fill", action: model.stopPlayback) }
@@ -77,15 +86,15 @@ struct ChatComposer: View {
 
     @ViewBuilder private var trailingButton: some View {
         if canSend {
-            Button(chat.replyingPrivately ? "Send privately" : "Send message",
-                   systemImage: chat.replyingPrivately ? "lock.fill" : "arrow.up") { submit() }
+            Button(chat.sendingPrivately ? "Send privately" : "Send message",
+                   systemImage: chat.sendingPrivately ? "lock.fill" : "arrow.up") { submit() }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.circle)
                 #if os(iOS)
             .controlSize(.large)
                 #else
-            .help(chat.replyingPrivately ? "Send privately (⌘Return)" : "Send message (⌘Return)")
+            .help(chat.sendingPrivately ? "Send privately (⌘Return)" : "Send message (⌘Return)")
                 #endif
                 .keyboardShortcut(.return, modifiers: .command)
         } else if !chat.sending {

@@ -9,6 +9,7 @@ private struct ChatQuestion: Encodable {
     let daybook_source: String?
     let daybook_focus: String?
     let access: String?
+    let private_reply: Bool?
     let device_clock: DeviceClockReading?
     let weather_location_supported = true
     var weather_location: WeatherLocationResult?
@@ -34,14 +35,15 @@ extension Controller {
     }
 
     func ask(_ question: String, id: String, context: DaybookContext? = nil, publishReply: Bool = true,
-             privately: Bool = false, languageOverride: NexLanguage? = nil,
+             access: ChatAccess = .automatic, languageOverride: NexLanguage? = nil,
              timeZoneOverride: String? = nil, clock: DeviceClockReading? = .current) async throws -> Reply {
         let api = try connection()
         let opening = privacy.generation
         var request = ChatQuestion(id: id, text: question, language: (languageOverride ?? language).rawValue,
                                    time_zone: context?.timeZone ?? timeZoneOverride ?? NexDate.timeZone,
                                    daybook_day: context?.day, daybook_source: context?.source,
-                                   daybook_focus: context?.focus, access: privately ? "private" : nil,
+                                   daybook_focus: context?.focus, access: access.requestValue,
+                                   private_reply: access == .privateReply ? true : nil,
                                    device_clock: clock)
         var answer: Reply = try await api.send("/v1/chat", body: request, timeout: 220)
         if answer.engine == "weather_location_request", context == nil {
@@ -52,6 +54,9 @@ extension Controller {
         }
         guard privacy.generation == opening else { throw CancellationError() }
         if let status = answer.statusMessage { throw NexError.api(503, status) }
+        if access.requiresPrivateReply && answer.engine != "private_request" {
+            throw NexError.api(409, "The server did not confirm private delivery.")
+        }
         if answer.engine == "private_request", privacy.connected {
             try? await privacy.refresh(self)
         }

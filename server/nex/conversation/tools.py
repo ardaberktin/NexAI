@@ -76,16 +76,19 @@ def web_result(store, turn, tool):
         pages = news_pages(day, zone, turn.started, query)
         items = [{"number": index, "title": page.title, "url": page.url, "excerpt": page.text}
                  for index, page in enumerate(pages, start=1)]
-        return Evidence(items, save_pages(store, pages), "web_lookup")
+        sources = [item["url"] for item in items] if turn.private_chat else save_pages(store, pages)
+        return Evidence(items, sources, "web_lookup")
     if not query or PRIVATE.search(query):
         raise WebReadError("This lookup needs a public topic without private details.")
     command = "Search the web for " + query
     target = web_request(command)
     if target.url and query not in turn.text:
         raise WebReadError("Please supply the public page address to open.")
-    items, sources, error = prepare_lookup(store, command)
+    items, sources, error = prepare_lookup(store, command, archive=not turn.private_chat)
     if error or not items or not any(item["excerpt"] for item in items):
         raise WebReadError(error or "The search returned no usable page excerpts.")
+    if turn.private_chat:
+        sources = [item["url"] for item in items]
     return Evidence([{**item, "excerpt": excerpt(item["excerpt"], 700)} for item in items], sources, "web_lookup")
 
 
