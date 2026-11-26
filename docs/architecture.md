@@ -34,6 +34,7 @@ The shared conversation code lives in `server/nex/conversation/`. `catalog.py` a
 - A self-service data reset revokes that account’s device sessions and records a pending reset in the account registry. The archive and live voice services restart to release their shared archive lock. The archive service takes the exclusive lock, erases the requesting account’s workspace, and rotates the local queue scope before accepting another sign-in. The account registry keeps the login and role.
 - The admin console is bound to server loopback. The archive’s private permissions and backup process apply to both the database and the audio store.
 - Speech, screen capture, location sharing, account access, and notifications have independent permissions. Detailed Mac screen observations stay on the Mac. Enabled integrations can transmit their permitted request data to external providers.
+- Each account can set default privacy for typed messages, web searches, calculations and code, and weather. Automatic Chat applies those defaults after Nex selects its tools. Per-message choices can change the default, and requests that require private access continue to use the private inbox. Private exchanges stay outside shared Chat history and its search index. Private web lookups keep their citations with the answer and send the permitted query to the web provider.
 
 MCP connections and discovered tool schemas live in the account's archive database. The shared assistant
 planner offers tools allowed by the account’s per-tool permissions. The server checks those permissions

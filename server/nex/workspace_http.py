@@ -10,6 +10,7 @@ from .goals import IDENTIFIER, Goals
 from .mcp.routes import ROOT as MCP_ROOT
 from .mcp.routes import request as mcp_request
 from .pdf.artifacts import content as pdf_content
+from .privacy import chat_settings
 from .push_queue import PushQueue
 from .workspace_chat_pages import chat_page, paged_chat_snapshot
 from .workspace_content import artifacts, chat_snapshot
@@ -37,6 +38,12 @@ def workspace_request(api, method, path, query, device, problem):
         if method == "PUT":
             data = api.object(256)
             return workspace_features.update(store, data.get("feature"), data.get("enabled"))
+    if path == "/v1/workspace/chat-privacy":
+        if method == "GET":
+            return chat_settings.settings(store.privacy)
+        if method == "PUT":
+            data = api.object(256)
+            return chat_settings.update(store.privacy, data.get("setting"), data.get("enabled"))
     if path == "/v1/workspace/clock-alerts" and method == "GET":
         if device not in ("mac", "iphone"):
             raise problem(403, "Sign in to receive alarms and timers.")

@@ -18,6 +18,7 @@ struct SettingsPage: View {
                 NexNotificationSettings(model: model)
             case .privacy:
                 AuthenticationSettings(autoLock: model.privacy.autoLock, lock: model.lockWorkspace)
+                ChatPrivacySettings(model: model, privacy: model.privacy)
                 if model.serverProfile != nil {
                     WeatherSharingSettings(model: model, sharing: model.weatherSharing)
                 }

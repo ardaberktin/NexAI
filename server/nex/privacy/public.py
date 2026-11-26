@@ -14,6 +14,7 @@ from ..conversation.sync import execute, generator, make_turn, select
 from ..live.weather_location import Coordinates
 from ..personal_learning import enqueue_context
 from ..store import now
+from . import chat_settings
 from .chat_recall import recall_chat
 from .keys import validate_session
 from .requests import queue, request_notice, resolve
@@ -65,6 +66,8 @@ def previous_private(store, turn, session, location, ask_location, lookup_only):
             validate_session(db, turn.device, session)
         row = db.execute("SELECT r.*,g.goal_id FROM requests r LEFT JOIN request_goals g ON r.id=g.request_id "
                          "WHERE r.id=?", (turn.id,)).fetchone()
+        if row is None and db.execute("SELECT 1 FROM private_chat_ids WHERE id=?", (turn.id,)).fetchone():
+            raise ValueError("This private exchange has expired or was dismissed.")
     if row is None:
         return None
     data = json.loads(row["payload"])
@@ -106,7 +109,7 @@ def save_public(store, turn, result, *, pending=False, learn=False):
                 enqueue_context(db, "q-" + turn.id, "dialogue", turn.text, now())
 
 
-def plan_chat(assistant, turn, saved, session, *, force, lookup_only):
+def plan_chat(assistant, turn, saved, session, *, force, defaults, lookup_only):
     store = assistant.store
     history = turn.history
     recall = partial(recall_chat, store, turn, session) if session and not lookup_only else None
@@ -119,19 +122,21 @@ def plan_chat(assistant, turn, saved, session, *, force, lookup_only):
     else:
         turn.history = with_goal_state(store, history)
         plan = select(assistant, turn, recall=recall)
-    private = needs_unlock(turn, plan, force)
+    private = not saved and (needs_unlock(turn, plan, force) or chat_settings.prefers_private(defaults, plan))
     # A private follow-up's context must never enter a public answer or public search terms.
     if history and history[-1].get("private") and not private:
         turn.history = ()
-        turn.recalled_chat = None
-        turn.resolved_language = None
-        plan = select(assistant, turn, recall=recall)
-        private = needs_unlock(turn, plan, force)
+        if not saved:
+            turn.recalled_chat = None
+            turn.resolved_language = None
+            plan = select(assistant, turn, recall=recall)
+            private = needs_unlock(turn, plan, force) or chat_settings.prefers_private(defaults, plan)
     return plan, private
 
 
 def chat(assistant, identifier, device, text, preference, zone, *, journal=None, force=False, lookup_only=False,
-         followups=None, session=None, ask_location=False, location=None, device_clock=None):
+         followups=None, session=None, ask_location=False, location=None, device_clock=None,
+         standard=False, private_reply=False):
     store = assistant.store
     history = followups.previous(device, session) if followups else ()
     clock = DeviceClock.read(device_clock)
@@ -153,7 +158,11 @@ def chat(assistant, identifier, device, text, preference, zone, *, journal=None,
         return saved if not lookup_only or saved["engine"] in {"web_lookup", "python_sandbox", "calculation"} else None
     if lookup_only and saved and saved.get("recalled_chat") is not None:
         return None
-    plan, private = plan_chat(assistant, turn, saved, session, force=force, lookup_only=lookup_only)
+    preferences = chat_settings.settings(store.privacy)
+    if force and not preferences["enabled"] and not (private_reply or journal):
+        return None if lookup_only else reply(turn, "", "private_chat_disabled")
+    defaults = preferences if preferences["enabled"] and not standard else {}
+    plan, private = plan_chat(assistant, turn, saved, session, force=force, defaults=defaults, lookup_only=lookup_only)
     if plan.error == "model_unavailable":
         return None if lookup_only else reply(turn, "", plan.error)
     if lookup_only and (private or not can_preflight(plan)):
@@ -161,7 +170,8 @@ def chat(assistant, identifier, device, text, preference, zone, *, journal=None,
     coordinates = Coordinates.for_turn(identifier, location) if plan.location and location is not None else None
     ask = ask_location and plan.location and location is None and journal is None
     if private:
-        result = handoff(assistant, turn, plan, session=session, coordinates=coordinates, defer=bool(session and ask))
+        result = handoff(assistant, turn, plan, session=session, coordinates=coordinates, defer=bool(session and ask),
+                         typed_chat=True)
         if ask and session:
             return location_request(turn)
         if followups:

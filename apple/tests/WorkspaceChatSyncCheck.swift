@@ -6,7 +6,7 @@ final class Controller {
     var snapshot = WorkspaceHistory(items: [], cursor: "empty", watch: true)
     var pages: [String: WorkspaceHistoryPage] = [:]
     var answer: (String) async throws -> Reply = { _ in throw URLError(.notConnectedToInternet) }
-    var requestedPrivateAnswer = false
+    var requestedAccess = ChatAccess.automatic
     var requestedText = ""
 
     func workspaceHistory(cursor: String?, wait: Bool) async throws -> WorkspaceHistory { snapshot }
@@ -16,8 +16,8 @@ final class Controller {
         return page
     }
 
-    func ask(_ question: String, id: String, publishReply: Bool, privately: Bool) async throws -> Reply {
-        requestedPrivateAnswer = privately
+    func ask(_ question: String, id: String, publishReply: Bool, access: ChatAccess) async throws -> Reply {
+        requestedAccess = access
         requestedText = question
         return try await answer(id)
     }
@@ -47,7 +47,7 @@ enum WorkspaceChatSyncCheck {
             }
             chat.draft = "Ready?"
             await chat.send(model)
-            precondition(!model.requestedPrivateAnswer)
+            precondition(model.requestedAccess == .automatic)
             precondition(chat.messages.map(\.text) == ["Ready?", "Ready."])
             precondition(chat.messages[0].date == chat.messages[1].date)
             precondition(chat.sendError == nil && chat.draft.isEmpty)
@@ -69,14 +69,41 @@ enum WorkspaceChatSyncCheck {
         model.snapshot = WorkspaceHistory(items: pair(requestID), cursor: "recovered", watch: true)
         await chat.load(model)
         precondition(chat.messages.count == 2 && chat.sendError == nil && chat.draft == "A new draft")
-        model.answer = { _ in reply }
-        await chat.send(model, privately: true)
-        precondition(model.requestedPrivateAnswer && chat.sendError == nil)
+        await checkChatAccess()
         let privateAnswer = checkPrivateTimeline()
         await checkHistoryPages()
         await checkReplyActions(privateAnswer)
         checkSpeechChunks()
         print("Chat sync, message actions, and speech chunk checks passed.")
+    }
+
+    @MainActor
+    static func checkChatAccess() async {
+        let model = Controller()
+        let chat = WorkspaceChat()
+        let privateReply = Reply(text: "", language: "en", sources: [], engine: "private_request")
+        model.answer = { _ in
+            precondition(chat.messages.isEmpty)
+            return privateReply
+        }
+        for access in [ChatAccess.automatic, .privateMessage] {
+            chat.access = access
+            chat.draft = "A private draft"
+            await chat.send(model)
+            precondition(model.requestedAccess == access && chat.access == .automatic)
+            precondition(chat.messages.isEmpty && chat.draft.isEmpty && chat.sendError == nil)
+        }
+        chat.access = .standard
+        chat.draft = "Keep this in Chat history"
+        model.answer = { _ in reply }
+        await chat.send(model)
+        precondition(model.requestedAccess == .standard && chat.messages.count == 2)
+        precondition(ChatAccess.privateReply.requestValue == ChatAccess.privateMessage.requestValue)
+
+        chat.access = .privateMessage
+        chat.draft = "Unsent private draft"
+        chat.clearPrivateReply()
+        precondition(chat.draft.isEmpty && chat.access == .automatic)
     }
 
     @MainActor
@@ -188,7 +215,7 @@ enum WorkspaceChatSyncCheck {
         chat.draft = ""
         chat.insertReply(to: privateAnswer)
         await chat.send(model, web: true)
-        precondition(model.requestedPrivateAnswer && model.requestedText == privateAnswer.text)
+        precondition(model.requestedAccess == .privateReply && model.requestedText == privateAnswer.text)
         precondition(chat.replyingPrivately && chat.draft == privateAnswer.text)
         precondition(chat.messages.isEmpty && chat.sendError != nil)
 

@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS request_recall(
 CREATE TABLE IF NOT EXISTS request_goal_choices(
     request_id TEXT PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE, choices TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chat_privacy(name TEXT PRIMARY KEY, enabled INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS private_chat_ids(id TEXT PRIMARY KEY);
 """
 
 

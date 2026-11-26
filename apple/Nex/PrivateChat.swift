@@ -1,5 +1,22 @@
 import Foundation
 
+enum ChatAccess: String {
+    case automatic
+    case privateMessage = "private"
+    case standard
+    case privateReply
+
+    var requestValue: String? {
+        switch self {
+        case .automatic: nil
+        case .privateReply: Self.privateMessage.rawValue
+        default: rawValue
+        }
+    }
+
+    var requiresPrivateReply: Bool { self == .privateMessage || self == .privateReply }
+}
+
 struct PrivateAnswer: Decodable, Identifiable, Equatable {
     let id: String
     let device: String

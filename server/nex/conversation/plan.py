@@ -81,6 +81,7 @@ class Turn:
     history: tuple = ()
     journal: DayContext | None = None
     spoken: bool = False
+    private_chat: bool = False
     exclude: str | None = None
     resolved_language: str | None = None
     device_clock: DeviceClock | None = None

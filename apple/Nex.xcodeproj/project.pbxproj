@@ -41,6 +41,7 @@
 		7ECA00000000000000000021 /* MCPSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECA00000000000000000020 /* MCPSettings.swift */; };
 		7ECA00000000000000000031 /* MCPConnectionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECA00000000000000000030 /* MCPConnectionEditor.swift */; };
 		7EFA00000000000000000102 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000101 /* SettingsPage.swift */; };
+		7EFA00000000000000000112 /* ChatPrivacySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000111 /* ChatPrivacySettings.swift */; };
 		7EFA00000000000000000202 /* NexServerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* NexServerSettings.swift */; };
 		7EFA00000000000000000FA2 /* HostedAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA1 /* HostedAccount.swift */; };
 		7EFA00000000000000000FB4 /* HostedAccountAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB3 /* HostedAccountAPI.swift */; };
@@ -59,6 +60,7 @@
 		7ECA00000000000000000022 /* MCPSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECA00000000000000000020 /* MCPSettings.swift */; };
 		7ECA00000000000000000032 /* MCPConnectionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECA00000000000000000030 /* MCPConnectionEditor.swift */; };
 		7EFA00000000000000000103 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000101 /* SettingsPage.swift */; };
+		7EFA00000000000000000113 /* ChatPrivacySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000111 /* ChatPrivacySettings.swift */; };
 		7EFA00000000000000000203 /* NexServerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000201 /* NexServerSettings.swift */; };
 		7EFA00000000000000000FA3 /* HostedAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FA1 /* HostedAccount.swift */; };
 		7EFA00000000000000000FB5 /* HostedAccountAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFA00000000000000000FB3 /* HostedAccountAPI.swift */; };
@@ -373,6 +375,7 @@
 		7ECA00000000000000000020 /* MCPSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSettings.swift; sourceTree = "<group>"; };
 		7ECA00000000000000000030 /* MCPConnectionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPConnectionEditor.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000101 /* SettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPage.swift; sourceTree = "<group>"; };
+		7EFA00000000000000000111 /* ChatPrivacySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPrivacySettings.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000201 /* NexServerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NexServerSettings.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FA1 /* HostedAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccount.swift; sourceTree = "<group>"; };
 		7EFA00000000000000000FB3 /* HostedAccountAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedAccountAPI.swift; sourceTree = "<group>"; };
@@ -596,6 +599,7 @@
 				7ECA00000000000000000020 /* MCPSettings.swift */,
 				7ECA00000000000000000030 /* MCPConnectionEditor.swift */,
 				7EFA00000000000000000101 /* SettingsPage.swift */,
+				7EFA00000000000000000111 /* ChatPrivacySettings.swift */,
 				7EFA00000000000000000201 /* NexServerSettings.swift */,
 				7EFA00000000000000000FA1 /* HostedAccount.swift */,
 				7EFA00000000000000000FB3 /* HostedAccountAPI.swift */,
@@ -943,6 +947,7 @@
 				7ECA00000000000000000021 /* MCPSettings.swift in Sources */,
 				7ECA00000000000000000031 /* MCPConnectionEditor.swift in Sources */,
 				7EFA00000000000000000102 /* SettingsPage.swift in Sources */,
+				7EFA00000000000000000112 /* ChatPrivacySettings.swift in Sources */,
 				7EFA00000000000000000202 /* NexServerSettings.swift in Sources */,
 				7EFA00000000000000000FA2 /* HostedAccount.swift in Sources */,
 				7EFA00000000000000000FB4 /* HostedAccountAPI.swift in Sources */,
@@ -1066,6 +1071,7 @@
 				7ECA00000000000000000022 /* MCPSettings.swift in Sources */,
 				7ECA00000000000000000032 /* MCPConnectionEditor.swift in Sources */,
 				7EFA00000000000000000103 /* SettingsPage.swift in Sources */,
+				7EFA00000000000000000113 /* ChatPrivacySettings.swift in Sources */,
 				7EFA00000000000000000203 /* NexServerSettings.swift in Sources */,
 				7EFA00000000000000000FA3 /* HostedAccount.swift in Sources */,
 				7EFA00000000000000000FB5 /* HostedAccountAPI.swift in Sources */,

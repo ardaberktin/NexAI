@@ -17,6 +17,7 @@ struct PhoneWatchRoute {
         let zone = [URLQueryItem(name: "time_zone", value: request.timeZone ?? NexDate.timeZone)]
         switch request.action {
         case .open: return Self("workspace/features")
+        case .chatPrivacy: return Self("workspace/chat-privacy")
         case .recordingStatus: return Self("workspace/recording-status")
         case .chat:
             if let cursor = request.cursor {

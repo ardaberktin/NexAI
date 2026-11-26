@@ -59,6 +59,9 @@ struct WorkspaceChatView: View {
         #if os(iOS)
         .sheet(item: $selection) { ChatSelectionSheet(selection: $0) }
         #endif
+        .task(id: privacy.connected) {
+            if privacy.connected { try? await model.refreshStatus() }
+        }
         .onChange(of: privacy.generation) {
             pdf = nil
             #if os(iOS)

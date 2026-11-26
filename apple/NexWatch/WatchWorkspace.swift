@@ -54,10 +54,10 @@ final class WatchWorkspace: ObservableObject {
         return try decoder.decode(Value.self, from: data)
     }
 
-    func ask(_ text: String, day: DaybookContext?, privately: Bool) async throws -> Reply {
+    func ask(_ text: String, day: DaybookContext?, access: ChatAccess) async throws -> Reply {
         let request = WatchRequest(.ask, id: nexID(), day: day, text: text,
                                    language: language.rawValue, timeZone: NexDate.timeZone,
-                                   value: privately ? "private" : nil, deviceClock: .current)
+                                   value: access.requestValue, deviceClock: .current)
         let expires = Date.now.addingTimeInterval(230)
         repeat {
             let progress: WatchAnswerProgress = try await get(request)
