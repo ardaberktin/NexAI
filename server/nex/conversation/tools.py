@@ -1,0 +1,188 @@
+"""Execute validated tool calls. Only the approved private path can open owner data."""
+import http.client
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
+
+from ..accounts.agenda import agenda_evidence
+from ..accounts.http import AccountError
+from ..accounts.intent import AccountIntent, search_topic
+from ..accounts.read import prepare_account
+from ..activities.recall import activity_evidence
+from ..age_intent import AgeRequest, age_request, units_in
+from ..conversation_history import recent_dialogue
+from ..conversation_recall import recent_question_reply
+from ..daybook import Daybook, DayContext
+from ..goal_writing import mail_context
+from ..goals import Goals
+from ..passages import matching_passage
+from ..personal_age import age_reply
+from ..personal_files import PersonalFiles, safe_line
+from ..recall_dates import recall_dates, time_zone
+from ..store import excerpt, search_prefixes
+from ..weather import Weather
+from ..weather_intent import WeatherRequest, weather_city
+from ..web_answers import prepare_lookup
+from ..web_intent import PRIVATE, web_request
+from ..web_transport import WebReadError
+from ..workspace_features import FeatureDisabled, require_enabled
+from .weather import hourly
+
+
+@dataclass
+class Evidence:
+    data: object
+    sources: list = field(default_factory=list)
+    engine: str = "local_model"
+    goal_id: str | None = None
+    attachment: str = ""
+    recall_cursor: dict | None = None
+
+
+def weather_result(store, turn, tool, coordinates):
+    city = tool.get("query", "").strip()
+    if city and not weather_city(city):
+        raise ValueError("Please give a city and region.")
+    request = WeatherRequest(city or None)
+    weather = Weather(store)
+    period = tool.get("period", "current")
+    day = turn.started.astimezone(time_zone(turn.zone)).date() if period == "current" else date.fromisoformat(tool["date"])
+    place, status = weather.locate(request, turn.device, turn.zone, turn.language, coordinates=coordinates)
+    if place is None:
+        return Evidence(status.text, engine="weather_city_needed")
+    return Evidence(hourly(place, day, turn.zone, period, turn.started), engine="weather")
+
+
+def change_weather_city(store, turn, tool):
+    weather = Weather(store)
+    if tool["operation"] == "clear":
+        weather.remember(turn.device, None)
+        return Evidence({"saved_city": None, "cleared": True}, engine="weather")
+    request = WeatherRequest(tool["query"])
+    place, status = weather.locate(request, turn.device, turn.zone, turn.language)
+    if place is None:
+        return Evidence(status.text, engine="weather_city_needed")
+    weather.remember(turn.device, place)
+    return Evidence({"saved_city": place.label}, engine="weather")
+
+
+def web_result(store, turn, query):
+    if not query or PRIVATE.search(query):
+        raise WebReadError("This lookup needs a public topic without private details.")
+    command = "Search the web for " + query
+    target = web_request(command)
+    if target.url and query not in turn.text:
+        raise WebReadError("Please supply the public page address to open.")
+    items, sources, error = prepare_lookup(store, command)
+    if error or not items or not any(item["excerpt"] for item in items):
+        raise WebReadError(error or "The search returned no usable page excerpts.")
+    return Evidence([{**item, "excerpt": excerpt(item["excerpt"], 700)} for item in items], sources, "web_lookup")
+
+
+def account_result(store, turn, tool):
+    name, query = tool["name"], tool.get("query", "")
+    intent = AccountIntent(name, False, topic=search_topic(query) if name == "gmail" else "",
+                           unread=tool.get("unread", False), lists=tool.get("lists", False),
+                           priority=tool.get("priority", False), access_check=tool.get("access_check", False), include_body=name == "gmail")
+    _, rows, error = prepare_account(store.root, intent, query, turn.zone, turn.started)
+    items = [mail_context(row, 480) for row in rows[:6]] if name == "gmail" else rows[:12]
+    return Evidence(error or items, engine="account_read")
+
+
+def goal_result(store, turn, tool):
+    query = tool["query"]
+    start = tool.get("start")
+    if start:
+        local = datetime.fromisoformat(start).replace(tzinfo=time_zone(turn.zone))
+        start = local.isoformat()
+    data = {"prompt": query, "frequency_minutes": tool.get("frequency", 0), "zone": turn.zone,
+            "scheduled_at": start}
+    goal = Goals(store).save(turn.id, data, create_once=True)
+    schedule = {key: goal[key] for key in ("title", "frequency_minutes")}
+    if scheduled := goal["scheduled_at"]:
+        schedule["local_start"] = datetime.fromisoformat(scheduled).astimezone(time_zone(turn.zone)).isoformat()
+    return Evidence(schedule,
+                    engine="goal_created", goal_id=goal["id"])
+
+
+def memory_result(store, turn, tool):
+    name, query = tool["name"], tool.get("query", "")
+    files, key = PersonalFiles(store.root), tool.get("file", "memory")
+    if name == "memory":
+        with files.locked():
+            item = files.current(datetime.now(UTC)) if key == "now" else files.read(key)
+        return Evidence(excerpt(item["markdown"], 2200))
+    content = safe_line(query, 500)
+    if not content:
+        raise ValueError("Missing content to save.")
+    files.append(key, content, heading="## Saved on request" if key == "memory" else "## Owner preferences")
+    return Evidence({"saved_in": key, "content": content})
+
+
+def age_result(store, turn, tool):
+    query = tool.get("query", "")
+    request = age_request(turn.text, turn.history) or AgeRequest(units_in(query) or ("year",))
+    result = age_reply(PersonalFiles(store.root), request, turn.history, turn.started, turn.zone)
+    return Evidence(result["text"], engine=result["engine"])
+
+
+def archive_result(store, turn, tool):
+    name, query = tool["name"], tool.get("query", "")
+    if name == "past_questions":
+        rows = recent_dialogue(store, turn.started)
+        scope = recall_dates(turn.text, turn.zone, turn.started)
+        if recent := recent_question_reply(store, turn.text, turn.language, scope, asked_at=turn.started,
+                                          exclude=turn.exclude, history=turn.history or rows, zone=turn.zone):
+            return Evidence(recent["text"], recent["sources"], "archive_search", recall_cursor=recent.get("recall_cursor"))
+    elif name == "archive":
+        scope = recall_dates(tool.get("date", ""), turn.zone, turn.started)
+        filters = {"limit": 5, "bounds": scope.bounds if scope else None,
+                   "evidence_only": True, "exclude": turn.exclude}
+        rows = store.search(query, **filters)
+        if not rows and query:
+            # FTS uses prefixes. Retry long inflected terms on their common root.
+            roots = " ".join(term[:5] for term in search_prefixes(query) if len(term) > 5)
+            if roots:
+                rows = store.search(roots, **filters)
+    elif name == "activities":
+        require_enabled(store, "activities")
+        rows = activity_evidence(store, turn.text, turn.zone, turn.started, exclude=turn.exclude,
+                                 scope=recall_dates(tool.get("date", ""), turn.zone, turn.started))
+    elif name == "daybook":
+        require_enabled(store, "daybook")
+        day = tool.get("date") or turn.started.astimezone(time_zone(turn.zone)).date().isoformat()
+        context = turn.journal or DayContext.parse(day, turn.zone)
+        rows = Daybook(store).evidence(context, turn.text, turn.exclude)
+    else:
+        raise ValueError("Unsupported private tool.")
+    items = [{"date": row.get("started"), "kind": row.get("kind"),
+              "text": matching_passage(row["text"], query, limit=500)} for row in rows[-8:]]
+    return Evidence(items, [row["id"] for row in rows[-8:]], "archive_search")
+
+
+def agenda_result(store, turn, tool):
+    data = agenda_evidence(store, tool.get("query") or "today", turn.zone, turn.started)
+    return Evidence(data, engine="account_read")
+
+
+PRIVATE_TOOLS = {
+    "gmail": account_result, "calendar": account_result, "ticktick": account_result, "agenda": agenda_result,
+    "goal": goal_result, "age": age_result, "weather_city": change_weather_city, "save_memory": memory_result, "memory": memory_result,
+    "past_questions": archive_result, "archive": archive_result, "daybook": archive_result, "activities": archive_result,
+}
+
+
+def fetch(store, turn, tool, *, private, coordinates):
+    name = tool["name"]
+    try:
+        if name == "web":
+            return web_result(store, turn, tool.get("query", ""))
+        if name == "weather":
+            return weather_result(store, turn, tool, coordinates)
+        if private:
+            return PRIVATE_TOOLS[name](store, turn, tool)
+        raise PermissionError("This tool requires an unlocked workspace.")
+    except (WebReadError, AccountError, FeatureDisabled, ValueError, LookupError, TypeError, OSError, http.client.HTTPException) as exc:
+        if isinstance(exc, WebReadError) and name == "web":
+            return Evidence({"unavailable": str(exc)}, engine="web_lookup")
+        return Evidence({"unavailable": str(exc) if isinstance(exc, (WebReadError, FeatureDisabled, ValueError))
+                         else f"Nex could not read {name}."})

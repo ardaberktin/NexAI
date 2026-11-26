@@ -1,0 +1,59 @@
+"""Short-lived, device- and unlock-bound context for the planning model."""
+import json
+from dataclasses import dataclass
+from time import monotonic
+
+from ..conversation_history import RESUME_WINDOW
+from ..store import excerpt
+from .keys import validate_session
+from .state import digest
+
+
+@dataclass
+class Exchange:
+    session: str
+    expires: float
+    messages: tuple
+
+
+class ChatFollowups:
+    def __init__(self):
+        self.latest = {}
+
+    def previous(self, device, token):
+        item = self.latest.get(device)
+        if token and item and item.expires > monotonic() and item.session == digest(token):
+            return item.messages
+        return ()
+
+    def clear(self, device):
+        self.latest.pop(device, None)
+
+    def remember(self, device, token, question, result):
+        previous = self.previous(device, token)
+        if previous and previous[-1].get("private"):
+            previous = ()
+        self.save(device, token, previous, question, result["text"], engine=result["engine"])
+
+    def remember_private(self, state, device, token, identifier, question, tools):
+        if not token:
+            self.clear(device)
+            return
+        with state.transaction() as db:
+            validate_session(db, device, token)
+            row = db.execute("SELECT answer, sources FROM requests LEFT JOIN citations "
+                             "ON requests.id=citations.request_id WHERE requests.id=? AND device=? AND state='ready'",
+                             (identifier, device)).fetchone()
+        if row:
+            selected = json.dumps(list(tools), ensure_ascii=False)
+            sources = json.loads(row["sources"] or "[]")
+            self.save(device, token, self.previous(device, token), question, row["answer"], private=True,
+                      selected=selected, sources=sources,
+                      engine="calculation" if any(t["name"] == "age" for t in tools) else "private_request")
+
+    def save(self, device, token, previous, question, response, **metadata):
+        self.clear(device)
+        if token:
+            messages = (*previous[-6:], {"kind": "question", "text": excerpt(question, 900)},
+                        {"kind": "answer", "text": excerpt(response, 900), **metadata})
+            self.latest[device] = Exchange(digest(token), monotonic() + RESUME_WINDOW.total_seconds(), messages)
