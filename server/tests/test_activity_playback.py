@@ -10,9 +10,18 @@ from uuid import uuid4
 
 from nex.activities.current import current_activity_reply
 from nex.activities.jobs import ActivityJobs, record_device_context
-from nex.activities.recognition import SOUND_CATEGORIES, Observation, from_sounds, interpret
+from nex.activities.recognition import (
+    SOUND_CATEGORIES,
+    Observation,
+    from_sounds,
+    interpret,
+)
 from nex.activities.timeline import timeline
-from nex.activities.voice_origin import review_voice_origin, source_evidence, source_observation
+from nex.activities.voice_origin import (
+    review_voice_origin,
+    source_evidence,
+    source_observation,
+)
 from nex.activities.worker import ActivityWorker
 from nex.daybook import DayContext
 from nex.http_api import recorder_operation

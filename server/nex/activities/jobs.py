@@ -8,7 +8,13 @@ from ..live import VOICE_LABELS
 from ..recall_dates import time_key
 from ..workspace_features import enabled, revision
 from .recognition import TITLES, from_sounds
-from .schema import DEVICE_FRESHNESS, SCREEN_FRESHNESS, attach_device_context, attach_screen, interval
+from .schema import (
+    DEVICE_FRESHNESS,
+    SCREEN_FRESHNESS,
+    attach_device_context,
+    attach_screen,
+    interval,
+)
 
 SCREEN_RETENTION = timedelta(minutes=20)
 SOUND_CONTEXT_WINDOW = timedelta(seconds=45)

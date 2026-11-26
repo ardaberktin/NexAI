@@ -22,8 +22,7 @@ def confidence(category, basis):
 def public_clip(row, start, end):
     category, basis = row["category"], row["basis"]
     sounds = json.loads(row["sounds"] or "[]")
-    custom = row["title"] if "title" in row.keys() else None
-    title = custom or (f"{sounds[0]} detected" if category == "unknown" and sounds else TITLES.get(category, "Activity"))
+    title = row["title"] or (f"{sounds[0]} detected" if category == "unknown" and sounds else TITLES.get(category, "Activity"))
     return {"id": row["id"], "started": start, "ended": end, "device": row["device"],
             "category": category, "title": title, "basis": BASIS_NAMES[basis],
             "confidence": confidence(category, basis), "detail": row["detail"],
