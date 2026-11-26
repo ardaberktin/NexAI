@@ -5,6 +5,7 @@ struct WatchRequest: Codable, Sendable {
         case open, chunk, chat, ask, daybook, conversation, activities, feed, savedStory, ideas, recordingStatus
         case goals, goal, goalEdit, goalAction, goalFollowUp, files, recordings, recording, audio
         case transcript, correctTranscript, memory, source, context, editContext, inbox, dismiss
+        case chatPrivacy
     }
 
     let action: Action

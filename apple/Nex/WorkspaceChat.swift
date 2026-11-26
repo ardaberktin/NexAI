@@ -5,6 +5,7 @@ final class WorkspaceChat: ObservableObject {
     @Published var draft = "" {
         didSet { if draft.isEmpty { privateDraftBackup = nil } }
     }
+    @Published var access = ChatAccess.automatic
     @Published private(set) var replyInsertion = 0
     @Published private(set) var messages: [WorkspaceMessage] = []
     @Published private(set) var sending = false
@@ -16,7 +17,7 @@ final class WorkspaceChat: ObservableObject {
     @Published private(set) var olderError: String?
     private var archived: [WorkspaceMessage] = []
     private var current: [WorkspaceMessage] = []
-    private var pending: (text: String, draft: String, id: String, privately: Bool, quotedPrivately: Bool)?
+    private var pending: (text: String, draft: String, id: String, access: ChatAccess)?
     private var privateDraftBackup: String?
     private var privateDraftGeneration = UUID()
     private var cursor: String?
@@ -25,6 +26,7 @@ final class WorkspaceChat: ObservableObject {
     private var privateExchangeIDs: Set<String> = []
 
     var replyingPrivately: Bool { privateDraftBackup != nil }
+    var sendingPrivately: Bool { replyingPrivately || access.requiresPrivateReply }
 
     func insertReply(to message: WorkspaceMessage) {
         guard message.offersReply, let text = message.copyableText else { return }
@@ -35,11 +37,11 @@ final class WorkspaceChat: ObservableObject {
 
     func clearPrivateReply() {
         privateDraftGeneration = UUID()
-        if let backup = privateDraftBackup {
-            privateDraftBackup = nil
-            draft = backup
-        }
-        if pending?.quotedPrivately == true { pending = nil }
+        if access.requiresPrivateReply { draft = "" }
+        else if let backup = privateDraftBackup { draft = backup }
+        privateDraftBackup = nil
+        pending = nil
+        access = .automatic
     }
 
     func observe(_ model: Controller) async {
@@ -144,9 +146,7 @@ final class WorkspaceChat: ObservableObject {
         let restored = Set(history.map(\.id))
         current.removeAll { restored.contains($0.id) }
         if !sending, let pending, restored.contains("a-" + pending.id) {
-            if draft == pending.draft { draft = "" }
-            sendError = nil
-            self.pending = nil
+            clearRecoveredSend()
         }
         publish()
     }
@@ -160,9 +160,7 @@ final class WorkspaceChat: ObservableObject {
         current.removeAll { isPrivateEcho($0) }
         archived.removeAll { isPrivateEcho($0) }
         if !sending, let pending, privateExchangeIDs.contains(pending.id) {
-            if draft == pending.draft { draft = "" }
-            self.pending = nil
-            sendError = nil
+            clearRecoveredSend()
         }
         publish()
     }
@@ -171,39 +169,47 @@ final class WorkspaceChat: ObservableObject {
         message.exchangeID.map(privateExchangeIDs.contains) ?? false
     }
 
-    func send(_ model: Controller, web: Bool = false, privately: Bool = false) async {
+    private func clearRecoveredSend() {
+        if draft == pending?.draft {
+            draft = ""
+            access = .automatic
+        }
+        pending = nil
+        sendError = nil
+    }
+
+    func send(_ model: Controller, web: Bool = false) async {
         let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sending, !value.isEmpty else { return }
         let backup = privateDraftBackup
         let generation = privateDraftGeneration
-        let isQuotedPrivateReply = backup != nil
-        let privately = privately || isQuotedPrivateReply
-        let text = web && !isQuotedPrivateReply ? WebLookup.request(for: value) : value
-        let id = pending.flatMap { $0.text == text && $0.privately == privately ? $0.id : nil } ?? nexID()
-        pending = (text, value, id, privately, isQuotedPrivateReply)
+        let requestAccess: ChatAccess = replyingPrivately ? .privateReply : access
+        let text = web && !replyingPrivately ? WebLookup.request(for: value) : value
+        let id = pending.flatMap { $0.text == text && $0.access == requestAccess ? $0.id : nil } ?? nexID()
+        pending = (text, value, id, requestAccess)
         sendError = nil
         sending = true
+        let date = NexDate.wire()
         draft = ""
-        if !isQuotedPrivateReply {
-            add(WorkspaceMessage(id: "q-" + id, role: .user, text: value, date: NexDate.wire(), sources: []))
-        }
         defer { sending = false }
         do {
-            let reply = try await model.ask(text, id: id, publishReply: false, privately: privately)
-            if !isQuotedPrivateReply {
-                add(WorkspaceMessage(id: "a-" + id, role: .assistant, text: reply.text,
-                                     date: NexDate.wire(), sources: reply.sources, language: reply.language,
-                                     privateNotice: reply.engine == "private_request"))
+            let reply = try await model.ask(text, id: id, publishReply: false, access: requestAccess)
+            guard generation == privateDraftGeneration else { return }
+            // Wait for the server to choose the storage path before displaying any local echoes.
+            if !requestAccess.requiresPrivateReply && reply.engine != "private_request" {
+                add(WorkspaceMessage(id: "q-" + id, role: .user, text: value, date: date, sources: []))
+                add(WorkspaceMessage(id: "a-" + id, role: .assistant, text: reply.text, date: NexDate.wire(),
+                                     sources: reply.sources, language: reply.language))
             }
             pending = nil
+            if draft.isEmpty { access = .automatic }
         } catch {
+            guard generation == privateDraftGeneration else { return }
             if privateExchangeIDs.contains(id) || archived.contains(where: { $0.id == "a-" + id }) {
                 pending = nil
+                if draft.isEmpty { access = .automatic }
                 return
             }
-            current.removeAll { $0.id == "q-" + id }
-            publish()
-            if isQuotedPrivateReply && generation != privateDraftGeneration { return }
             if draft.isEmpty {
                 privateDraftBackup = backup
                 draft = value

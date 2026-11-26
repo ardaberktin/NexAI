@@ -2,6 +2,7 @@
 import asyncio
 import json
 import re
+from urllib.parse import quote
 
 from ..coding.answers import CODE_TOKENS, execute_python
 from ..coding.intent import ENGINE as PYTHON_ENGINE
@@ -135,7 +136,7 @@ def spoken_text(answer):
 
 def may_search(turn, plan, tool):
     if not needs_unlock(turn, plan) and not any(item.get("private") for item in turn.history):
-        if not turn.recalled_chat or not turn.recalled_chat["exchanges"]:
+        if not turn.private_chat and (not turn.recalled_chat or not turn.recalled_chat["exchanges"]):
             return True
         query = tool.get("query", "").strip()
         return literal_web_topic(turn.text, query) if query else "date" in tool
@@ -442,11 +443,13 @@ async def run(store, turn, plan, generate, *, private=False, coordinates=None):
     engine = next(iter(evidence.values())).engine if len(evidence) == 1 else "local_model"
     # Web citation numbers correspond to the original ordered page list.
     ordered = sorted(evidence, key=lambda name: name != "web")
-    sources = [source for name in ordered for source in evidence[name].sources]
+    sources = [source for name in ordered if not turn.private_chat or name != "web" for source in evidence[name].sources]
     preferences = await asyncio.to_thread(owner_preferences, store) if private else ""
     text = await compose(turn, evidence, generate, clarify=plan.clarify, preferences=preferences)
     if text is None:
         return reply(turn, "", "web_verification_failed", sources)
+    if text and turn.private_chat and (web := evidence.get("web")) and web.sources:
+        text = link_private_citations(text, web.data)
     answer = reply(turn, text, engine, sources) if text else reply(turn, "", "model_unavailable")
     if (recall := evidence.get("past_questions")) and recall.recall_cursor:
         answer["recall_cursor"] = recall.recall_cursor
@@ -458,3 +461,14 @@ async def run(store, turn, plan, generate, *, private=False, coordinates=None):
     if goal and isinstance(goal.data, dict) and (choices := goal.data.get("goal_choices")):
         answer["goal_choices"] = choices
     return answer
+
+
+def link_private_citations(text, pages):
+    links = {page["number"]: quote(page["url"], safe=":/?#[]@!$&'*+,;=%") for page in pages
+             if page["url"].startswith("https://")}
+
+    def link(match):
+        number = int(match[1])
+        return f"[{number}](<{links[number]}>)" if number in links else match[0]
+
+    return CITATION.sub(link, text)

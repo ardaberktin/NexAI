@@ -28,13 +28,13 @@ def save_pages(store, pages):
     return identifiers
 
 
-def prepare_lookup(store, query):
+def prepare_lookup(store, query, *, archive=True):
     try:
         request = web_request(query)
         pages = lookup(request)
     except WebReadError as error:
         return None, [], str(error)
-    sources = save_pages(store, pages)
+    sources = save_pages(store, pages) if archive else []
     evidence = [page_evidence(i, page, request.terms or query) for i, page in enumerate(pages, start=1)]
     support = [page for page in evidence if page.get("source_answer")]
     return support or evidence, sources, ""

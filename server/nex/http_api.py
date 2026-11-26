@@ -27,7 +27,7 @@ from .hosted.auth import BadLogin, LoginBusy, ResetInProgress, bearer
 from .hosted.setup import claim_owner
 from .models import ModelError
 from .personal_files import PersonalConflict, safe_line
-from .privacy import public, routes
+from .privacy import chat_settings, public, routes
 from .privacy.keys import require_session
 from .privacy.state import AccessDenied
 from .recall_dates import time_zone
@@ -358,6 +358,7 @@ class API(BaseHTTPRequestHandler):
                     vault = Credentials(store.root)
                     status["connections"] = vault.status()
                     status["account_write_access"] = vault.write_access()
+                    status["chat_privacy"] = chat_settings.settings(store.privacy)
                 self.send(status)
                 return
             if path in {"/v1/daybook", "/v1/daybook/conversation"}:
@@ -457,18 +458,26 @@ class API(BaseHTTPRequestHandler):
         zone = time_zone(data.get("time_zone", "UTC")).key
         language = valid_language(data.get("language", "auto"))
         day = data.get("daybook_day")
+        access = data.get("access")
+        if access not in (None, "private", "standard"):
+            raise ValueError("Choose automatic, private, or standard Chat access.")
         if day is not None:
             require_enabled(self.app.store, "daybook")
         journal = DayContext.parse(day, zone, data.get("daybook_source"), data.get("daybook_focus")) if day is not None else None
         if not self.app.chat_slot.acquire(blocking=False):
             raise Problem(429, "Nex is answering another question. Try again shortly.")
         try:
-            self.send(public.chat(self.app.assistant, identifier, device, message, language, zone,
-                                  journal=journal, force=data.get("access") == "private", lookup_only=lookup_only,
+            result = public.chat(self.app.assistant, identifier, device, message, language, zone,
+                                  journal=journal, force=access == "private", standard=access == "standard",
+                                  private_reply=access == "private" and data.get("private_reply") is True,
+                                  lookup_only=lookup_only,
                                   followups=self.chat_followups, location=data.get("weather_location"),
                                   ask_location=data.get("weather_location_supported") is True,
                                   device_clock=data.get("device_clock"),
-                                  session=self.headers.get("X-Nex-Workspace") if device != "console" else None))
+                                  session=self.headers.get("X-Nex-Workspace") if device != "console" else None)
+            if result and result["engine"] == "private_chat_disabled":
+                raise Problem(409, "Private Chat is off. Turn it on in Privacy & Security settings.")
+            self.send(result)
         finally:
             self.app.chat_slot.release()
 

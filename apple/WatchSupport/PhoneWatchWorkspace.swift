@@ -83,7 +83,8 @@ final class PhoneWatchWorkspace {
             do {
                 let language = NexLanguage(rawValue: request.language ?? "") ?? model.language
                 let response = try await model.ask(text, id: id, context: request.day, publishReply: false,
-                                                   privately: request.value == "private", languageOverride: language,
+                                                   access: request.value.flatMap(ChatAccess.init(rawValue:)) ?? .automatic,
+                                                   languageOverride: language,
                                                    timeZoneOverride: request.timeZone, clock: request.deviceClock)
                 result = .success(response)
             } catch { result = .failure(error) }
