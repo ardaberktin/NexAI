@@ -254,8 +254,7 @@ class PlaybackReviewTests(unittest.IsolatedAsyncioTestCase):
         profiles = VoiceProfiles(self.store.privacy, room, "test-secret")
         encrypted = profiles.cipher.encrypt(json.dumps(owner_vec.tolist()).encode())
         with self.store.privacy.transaction() as db:
-            db.execute("INSERT INTO voices(id,label,template,created) VALUES('v1','Owner',?,'2026-01-01T00:00:00Z')",
-                       (encrypted,))
+            db.execute("INSERT INTO voices(device,template) VALUES('mac',?)", (encrypted,))
         samples = np.concatenate([
             np.full(INPUT_RATE * 2, -0.5, dtype=np.float32),
             np.full(INPUT_RATE * 2, 0.5, dtype=np.float32),
