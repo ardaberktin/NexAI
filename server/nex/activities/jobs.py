@@ -146,7 +146,15 @@ class ActivityJobs:
                 (json.dumps(sounds), profile, job["recording_id"]),
             )
             if latest["category"] is None:
-                self.write(db, latest, from_sounds(sounds, latest["mode"], latest["transcript"]), None)
+                placeholder = from_sounds(sounds, latest["mode"], latest["transcript"])
+                if placeholder.category == "unknown":
+                    db.execute(
+                        "UPDATE activity_clips SET category=?,basis=?,detail=?,title=?,due=NULL WHERE recording_id=?",
+                        (placeholder.category, placeholder.basis, placeholder.detail, placeholder.title,
+                         job["recording_id"]),
+                    )
+                else:
+                    self.write(db, latest, placeholder, None)
             if sounds or latest["transcript"] or latest["screen"] or latest["device_context"]:
                 db.execute("UPDATE activity_clips SET due='' WHERE recording_id=?", (job["recording_id"],))
             if any(label not in VOICE_LABELS for label in (sounds or ())):
@@ -157,7 +165,8 @@ class ActivityJobs:
                            SELECT a.recording_id FROM activity_clips a
                            JOIN recordings r ON r.id=a.recording_id
                            WHERE r.device=? AND r.started>? AND r.started<=?
-                             AND (a.category IS NULL OR a.category IN ('unknown','speech','conversation'))
+                             AND a.due IS NULL
+                             AND a.category IN ('unknown','speech','conversation')
                        )""",
                     (latest["device"], latest["started"], time_key(end + SOUND_CONTEXT_WINDOW)),
                 )

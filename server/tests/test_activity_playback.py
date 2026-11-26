@@ -214,6 +214,20 @@ class PlaybackReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(continued.category, "media")
         self.assertIsNone(continued.title)
 
+    async def test_transcript_update_preserves_device_observation_while_requeuing(self):
+        now = datetime.now(UTC) - timedelta(seconds=20)
+        record_device_context(self.store, "mac", now - timedelta(seconds=5), "Ardia", True)
+        key = self.clip(now, device="iphone")
+        self.jobs.save_sounds(self.jobs.next(audio=True), [])
+        dialogue = Mock(background_text=AsyncMock(return_value=json.dumps({"category": "media"})))
+        worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+        await worker.analyze(self.jobs.next(wait_for_sounds=True), False)
+
+        with self.store.connect() as db:
+            db.execute("UPDATE recordings SET transcript=?,state='ready' WHERE id=?", ("New transcript", key))
+            row = db.execute("SELECT category,basis,due FROM activity_clips WHERE recording_id=?", (key,)).fetchone()
+        self.assertEqual((row["category"], row["basis"], row["due"]), ("media", "device", ""))
+
     async def test_ps5_and_tv_continuity_and_open_ended_activities(self):
         first = self.clip(self.start)
         with self.store.connect() as db:

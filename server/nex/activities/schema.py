@@ -25,10 +25,11 @@ CREATE TRIGGER activity_new_recording AFTER INSERT ON recordings
 WHEN NOT EXISTS (SELECT 1 FROM workspace_features WHERE name='activities' AND enabled=0) BEGIN
     INSERT INTO activity_clips(recording_id,started) VALUES(NEW.id,NEW.started);
 END;
-CREATE TRIGGER IF NOT EXISTS activity_transcript_changed AFTER UPDATE OF transcript ON recordings
+DROP TRIGGER IF EXISTS activity_transcript_changed;
+CREATE TRIGGER activity_transcript_changed AFTER UPDATE OF transcript ON recordings
 WHEN OLD.transcript IS NOT NEW.transcript BEGIN
     UPDATE activity_clips SET version=version+1,due='',
-        category=CASE WHEN basis='sound' AND sounds IS NOT NULL THEN category END
+        category=CASE WHEN basis IN ('device','screen') OR (basis='sound' AND sounds IS NOT NULL) THEN category END
     WHERE recording_id=NEW.id;
 END;
 """

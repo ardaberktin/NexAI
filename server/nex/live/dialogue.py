@@ -46,6 +46,9 @@ class Dialogue:
         self.local = self.client(local_socket)
         self.mac = self.client(mac_socket) if mac_socket else None
         self.background_slot = asyncio.Lock()
+        self.priority_waiters = 0
+        self.priority_done = asyncio.Event()
+        self.priority_done.set()
         self.idle = asyncio.Event()
         self.idle.set()
         self.become_busy = asyncio.Event()
@@ -148,8 +151,23 @@ class Dialogue:
         return await public_reply(self, turn, history, emit, locate, read_clock=read_clock), False
 
     async def background_text(self, messages, limit, *, temperature=None):
-        async with self.background_slot:
-            return await self.complete_background(messages, limit, temperature=temperature)
+        self.priority_waiters += 1
+        self.priority_done.clear()
+        try:
+            async with self.background_slot:
+                return await self.complete_background(messages, limit, temperature=temperature)
+        finally:
+            self.priority_waiters -= 1
+            if self.priority_waiters == 0:
+                self.priority_done.set()
+
+    async def low_priority_text(self, messages, limit, *, temperature=None):
+        while True:
+            await self.priority_done.wait()
+            async with self.background_slot:
+                if self.priority_waiters:
+                    continue
+                return await self.complete_background(messages, limit, temperature=temperature)
 
     async def complete_background(self, messages, limit, *, temperature=None):
         if self.mac:

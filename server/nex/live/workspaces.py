@@ -102,9 +102,9 @@ class LiveWorkspaces:
             if not account:
                 state.enabled = next((enabled for user, enabled in self.accounts.list() if user.owner), True)
             tasks = (
-                Briefings(memory, dialogue.background_text).run,
+                Briefings(memory, dialogue.low_priority_text).run,
                 ActivityWorker(memory, self.runtime, self.room, dialogue, settings_root=self.root, voices=voices).run,
-                PersonalLearning(memory, PersonalFiles(root), dialogue.background_text).run,
+                PersonalLearning(memory, PersonalFiles(root), dialogue.low_priority_text).run,
             )
             jobs = asyncio.create_task(self.run_jobs(tasks, enabled))
             try:
