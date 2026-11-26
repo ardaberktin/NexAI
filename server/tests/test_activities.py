@@ -97,6 +97,19 @@ class ActivityTests(unittest.TestCase):
         self.assertEqual(set(snapshot["items"][0]), {"device", "category", "title", "confidence", "started", "ended"})
         self.assertEqual(current_snapshot(self.store, self.start + timedelta(seconds=126))["items"], [])
 
+    def test_chat_snapshot_displays_a_newer_sound_observation(self):
+        self.clip(self.start)
+        self.classify_sound("Video game music", "gaming")
+        self.clip(self.start + timedelta(seconds=12))
+        self.jobs.save_sounds(self.jobs.next(audio=True), ["Typing", "Computer keyboard"])
+
+        anchor = self.start + timedelta(seconds=25)
+        items = current_snapshot(self.store, anchor)["items"]
+        self.assertEqual([(item["category"], item["title"], item["confidence"]) for item in items],
+                         [("sound", "Typing detected", "Unclear")])
+        self.assertEqual(timeline(self.store, self.context.bounds)["items"][-1]["category"], "unknown")
+        self.assertEqual(current_snapshot(self.store, anchor + timedelta(seconds=90))["items"], [])
+
     def test_correction_during_generation_cannot_reinstate_superseded_observation(self):
         key = self.clip(self.start)
         with self.store.connect() as db:

@@ -15,8 +15,14 @@ PHRASES = {
 def current_snapshot(store, at=None):
     anchor = at or datetime.now(UTC)
     fields = ("started", "ended", "device", "category", "title", "confidence")
-    return {"items": [{key: period[key] for key in fields} for period in recent_periods(store, anchor, None)],
-            "as_of": time_key(anchor), "fresh_for": int(FRESH.total_seconds())}
+    items = []
+    for period in recent_periods(store, anchor, None):
+        item = {key: period[key] for key in fields}
+        if item["category"] == "unknown" and period["sounds"]:
+            # Chat filters unknown activities. Give it a separate display category for audible evidence.
+            item["category"] = "sound"
+        items.append(item)
+    return {"items": items, "as_of": time_key(anchor), "fresh_for": int(FRESH.total_seconds())}
 
 
 def describe(period):

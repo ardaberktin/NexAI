@@ -39,6 +39,15 @@ enum ChatActivityCheck {
         precondition(detection.first?.activity.title == "Playing PS5")
         precondition(detection.first?.observedAt == anchor.addingTimeInterval(-36))
         precondition(detection.first?.expiresAt == received.addingTimeInterval(54))
+
+        let soundPacket = """
+            {"as_of":"\(date)","fresh_for":90,"items":[{"category":"sound","title":"Typing detected",
+            "confidence":"Unclear","device":"iphone","started":"\(quiet.started)","ended":"\(quiet.ended)"}]}
+            """
+        let soundSnapshot = try decoder.decode(ChatActivitySnapshot.self, from: Data(soundPacket.utf8))
+        let sound = soundSnapshot.detections(receivedAt: received).first
+        precondition(sound?.activity.title == "Typing detected")
+        precondition(sound?.activity.confidence == "Unclear")
         print("Chat activity checks passed.")
     }
 }
