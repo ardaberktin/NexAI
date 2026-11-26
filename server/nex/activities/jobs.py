@@ -7,9 +7,10 @@ from ..daybook_schedule import schedule_recordings
 from ..recall_dates import time_key
 from ..workspace_features import enabled, revision
 from .recognition import from_sounds
-from .schema import SCREEN_FRESHNESS, attach_screen
+from .schema import SCREEN_FRESHNESS, attach_screen, interval
 
 SCREEN_RETENTION = timedelta(minutes=20)
+SOUND_CONTEXT_WINDOW = timedelta(seconds=45)
 
 
 def expire_samples(db, anchor):
@@ -47,11 +48,31 @@ class ActivityJobs:
             if feature_revision is None:
                 return None
             return db.execute(
-                f"""SELECT ? AS feature_revision,a.*,r.mode,r.transcript,r.audio_state,r.duration,r.time_zone
+                f"""SELECT ? AS feature_revision,a.*,r.device,r.mode,r.transcript,r.audio_state,r.duration,r.time_zone
                    FROM activity_clips a
                    JOIN recordings r ON r.id=a.recording_id WHERE {condition}
                    ORDER BY a.started DESC LIMIT 1""", (feature_revision, time_key(datetime.now(UTC))),
             ).fetchone()
+
+    def nearby_sounds(self, job):
+        start = datetime.fromisoformat(job["started"])
+        lower = start - SOUND_CONTEXT_WINDOW
+        with self.store.connect() as db:
+            rows = db.execute(
+                """SELECT r.started,r.duration,a.sounds FROM activity_clips a
+                   JOIN recordings r ON r.id=a.recording_id
+                   WHERE r.device=? AND r.started>=? AND r.started<? AND json_array_length(a.sounds)>0
+                   ORDER BY r.started DESC,r.id DESC LIMIT 4""",
+                (job["device"], time_key(lower - timedelta(seconds=65)), job["started"]),
+            )
+            context = []
+            for row in rows:
+                _, end = interval(row)
+                if end < lower or end > start:
+                    continue
+                context.append({"seconds_before": round((start - end).total_seconds()),
+                                "labels": json.loads(row["sounds"])})
+            return context
 
     def save_sounds(self, job, sounds):
         with self.store.connect() as db:

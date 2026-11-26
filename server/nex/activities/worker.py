@@ -11,12 +11,14 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 
 from ..audio_files import AudioFiles
+from ..live import VOICE_LABELS
 from ..models import Engines, ModelError
 from ..recall_dates import time_key
 from ..settings import Settings
 from .jobs import ActivityJobs
 from .recognition import classifier_messages, from_sounds, interpret
 from .screen_recognition import classify_with_screen
+from .voice_origin import review_voice_origin, source_evidence
 
 LOG = logging.getLogger(__name__)
 
@@ -55,7 +57,20 @@ class ActivityWorker:
         transcript, screen = (job["transcript"] or "")[:1500], job["screen"] or ""
         fallback = from_sounds(sounds, job["mode"], transcript)
         result = await self.classify(transcript, screen, sounds, fallback)
+        result = await self.review_voices(job, result, transcript, sounds, fallback)
         await asyncio.to_thread(self.jobs.save, job, result or fallback, due=None if result else retry_time())
+
+    async def review_voices(self, job, result, transcript, sounds, fallback):
+        if (result is None or result.basis == "screen" or result.category not in ("unknown", "speech", "conversation")
+                or not (transcript or sounds)):
+            return result
+        if result.category == "unknown" and not (transcript or VOICE_LABELS.intersection(sounds or ())):
+            return result
+        nearby = await asyncio.to_thread(self.jobs.nearby_sounds, job)
+        evidence = source_evidence(transcript, sounds, nearby)
+        if result.category == "unknown" and not (transcript or evidence["current_playback"] or evidence["earlier_playback"]):
+            return result
+        return await review_voice_origin(self.dialogue, evidence, fallback) or result
 
     async def classify(self, transcript, screen, sounds, fallback):
         if fallback.category == "nex":

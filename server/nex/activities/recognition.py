@@ -108,14 +108,19 @@ def sound_observation(category, value, sounds, fallback):
     return Observation(category, "sound", heard(labels[key] for key in dict.fromkeys(evidence)))
 
 
-def read_decision(raw):
+def read_object(raw):
     if not isinstance(raw, str):
         return None
     try:
         value = json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
     except (ValueError, TypeError, AttributeError):
         return None
-    if not isinstance(value, dict) or not isinstance(value.get("category"), str):
+    return value if isinstance(value, dict) else None
+
+
+def read_decision(raw):
+    value = read_object(raw)
+    if value is None or not isinstance(value.get("category"), str):
         return None
     return value if value["category"] in CLASSIFIER_CATEGORIES else None
 

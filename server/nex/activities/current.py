@@ -18,8 +18,8 @@ def current_snapshot(store, at=None):
     items = []
     for period in recent_periods(store, anchor, None):
         item = {key: period[key] for key in fields}
-        if item["category"] == "unknown" and period["sounds"]:
-            # Chat filters unknown activities. Give it a separate display category for audible evidence.
+        if item["category"] == "speech" or (item["category"] == "unknown" and period["sounds"]):
+            # Give Chat a display category for audible evidence with no identified activity.
             item["category"] = "sound"
         items.append(item)
     return {"items": items, "as_of": time_key(anchor), "fresh_for": int(FRESH.total_seconds())}

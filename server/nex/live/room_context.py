@@ -7,11 +7,10 @@ from threading import Lock
 import numpy as np
 import sherpa_onnx
 
-from . import INPUT_RATE
+from . import INPUT_RATE, PLAYBACK_LABELS
 
 LOG = logging.getLogger(__name__)
 ASSETS = ("model.int8.onnx", "class_labels_indices.csv", "segmentation.onnx", "speaker.onnx")
-PLAYBACK_LABELS = {"Television", "Radio"}
 MUSIC_LABELS = {"Music", "Musical instrument", "Singing"}
 
 

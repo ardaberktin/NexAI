@@ -14,6 +14,7 @@ from nex.activities.jobs import ActivityJobs, record_screen
 from nex.activities.recall import activity_evidence, activity_question
 from nex.activities.recognition import Observation, from_sounds, interpret
 from nex.activities.timeline import timeline
+from nex.activities.voice_origin import source_evidence, source_observation
 from nex.activities.worker import ActivityWorker
 from nex.assistant import Assistant
 from nex.daybook import Daybook, DayContext
@@ -189,6 +190,36 @@ class ActivityTests(unittest.TestCase):
             with self.subTest(category=category, source=source, evidence=evidence):
                 raw = json.dumps({"category": category, "source": source, "evidence": evidence})
                 self.assertEqual(interpret(raw, "", "", fallback, sounds), fallback)
+
+    def test_worker_uses_recent_sound_evidence_from_the_same_microphone(self):
+        for offset, device, labels in (
+            (0, "iphone", ["Television"]),
+            (125, "mac", ["Music"]),
+            (140, "iphone", ["Speech", "Radio"]),
+            (160, "iphone", ["Speech"]),
+        ):
+            key = self.clip(self.start + timedelta(seconds=offset), device=device)
+            self.jobs.save_sounds(self.jobs.next(audio=True), labels)
+
+        dialogue = Mock(background_text=AsyncMock(side_effect=[
+            json.dumps({"category": "conversation", "source": "sound", "evidence": ["1"]}),
+            json.dumps({"origin": "recorded_playback", "evidence": "earlier_playback"}),
+        ]))
+        worker = ActivityWorker(self.store, self.store.root, None, dialogue)
+        asyncio.run(worker.analyze(self.jobs.next(), False))
+        data = json.loads(dialogue.background_text.await_args.args[0][-1]["content"])
+        self.assertEqual(data, {"current_sounds": ["Speech"], "current_playback": [],
+                                "earlier_playback": [{"seconds_before": 8, "labels": ["Radio"]}]})
+        observation = timeline(self.store, self.context.bounds, source=key)["items"][-1]
+        self.assertEqual(observation["title"], "Media playback")
+        self.assertEqual(observation["detail"], "Heard Speech. Nearby recordings picked up Radio.")
+
+    def test_earlier_sound_alone_cannot_classify_the_current_recording(self):
+        nearby = [{"seconds_before": 5, "labels": ["Radio"]}]
+        fallback = from_sounds([], "ambient", "")
+        raw = json.dumps({"origin": "recorded_playback", "evidence": "earlier_playback"})
+        self.assertEqual(source_observation(raw, source_evidence("", [], nearby), fallback), fallback)
+        self.assertIsNone(source_observation(raw, source_evidence("", ["Speech"], []), fallback))
 
     def test_youtube_requires_platform_evidence_from_the_screen_or_speech(self):
         screen = "A YouTube watch page is playing a video."
