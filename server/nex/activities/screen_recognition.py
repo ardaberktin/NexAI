@@ -7,6 +7,7 @@ from ..personal_files import safe_line
 from .brand_cues import BRANDS, supports_brand
 from .recognition import (
     CLASSIFIER_CATEGORIES,
+    SOUND_CATEGORIES,
     TITLES,
     Observation,
     heard,
@@ -50,8 +51,10 @@ def resolve_screen_decision(value, evidence, fallback):
     basis = key if key in ("screen", "speech") else "sound"
     if basis == "screen" and value["screen_state"] != "active":
         return fallback, False
+    if basis == "sound" and category not in SOUND_CATEGORIES:
+        return fallback, False
     detail = safe_line(evidence[key], 240)
-    if not detail or (category in BRANDS and (basis == "sound" or not supports_brand(category, basis, detail))):
+    if not detail or (category in BRANDS and not supports_brand(category, basis, detail)):
         return fallback, False
     return Observation(category, basis, heard([detail]) if basis == "sound" else detail), False
 

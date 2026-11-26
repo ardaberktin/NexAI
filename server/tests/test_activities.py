@@ -189,6 +189,15 @@ class ActivityTests(unittest.TestCase):
         self.assertEqual(interpret(result, mention, "", fallback), fallback)
         self.assertEqual(journal_speech("I am watching YouTube."), "I am watching YouTube.")
 
+    def test_generic_tv_sounds_do_not_identify_a_movie_or_show(self):
+        sounds = ["Television", "Background music"]
+        fallback = from_sounds(sounds, "ambient", "")
+        for category in ("movie", "show"):
+            sound_result = json.dumps({"category": category, "source": "sound", "evidence": ["1"]})
+            quoted_sound = json.dumps({"category": category, "quote": "Television"})
+            self.assertEqual(interpret(sound_result, "", "", fallback, sounds), fallback)
+            self.assertEqual(interpret(quoted_sound, "See you later.", "", fallback, sounds), fallback)
+
     def test_worker_uses_screen_state_before_accepting_an_activity(self):
         self.clip(self.start)
         with self.store.connect() as db:

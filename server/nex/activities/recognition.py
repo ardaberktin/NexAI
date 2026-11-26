@@ -19,13 +19,14 @@ TITLES = {
 }
 
 CLASSIFIER_CATEGORIES = tuple(key for key in TITLES if key != "nex")
-SOUND_CATEGORIES = ("unknown", *(key for key in CLASSIFIER_CATEGORIES if key not in BRANDS and key != "unknown"))
+SOUND_CATEGORIES = ("unknown", *(key for key in CLASSIFIER_CATEGORIES
+                                 if key not in BRANDS and key not in ("movie", "show", "unknown")))
 
 SOUND_INSTRUCTION = """Infer the broad activity suggested by these sound detections from a microphone.
 Use the most distinctive sound. Some labels can refer to the same event.
 Ignore generic room sounds. Choose unknown if a sound is ambiguous and could equally fit many unrelated activities.
 A plausible, distinctive sound is enough for a possible activity. Use the category directly supported by the sound.
-Use media for recognizable TV or video playback when the sounds cannot distinguish a movie, show, or game.
+Use media for recognizable TV or video playback. Generic sound detections cannot identify a film or episode.
 Choose from: """ + ", ".join(f"{key} ({TITLES[key]})" for key in SOUND_CATEGORIES) + """.
 For unknown, return source none and empty evidence. Otherwise return source sound and the IDs of the supporting sounds as strings.
 Return JSON with source, evidence, and category. For example, frying and sizzling can support cooking,
@@ -137,8 +138,8 @@ def interpret(raw, transcript, screen, fallback, sounds=()):
                   if quote.casefold() in " ".join(text.split()).casefold()), None)
     if basis is None and any(quote.casefold() == label.casefold() for label in sounds or ()):
         basis = "sound"
-    if basis is None:
+    if basis is None or (basis == "sound" and category not in SOUND_CATEGORIES):
         return fallback
-    if category in BRANDS and (basis == "sound" or not supports_brand(category, basis, quote)):
+    if category in BRANDS and not supports_brand(category, basis, quote):
         return fallback
     return Observation(category, basis, quote)
