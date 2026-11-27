@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock
 
 from nex.conversation.goal_authorization import requested_future_action
 from nex.conversation.goal_edit_fields import edit_schema
-from nex.conversation.plan import requested_schedule
+from nex.conversation.plan import requested_schedule, validated
+from nex.conversation.planning_schema import plan_schema
 from nex.conversation.schedule_pattern import (
     Pattern,
     interval_minutes,
@@ -78,6 +79,13 @@ class GoalSchedulePatternTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["required"], ["query"])
         self.assertEqual(set(result["properties"]), {"query"})
         self.assertFalse(result["additionalProperties"])
+
+    def test_gmail_planner_must_decide_search_scope_and_old_plans_still_replay(self):
+        schema = plan_schema({"gmail"})["properties"]["tools"]["items"]["anyOf"][0]
+        self.assertEqual(set(schema["required"]), {"name", "query", "terms"})
+        for tool in ({"name": "gmail"}, {"name": "gmail", "query": "", "terms": []},
+                     {"name": "gmail", "query": "summer placement", "terms": ["internship"]}):
+            self.assertEqual(validated([tool]).tools, (tool,))
 
     def test_empty_filtered_search_cannot_establish_an_empty_inbox(self):
         search = {"status": "empty", "messages": [], "search_scope": {"query": "summer placements"}}

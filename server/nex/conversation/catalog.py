@@ -25,8 +25,10 @@ CATALOG = {
     "python": "Offline computation or running requested code. query = the task in words, not Python source.",
     "agenda": "The user's combined schedule, calendar and tasks unless a specific service is named. "
               "Use start_date and optional exclusive end_date (YYYY-MM-DD), or a relative day in query.",
-    "gmail": "Read email. query = topic or empty for recent mail. When the user requests a topical search, copy its topic into query and supply common alternative wordings in terms. Use an empty query only for an unfiltered recent-mail request. Keep search instructions, priority and read status out of terms. "
-             "Use exact:true only for a quoted exact phrase requested by the user. Omit unread and priority unless the user asks for those filters.",
+    "gmail": "Search the user's Gmail. query is the subject matter they want to find. terms are up to three "
+             "alternative short search expressions for how a matching sender might describe the same subject. "
+             "For a general mailbox overview, set query to an empty string and terms to an empty array. "
+             "Use exact:true only for a quoted phrase requested verbatim. Set unread or priority only on request.",
     "calendar": "Events specifically from Google Calendar. Use this only when the Google service is requested.",
     "ticktick": "Tasks. Use start_date and optional exclusive end_date (YYYY-MM-DD). Optional lists and access_check booleans.",
     "archive": "Search only the user's recordings and past dialogue. query = topic keywords. "

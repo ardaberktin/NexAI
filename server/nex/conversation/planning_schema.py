@@ -7,7 +7,7 @@ from .goal_management_prompts import OPERATIONS
 
 BOOLEAN = {"unread", "priority", "exact", "lists", "access_check", "check_in", "format_only"}
 INTEGER = {"count", "duration_seconds", "frequency", "target", "max_links"}
-REQUIRED = {"weather": ("period", "date"), "save_memory": ("query",), "clock": ("operation",),
+REQUIRED = {"gmail": ("query", "terms"), "weather": ("period", "date"), "save_memory": ("query",), "clock": ("operation",),
             "past_questions": ("count",), "activities": ("mode",), "weather_city": ("operation",),
             "browser": ("url",), "skill": ("skill",)}
 SCHEDULED_FIELDS = {"new_calendar": {"start_date", "end_date"}, "new_mail": set(), "create_pdf": set(),

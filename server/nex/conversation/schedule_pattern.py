@@ -33,8 +33,9 @@ def unsupported_schedule():
     return {"status": "unsupported_schedule", "saved": False, "changed": False,
             "supported_intervals_minutes": list(FREQUENCIES[1:]),
             "single_weekly_weekday": True, "weekday_subsets": False,
-            "detail": "Fixed intervals run continuously. A single weekday can repeat weekly. "
-                      "A recurring subset of weekdays cannot be represented. Ask before changing the schedule."}
+            "requires_user_choice": True,
+            "detail": "Only the listed fixed intervals are available. A single weekday can repeat weekly. "
+                      "A repeating subset of weekdays is unavailable."}
 
 
 UNIT_MINUTES = {"minute": 1, "hour": 60, "day": 1440, "week": 10080}
