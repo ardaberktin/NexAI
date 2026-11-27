@@ -50,6 +50,15 @@ class GoalSchedulePatternTests(unittest.IsolatedAsyncioTestCase):
             result = await requested_future_action({"question": message}, AsyncMock(return_value=json.dumps(decision)))
             self.assertIs(result, expected)
 
+    async def test_calendar_label_requires_independent_confirmation_of_a_fixed_week(self):
+        raw = json.dumps({"pattern": "calendar_pattern", "count": 1, "unit": "week", "weekdays": ["Wednesday"],
+                          "clock": "12:00", "first_start": "implicit"})
+        for fixed, expected in ((True, "interval"), (False, "calendar_pattern")):
+            model = AsyncMock(side_effect=[raw, json.dumps({"weekly": fixed})])
+            parsed = await read_pattern({"question": "Deliver the report on Wednesdays."}, model)
+            self.assertEqual(parsed.kind, expected)
+            self.assertEqual(parsed.unsupported, not fixed)
+
     def test_interval_conversion_preserves_the_quantity_and_unit(self):
         for count, unit, result in ((15, "minute", 15), (0.5, "hour", 30), (2, "week", 20160),
                                     (True, "minute", None), (1, "unknown", None)):

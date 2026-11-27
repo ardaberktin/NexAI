@@ -101,6 +101,18 @@ def interval_minutes(data):
         return None
 
 
+async def fixed_weekly(context, weekday, generate):
+    instructions = """Does running on weekday every seven days satisfy the requested recurrence?
+Check the user's actual constraints. Reject monthly or ordinal weekdays, intervals spanning multiple weeks,
+excluded occurrences, end dates, or any other exception to that single weekly pattern. Do not perform
+date arithmetic. Return only the decision."""
+    schema = {"type": "object", "required": ["weekly"], "additionalProperties": False,
+              "properties": {"weekly": {"type": "boolean"}}}
+    request = {"weekday": weekday, "request": context["question"], "history": context.get("history", [])}
+    raw = await generate(model_messages(instructions, request, schema=schema), 25)
+    return json_object(raw or "").get("weekly") is True
+
+
 async def read_pattern(context, generate):
     history = [item["content"] for item in context.get("history", []) if item.get("role") == "user"]
     request = {"earlier_user_requests": history[-2:], "latest_request": context["question"]}
@@ -109,8 +121,12 @@ async def read_pattern(context, generate):
     days = data.get("weekdays")
     if data.get("pattern") not in PATTERNS or not isinstance(days, list) or not all(d in WEEKDAYS for d in days):
         return None
-    minutes = interval_minutes(data) if data["pattern"] == "interval" else None
-    if data["pattern"] == "interval" and minutes is None:
+    kind = data["pattern"]
+    if (kind == "calendar_pattern" and len(days) == 1 and interval_minutes(data) == 10080
+            and await fixed_weekly(context, days[0], generate)):
+        kind = "interval"
+    minutes = interval_minutes(data) if kind == "interval" else None
+    if kind == "interval" and minutes is None:
         return None
     try:
         clock = time.fromisoformat(data["clock"]) if data.get("clock") is not None else None
@@ -121,7 +137,7 @@ async def read_pattern(context, generate):
         return None
     if mode == "clock" and clock is None:
         mode = "implicit"
-    return Pattern(data["pattern"], minutes, tuple(dict.fromkeys(days)), clock, mode)
+    return Pattern(kind, minutes, tuple(dict.fromkeys(days)), clock, mode)
 
 
 REVIEW_READ_TIME = """Decide when the user wants this lookup performed. Looking up a future date now is a

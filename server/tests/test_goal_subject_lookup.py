@@ -2,12 +2,22 @@ import json
 import unittest
 from unittest.mock import AsyncMock
 
-from nex.conversation.goal_lookup import PAGE_SIZE
+from nex.conversation.goal_lookup import PAGE_SIZE, clarified_edit_target
 from nex.conversation.goal_management_prompts import RESOLVE_PDF_REMOVAL
 from nex.conversation.goal_pdf_removal import decide_page, remove_pdf
 
 
 class GoalSubjectLookupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_clarification_separates_requested_and_protected_targets(self):
+        candidates = [{"title": "Greenhouse humidity"}, {"title": "Greenhouse temperature"}]
+        context = {"question": "Humidity, please. Leave temperature alone.",
+                   "clarification": [{"content": "Move the greenhouse check to noon."}]}
+        preserve = '{"role":"preserve","words":"Leave temperature alone"}'
+        for quote, expected in (("Humidity", candidates[:1]), ("Watering", [])):
+            model = AsyncMock(side_effect=[json.dumps({"role": "change", "words": quote}), preserve])
+            self.assertEqual(await clarified_edit_target(candidates, context, model), expected)
+            self.assertEqual(model.await_count, 2)
+
     async def test_a_shared_subject_on_different_pages_cannot_be_treated_as_unique(self):
         goals = [{"id": str(n), "target": n, "title": f"Task {n}", "task": "Routine update."}
                  for n in range(1, PAGE_SIZE + 2)]

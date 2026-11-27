@@ -12,6 +12,7 @@ from .goal_edit import plan_edit
 from .goal_edit_receipt import changed_settings
 from .goal_lookup import (
     PAGE_SIZE,
+    clarified_edit_target,
     clarify_target,
     describe,
     exact_title_targets,
@@ -40,7 +41,7 @@ from .schedule_pattern import UnsupportedSchedule, unsupported_schedule
 from .tools import Evidence
 
 
-def apply_change(store, turn, goal, action, edit, *, format_instruction=None):
+def apply_change(store, turn, goal, action, edit, *, format_instruction=None, remove_format=False):
     goals = Goals(store)
     identifier, revision = goal["id"], goal["revision"]
     if action == "delete":
@@ -71,7 +72,9 @@ def apply_change(store, turn, goal, action, edit, *, format_instruction=None):
         receipt = goal_receipt(store, saved, updated=changed) | {"action": "updated" if changed else "unchanged"}
         if changed and edit:
             receipt["changed_settings"] = changed_settings(goal, saved, receipt["check_in"])
-        if format_instruction:
+        if remove_format:
+            receipt = {"action": "pdf_removed", "title": saved["title"], "schedule_text": None}
+        elif format_instruction and edit is None:
             receipt["format_instruction"] = format_instruction.strip()
     return Evidence(receipt, engine="goal_" + receipt["action"], goal_id=identifier)
 
@@ -144,7 +147,14 @@ async def manage_goal(store, turn, generate, operation=None, *, format_only=Fals
         check_matches = bool(operation and not offered and not format_only and len(named) != 1 and
                              (len(descriptions) > 1 or operation == "delete"))
         check_pdf_matches = format_only and not offered and len(descriptions) > 1
-        matches = await shortlist(descriptions, context, generate, verify_match=check_matches or check_pdf_matches)
+        if operation == "edit" and not format_only and offered and len(descriptions) > 1:
+            matches = await clarified_edit_target(descriptions, context, generate)
+            if len(matches) != 1:
+                return clarify_target(descriptions, goals)
+        elif operation == "delete" and len(named) > 1:
+            matches = [row for row in descriptions if await authorized_deletion(row["title"], context, generate)]
+        else:
+            matches = await shortlist(descriptions, context, generate, verify_match=check_matches or check_pdf_matches)
         if format_only and exact_titles and exact_titles.isdisjoint(row["target"] for row in matches):
             matches.extend(row for row in descriptions if row["target"] in exact_titles)
         if format_only and len(matches) < len(descriptions) <= PAGE_SIZE:
@@ -225,7 +235,7 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
             fields = result.get("changes", {})
             format_instruction = fields.get("format_instruction") if fields.keys() == {"format_instruction"} else None
             return await asyncio.to_thread(apply_change, store, turn, goal, action, edit,
-                                           format_instruction=format_instruction)
+                                           format_instruction=format_instruction, remove_format=fields.get("pdf_enabled") is False)
         if verdict is None and "history" not in selection and context["history"] and not named:
             selection = context
             continue
@@ -244,13 +254,17 @@ async def verified_pdf_target(context, candidates, target, generate):
     return yes_no(await generate(model_messages(VERIFY_PDF_TARGET, data), 8)) is True
 
 
+async def authorized_deletion(title, context, generate):
+    data = {"goal": title, "user_message": context["question"]}
+    if clarification := context.get("clarification"):
+        data["preceding_clarification"] = clarification
+    return yes_no(await generate(model_messages(VERIFY_NAMED_DELETE, data), 8)) is True
+
+
 async def confirmed_change(goal, decision, context, generate, named):
     action = decision["action"]
     if action == "delete" and (named == [decision["target"]] or context.get("requested_action") == "delete"):
-        data = {"goal": goal["title"], "user_message": context["question"]}
-        if clarification := context.get("clarification"):
-            data["preceding_clarification"] = clarification
-        return yes_no(await generate(model_messages(VERIFY_NAMED_DELETE, data), 8)) is True
+        return await authorized_deletion(goal["title"], context, generate)
     operation = {"edit": decision["changes"]} if action == "edit" else action
     review = {"saved_goal": {"name": goal["title"], "task": goal["prompt"]}, "proposed_operation": operation,
               "local_time": context["local_time"], "latest_message": context["question"]}

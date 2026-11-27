@@ -95,10 +95,31 @@ async def plan_edit(turn, goal, context, generate):
                     and (weekday := weekday_selector({"query": changes.get("timing")}))):
                 day = with_weekday({}, weekday, turn.zone, turn.started)["start_date"]
                 changes = changes | {"start": day + start[10:]}
+            if changes.keys() == {"format_instruction"}:
+                result = await plan_output_edit(turn, data, generate)
+                if result != "other":
+                    return result
             return changes, changes_for(turn, goal, changes)
         except ValueError as error:
             instructions = f"{instructions}\nCorrect the previous edit {changes!r}. {error}"
     return None
+
+
+PDF_MODE = """Identify the requested change to this goal's output. Choose enable_pdf for additional
+or reformatted PDF copies, remove_pdf for disabling future attachments, and other for a different format.
+Respect negation and use the discussion to resolve references."""
+
+
+async def plan_output_edit(turn, data, generate):
+    schema = {"type": "object", "required": ["setting"], "additionalProperties": False,
+              "properties": {"setting": {"enum": ["enable_pdf", "remove_pdf", "other"]}}}
+    raw = await generate(model_messages(PDF_MODE, data, schema=schema), 30)
+    setting = json_object(raw or "").get("setting")
+    if setting == "enable_pdf":
+        return await plan_pdf_format(turn, data, generate)
+    if setting == "remove_pdf":
+        return {"pdf_enabled": False}, None
+    return "other" if setting == "other" else None
 
 
 async def plan_pdf_format(turn, data, generate):

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from conversation_fixtures import unlock
 from nex.assistant import Assistant
+from nex.conversation.goal_edit import PDF_MODE
 from nex.conversation.goal_edit_fields import CHOOSE_FIELDS
 from nex.conversation.goal_edit_receipt import VERIFY_EDIT, WRITE_EDIT
 from nex.conversation.goal_management_prompts import (
@@ -19,10 +20,14 @@ from nex.conversation.goal_management_prompts import (
 )
 from nex.conversation.reply import (
     VERIFY_GOAL,
+    VERIFY_GOAL_FORMAT,
+    VERIFY_GOAL_PDF_REMOVAL,
     VERIFY_GOAL_STATUS,
     VERIFY_UNSAVED_GOAL,
     WRITE_GOAL,
     WRITE_GOAL_CLARIFICATION,
+    WRITE_GOAL_FORMAT,
+    WRITE_GOAL_PDF_REMOVAL,
     WRITE_GOAL_STATUS,
     WRITE_UNSAVED_GOAL,
 )
@@ -73,6 +78,8 @@ class ChatGoalManagementTests(unittest.TestCase):
                 return json.dumps(self.decision)
             selected, = [row for row in data["goals"] if row["title"] == self.card["title"]]
             return json.dumps({"action": self.decision, "target": selected["target"], "title": selected["title"]})
+        if prompt == PDF_MODE:
+            return json.dumps({"setting": self.pdf_mode})
         if prompt == CHOOSE_FIELDS:
             return json.dumps({"fields": [key for key in self.edit if key not in {"question", "timing"}]})
         if prompt.startswith(EDIT_GOAL):
@@ -82,6 +89,10 @@ class ChatGoalManagementTests(unittest.TestCase):
         if prompt == VERIFY_NAMED_DELETE:
             self.deletion_review = data
             return "YES" if self.verify() == "MATCH" else "NO"
+        if prompt in (WRITE_GOAL_FORMAT, WRITE_GOAL_PDF_REMOVAL):
+            return f"Updated PDF copies for {data['tools']['goal']['title']}."
+        if prompt in (VERIFY_GOAL_FORMAT, VERIFY_GOAL_PDF_REMOVAL):
+            return "YES"
         if prompt.startswith((WRITE_GOAL, WRITE_GOAL_STATUS, WRITE_EDIT)):
             receipt = data["tools"]["goal"]
             text = f"Goal {receipt['action']}: {receipt['title']}."
@@ -122,6 +133,21 @@ class ChatGoalManagementTests(unittest.TestCase):
 
         GoalFollowUpJobs(self.store, schedule).decide()
         return self.goals.detail(self.card["id"])["follow_up"]
+
+    def test_generic_edit_adds_and_removes_the_actual_pdf_setting(self):
+        session = unlock(self.store)
+        self.intent = "EDIT"
+        self.decision = "edit"
+        for mode, request in (("enable_pdf", "Add a PDF copy to the library pass updates"),
+                              ("remove_pdf", "Switch the library pass updates back to text only")):
+            with self.subTest(mode=mode):
+                self.pdf_mode = mode
+                self.edit = {"format_instruction": request}
+                self.ask(request, session=session)
+                saved = self.goals.detail(self.card["id"])
+                self.assertEqual(saved.get("pdf_instruction"), request if mode == "enable_pdf" else None)
+                self.assertEqual(saved["prompt"], self.card["prompt"])
+                self.assertEqual(self.receipt()["goal_id"], self.card["id"])
 
     def test_pause_inspect_and_resume_keep_the_definition_and_sibling(self):
         session = unlock(self.store)

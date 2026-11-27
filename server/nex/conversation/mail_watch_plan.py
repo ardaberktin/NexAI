@@ -93,6 +93,10 @@ def mail_watch_history(turn):
 def prepare_mail_watch(tools, turn, start_mode):
     if not isinstance(tools, list):
         return tools
+    if (not turn.history and len(tools) == 1 and isinstance(tools[0], dict) and tools[0].get("name") == "goal"
+            and 0 < len(turn.text.strip()) <= 1200):
+        # A standalone arrival watch can keep the exact criteria authorized by its owner.
+        tools = [tools[0] | {"query": turn.text.strip()}]
     return [with_watch_start(tool, turn, start_mode) if isinstance(tool, dict) and tool.get("name") == "goal" else tool
             for tool in tools]
 

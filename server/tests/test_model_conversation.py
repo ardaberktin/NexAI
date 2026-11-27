@@ -202,7 +202,7 @@ class ModelConversationTests(unittest.TestCase):
         proposed = {"name": "goal", "query": "Watch Gmail for the committee’s decision", "frequency": 60,
                     "delay_minutes": 60}
         watch = {key: value for key, value in proposed.items() if key != "delay_minutes"} | {
-            "start": first_run.isoformat(timespec="minutes"), "watch_provider": "gmail",
+            "start": first_run.isoformat(timespec="minutes"), "watch_provider": "gmail", "query": self.turn.text,
         }
         generate = AsyncMock(side_effect=['{"capabilities":["mail_watch"],"language":"en"}',
                                           '{"action":"mail_watch","start":"delay"}',

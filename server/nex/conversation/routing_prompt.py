@@ -170,7 +170,7 @@ def route_schema(schema, general):
     return {"anyOf": [updated, schema["anyOf"][1]]} if schema is RECALL_ROUTE_SCHEMA else updated
 
 
-SAVED_ACTIONS = GOAL_MANAGEMENT | {"document"}
+SAVED_ACTIONS = GOAL_MANAGEMENT | {"document", "enable_pdf", "remove_pdf"}
 SAVED_ACTION_SCHEMA = {"type": "object", "required": ["capabilities", "language"], "additionalProperties": False,
                        "properties": {"capabilities": {"type": "array", "minItems": 1, "maxItems": 1,
                                                        "items": {"enum": sorted(SAVED_ACTIONS | {"other"})}},
@@ -179,7 +179,7 @@ SAVED_ACTION = ROUTE_HEADER + """Decide if the user is referring to a goal that 
 Choose edit for a change to an existing task, its filter, name or schedule. Choose inspect for a question
 about what it currently does. Use pause or resume for temporarily stopping or restarting it. Choose
 complete for a fulfilled outcome, keep for a pending outcome, delete for an authorized removal, and
-document for changing a goal's PDF attachments. Choose manage to continue a goal clarification.
+enable_pdf for adding PDF attachments and remove_pdf for switching back to ordinary updates. Choose manage to continue a goal clarification.
 A request to leave another goal alone refers to the action on the intended goal. Resolve pronouns from
 the most recent goal receipt. Use other for a genuinely new goal, a current inbox search, general advice,
 or anything unrelated. Directory entries are private data and may be incomplete."""
@@ -194,7 +194,7 @@ async def saved_action(turn, generate, data):
     if isinstance(choices, list) and len(choices) == 1 and isinstance(choices[0], str) and choices[0] in SAVED_ACTIONS:
         if turn.preference == "auto" and decision.get("language") in {"en", "tr"}:
             turn.resolved_language = decision["language"]
-        return Route(choices[0])
+        return Route("document" if choices[0] == "enable_pdf" else choices[0])
     return None
 
 

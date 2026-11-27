@@ -42,14 +42,14 @@ from .agent import (
 )
 from .catalog import PUBLIC
 from .clock_tool import clock_call
-from .goal_edit_receipt import VERIFY_EDIT, WRITE_EDIT
+from .goal_edit_receipt import VERIFY_EDIT, VERIFY_WATCH, WRITE_EDIT, WRITE_WATCH
 from .goal_management import manage_goal
 from .pdf_tool import create_pdf
 from .plan import Plan, validated
 from .question_quotes import select_quotes
 from .schedule_pattern import unsupported_schedule
 from .tools import Evidence, fetch
-from .verify_tool_reply import verified_tool_reply, verify_or_revise
+from .verify_tool_reply import verify_or_revise
 
 WRITE = """You are Nex. Answer the latest question directly, warmly, and in the requested language.
 Use earlier turns only to resolve references in the latest question. If the user changes topics, answer the new
@@ -393,6 +393,8 @@ async def compose_goal(turn, goal, generate, tokens, preferences):
     status = goal.get("action") in {"completed", "deleted", "unchanged", "paused", "resumed", "inspected"}
     guidance = WRITE_GOAL_STATUS if status else WRITE_GOAL
     verifier = VERIFY_GOAL_STATUS if status else VERIFY_GOAL
+    if goal.get("action") == "saved" and goal.get("watch_provider") == "gmail":
+        guidance, verifier = WRITE_WATCH, VERIFY_WATCH
     editing = bool(goal.get("changed_settings"))
     if editing:
         guidance, verifier = WRITE_EDIT, VERIFY_EDIT
@@ -408,13 +410,9 @@ async def compose_goal(turn, goal, generate, tokens, preferences):
         text = await generate(model_messages(instructions, data), tokens)
         if (isinstance(text, str) and text.strip()
                 and (not pdf_format or names_saved_title(text, goal["title"]))):
-            if goal.get("watch_provider") == "gmail" and not status:
-                if await verified_tool_reply(turn.text, text, {"goal": goal}, local_time, generate):
-                    return text.strip()
-            else:
-                review = model_messages(verifier, {"draft": text, "goal": goal, "local_time": local_time})
-                if yes_no(await generate(review, 8)) is True:
-                    return text.strip()
+            review = model_messages(verifier, {"draft": text, "goal": goal, "local_time": local_time})
+            if yes_no(await generate(review, 8)) is True:
+                return text.strip()
         if pdf_format:
             correction = "Copy the complete saved title verbatim and describe only the saved PDF setting."
         elif editing:

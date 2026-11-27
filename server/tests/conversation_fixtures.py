@@ -16,6 +16,7 @@ from nex.conversation.catalog import (
 )
 from nex.conversation.clock_tool import PLAN_CLOCK
 from nex.conversation.goal_authorization import CHECK_REQUEST
+from nex.conversation.goal_edit_receipt import VERIFY_WATCH, WRITE_WATCH
 from nex.conversation.mail_watch_plan import (
     CHOOSE_MAIL_ACTION,
     MAIL_WATCH_ROUTES,
@@ -81,7 +82,7 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
             return json.dumps({"notice": text})
         if prompt == VERIFY_WEB:
             return web_verdict
-        if prompt in {VERIFY_GOAL, VERIFY_GOAL_PLAN}:
+        if prompt in {VERIFY_GOAL, VERIFY_GOAL_PLAN, VERIFY_WATCH}:
             return "YES"
         if prompt == VERIFY_TOOL_REPLY:
             gmail, goal = current_tools.get("gmail"), current_tools.get("goal", {})
@@ -104,7 +105,7 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
                 payload["plan_feedback"] = messages[-1]["content"]
             calls = plan(payload) if callable(plan) else plan
             return tools(*calls)
-        if prompt.startswith((WRITE_GOAL, WRITE_MAIL_WATCH, WRITE)):
+        if prompt.startswith((WRITE_GOAL, WRITE_WATCH, WRITE_MAIL_WATCH, WRITE)):
             payload = json.loads(messages[1]["content"])
             current_tools = payload["tools"]
             if compose:
