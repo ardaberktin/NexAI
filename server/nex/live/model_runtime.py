@@ -20,6 +20,7 @@ MODEL_ID = "gemma"
 MODEL_FILE = "gemma-3-4b-it-qat-Q4_0.gguf"
 FALLBACK_CONTEXT = 4096
 EXTRA_MODEL_PATTERNS = (
+    ("qwen-3.5-4b", "Qwen 3.5 · 4B", "Qwen3.5-4B-Q4_K_M.gguf", True),
     ("muse-glimmer", "Muse Glimmer · 30B", "muse-glimmer*.gguf", True),
     ("gemma-4-12b", "Gemma 4 · 12B", "gemma-4-12[bB]*.gguf", True),
     ("gemma-4", "Gemma 4", "gemma-4*.gguf", True),
@@ -158,6 +159,9 @@ class ModelRuntime:
                 self.selected_id = saved
         except FileNotFoundError:
             pass
+        self._persist_selection()
+
+    def _persist_selection(self):
         contents = f"{self.selected_id}\n".encode()
         try:
             if self.marker.read_bytes() == contents:
@@ -275,7 +279,7 @@ class ModelRuntime:
             if self.selected_id != selected:
                 await self.stop()
                 self.selected_id = selected
-                self.mark_managed()
+                self._persist_selection()
         return await self.ensure_started()
 
     async def ensure_started(self):

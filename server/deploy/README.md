@@ -17,11 +17,11 @@ systemctl --user enable --now nex-live.service
 journalctl --user -u nex-live.service -n 30
 ```
 
-The recipe uses Python 3.12, a pinned PyTorch CPU wheel, and several gigabytes of downloaded assets. On other Linux architectures supply compatible dependencies and model runtimes before starting the service. Set `NEX_LIVE_DEVICE=cpu` in the unit if you installed Vulkan and want to force CPU inference. Gemma 3 4B serves Chat and voice on Excalibur. For an existing installation, run `bash deploy/stage-gemma.sh` with the same `NEX_DATA` before upgrading.
+The recipe uses Python 3.12, a pinned PyTorch CPU wheel, and several gigabytes of downloaded assets. On other Linux architectures supply compatible dependencies and model runtimes before starting the service. Set `NEX_LIVE_DEVICE=cpu` in the unit if you installed Vulkan and want to force CPU inference. The base installation stages Gemma 3 4B. Run `bash deploy/stage-qwen-3.5.sh` with the same `NEX_DATA` to stage the checksum-pinned [Qwen 3.5 4B Q4_K_M build](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF). The archive owner can then select **Qwen 3.5 · 4B** in Excalibur Model settings to use it for Chat and voice. Nex persists the selection across restarts.
 
 The override starts the live service with the archive and keeps its startup queued while the archive retries, such as when Tailscale is still starting at boot. Existing installations can install the override with the same `install -D` command and reload systemd.
 
-If Gemma is unavailable, Nex reports a model failure while the archive stays accessible. Managed mode is recorded in `$NEX_DATA/live-model`. To retire the managed service, remove the startup override, reload systemd, disable and stop `nex-live.service`, and remove the marker to return to the archive's configured model route.
+If the managed model cannot start, Nex reports a model failure while the archive stays accessible. Managed mode is recorded in `$NEX_DATA/live-model`. To retire the managed service, remove the startup override, reload systemd, disable and stop `nex-live.service`, and remove the marker to return to the archive's configured model route.
 
 The voice service shares the archive’s account registry and certificate on TCP 8767. It uses Nemotron with Sherpa-ONNX for streaming recognition, Silero and Smart Turn for turn detection, Kokoro for English speech, and EMA for Turkish speech. The model supervisor serves language requests on a private Unix socket. The archive still needs FFmpeg and Whisper for background transcription.
 

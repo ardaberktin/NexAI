@@ -35,7 +35,7 @@ def start_workspace_jobs(store, engines, settings, stop, *, enabled=lambda: True
 
     def curate(messages, tokens):
         # Curation is optional when chat/recording already owns the model.
-        return engines.generate(messages, tokens, settings.read(), wait=False)
+        return engines.generate(messages, tokens, settings.read(), wait=False, thinking=False)
 
     def build_edition():
         feed.run(curate)
