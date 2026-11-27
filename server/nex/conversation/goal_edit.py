@@ -7,6 +7,7 @@ from ..goal_writing import json_object, model_messages, yes_no
 from ..store import excerpt
 from .calendar_scope import scope_prompt, weekday_selector, with_weekday
 from .goal_context import clarification_exchange
+from .goal_edit_fields import edit_schema
 from .goal_lookup import describe
 from .goal_management_prompts import (
     EDIT_GOAL,
@@ -16,17 +17,6 @@ from .goal_plans import goal_start
 from .goal_tools import goal_data
 from .plan import validated
 from .schedule_pattern import UnsupportedSchedule, read_pattern
-
-EDIT_FIELDS = {
-    "title": {"type": "string"}, "query": {"type": "string"}, "start": {"type": "string"},
-    "timing": {"type": "string"}, "frequency": {"type": "integer"}, "check_in": {"type": "boolean"},
-    "format_instruction": {"type": "string"},
-}
-EDIT_SCHEMA = {"anyOf": [
-    {"type": "object", "properties": EDIT_FIELDS, "additionalProperties": False},
-    {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"],
-     "additionalProperties": False},
-]}
 
 
 def changes_for(turn, goal, changes):
@@ -77,10 +67,17 @@ async def plan_edit(turn, goal, context, generate):
     data["selected_goal"] = describe(goal, 1, None) | {"task": goal["prompt"]}
     if data.get("format_only"):
         return await plan_pdf_format(turn, data, generate)
+    data["latest_edit_request"] = data.pop("question")
     data["upcoming_days"] = scope_prompt(turn.text, turn.zone, turn.started, "")["upcoming_days"]
+    schema = await edit_schema(data, generate)
+    if schema is None:
+        return None
     instructions = EDIT_GOAL
     for _ in range(2):
-        changes = json_object(await generate(model_messages(instructions, data, schema=EDIT_SCHEMA), 260) or "")
+        changes = json_object(await generate(model_messages(instructions, data, schema=schema), 260) or "")
+        if changes.keys() != schema["properties"].keys():
+            instructions = EDIT_GOAL + "\nReturn exactly the requested fields."
+            continue
         if changes.keys() == {"question"}:
             question = changes["question"]
             if isinstance(question, str) and 0 < len(question.strip()) <= 480 and question.strip().endswith("?"):

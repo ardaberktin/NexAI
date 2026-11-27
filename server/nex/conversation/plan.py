@@ -52,7 +52,8 @@ from .document_routing import (
     normalize_source_url,
     repair_document_search,
 )
-from .goal_context import goal_references, pending_pdf_action
+from .goal_authorization import requested_future_action
+from .goal_context import goal_references, pending_management, pending_pdf_action
 from .goal_management_prompts import CHOOSE_DELETION_SCOPE, OPERATIONS
 from .goal_plans import (
     MCP_GOAL_PLAN,
@@ -72,7 +73,7 @@ from .mail_watch_plan import (
 )
 from .planning_schema import plan_schema
 from .routing_prompt import Route, route_turn
-from .schedule_pattern import read_pattern
+from .schedule_pattern import read_delivery, read_pattern
 
 LOG = logging.getLogger(__name__)
 SCHEDULE_TOOLS = {"goal", "manage_goal", "agenda", "calendar", "ticktick", "gmail"}
@@ -315,11 +316,16 @@ async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
     if route is None:
         return Plan((), "invalid_goal_plan")
     label = route.label
+    if (not turn.journal and label == "general" and route.tools and not mcp_route
+            and route.tools <= {"agenda", "calendar", "ticktick", "weather"}):
+        label = await read_delivery(turn.text, generate) or label
     if label in {"answer", "clarify"}:
         return Plan((), clarify=label == "clarify")
     if label == "manage" and pending_pdf_action(turn.history):
         return await select_document(turn, generate, data)
-    if label == "delete" and not turn.journal:
+    if label == "manage" and (previous := pending_management(turn.history).get("operation")) in OPERATIONS:
+        label = previous
+    elif label == "delete" and not turn.journal:
         request = {"latest_message": turn.text, "history": data["history"][-4:]}
         raw = await generate(model_messages(CHOOSE_DELETION_SCOPE, request), 8)
         scope = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
@@ -451,12 +457,18 @@ async def select_document(turn, generate, data):
     return Plan((), "model_unavailable")
 
 
-async def requested_schedule(context, generate):
+async def requested_schedule(context, generate, *, check_in=False):
     pattern = await read_pattern(context, generate)
     if pattern is None:
         return None, Plan((), "model_unavailable")
     if pattern.kind == "no_request":
         return None, Plan((), clarify=True)
+    if check_in or pattern.kind in {"once", "unspecified"}:
+        authorized = await requested_future_action(context, generate)
+        if authorized is None:
+            return None, Plan((), "model_unavailable")
+        if not authorized:
+            return None, Plan((), clarify=True)
     if pattern.unsupported:
         return None, Plan((), "unsupported_goal_schedule")
     return pattern, None
@@ -473,7 +485,7 @@ async def select_mail_watch(turn, generate, data, route):
     pattern, problem = await requested_schedule(context, generate)
     if problem:
         return problem
-    frequency = pattern.minutes if pattern.kind == "interval" else None
+    frequency = pattern.minutes if pattern.kind == "interval" else 60
     context["watch_start"] = {"implicit": "cadence", "date": "clock"}.get(pattern.first_start, pattern.first_start)
     schema = plan_schema(names, goal_type="mail_watch", goal_start_mode=context["watch_start"], goal_frequency=frequency)
     request = {key: context[key] for key in ("question", "history", "local_time", "goal_time_zone", "watch_start")}
@@ -494,7 +506,7 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
     available = None
     frequency = pattern = None
     if not connected and "edit_target" not in context and (goal_type or (proposal and proposal["name"] == "goal")):
-        pattern, problem = await requested_schedule(context, generate)
+        pattern, problem = await requested_schedule(context, generate, check_in=goal_type == "check_in")
         if problem:
             return problem
         if goal_type == "check_in":

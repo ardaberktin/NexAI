@@ -6,7 +6,8 @@ from ..store import excerpt
 
 VERIFY_TOOL_REPLY = """Extract what the draft actually claims. Return JSON with these fields.
 mail_search: checked if it claims a current inbox search or gives its results, including no matches.
-A claim of no matches means checked even if the draft also mentions an error. Use unavailable only if
+Use inbox_empty for an assertion that there are no emails in the entire inbox. Use checked for zero matches
+within the requested topic. A claim of no matches means checked even if the draft also mentions an error. Use unavailable only if
 it says the inbox could not be checked and gives no search result. Use none if it makes neither claim.
 saved_watch: true if it claims a watch, reminder or schedule is saved, updated, active or will run.
 A reference explicitly limited to earlier conversation and a statement that nothing was saved are not a current claim.
@@ -23,7 +24,7 @@ CLAIMS_SCHEMA = {
     "type": "object", "additionalProperties": False,
     "required": ["mail_search", "saved_watch", "cadence", "wrong_next_check", "unsupported_delivery"],
     "properties": {
-        "mail_search": {"enum": ["none", "checked", "unavailable"]},
+        "mail_search": {"enum": ["none", "checked", "inbox_empty", "unavailable"]},
         "saved_watch": {"type": "boolean"},
         "cadence": {"enum": [None, *FREQUENCIES[1:], "other"]},
         "wrong_next_check": {"type": "boolean"},
@@ -56,6 +57,8 @@ async def verified_tool_reply(question, draft, tools, local_time, generate):
 
 
 def mail_claim_matches(claim, gmail):
+    if claim == "inbox_empty":
+        return bool(gmail and gmail.get("status") == "empty" and not gmail.get("search_scope"))
     if gmail and gmail.get("status") in {"ok", "empty"}:
         return claim == "checked"
     return claim in ("none", "unavailable")

@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from conversation_fixtures import unlock
 from nex.assistant import Assistant
+from nex.conversation.goal_edit_fields import CHOOSE_FIELDS
+from nex.conversation.goal_edit_receipt import VERIFY_EDIT, WRITE_EDIT
 from nex.conversation.goal_management_prompts import (
     CHOOSE_DELETION_SCOPE,
     EDIT_GOAL,
@@ -71,6 +73,8 @@ class ChatGoalManagementTests(unittest.TestCase):
                 return json.dumps(self.decision)
             selected, = [row for row in data["goals"] if row["title"] == self.card["title"]]
             return json.dumps({"action": self.decision, "target": selected["target"], "title": selected["title"]})
+        if prompt == CHOOSE_FIELDS:
+            return json.dumps({"fields": [key for key in self.edit if key not in {"question", "timing"}]})
         if prompt.startswith(EDIT_GOAL):
             return json.dumps(self.edit)
         if prompt.startswith(VERIFY_CHANGE):
@@ -78,12 +82,12 @@ class ChatGoalManagementTests(unittest.TestCase):
         if prompt == VERIFY_NAMED_DELETE:
             self.deletion_review = data
             return "YES" if self.verify() == "MATCH" else "NO"
-        if prompt.startswith((WRITE_GOAL, WRITE_GOAL_STATUS)):
+        if prompt.startswith((WRITE_GOAL, WRITE_GOAL_STATUS, WRITE_EDIT)):
             receipt = data["tools"]["goal"]
             text = f"Goal {receipt['action']}: {receipt['title']}."
-            schedule = receipt["schedule_text"]
+            schedule = receipt.get("schedule_text")
             return f"{text} Next check is {schedule}." if schedule else text
-        if prompt in (VERIFY_GOAL, VERIFY_GOAL_STATUS):
+        if prompt in (VERIFY_GOAL, VERIFY_GOAL_STATUS, VERIFY_EDIT):
             return "YES" if self.verify_receipt else "NO"
         if prompt == WRITE_GOAL_CLARIFICATION:
             return json.dumps({"question": "Which goal do you mean, " + " or ".join(data["candidate_titles"]) + "?"})

@@ -22,18 +22,20 @@ def clarification_exchange(history):
     return ()
 
 
+def pending_management(history):
+    exchange = clarification_exchange(history)
+    tools = json_value(exchange[1].get("selected") or "") if exchange else None
+    if isinstance(tools, list):
+        return next((tool for tool in tools if isinstance(tool, dict) and tool.get("name") == "manage_goal"), {})
+    return {}
+
+
 def pending_pdf_action(history):
-    if not (exchange := clarification_exchange(history)):
-        return None
-    tools = json_value(exchange[1].get("selected") or "")
-    if not isinstance(tools, list):
-        return None
-    for tool in tools:
-        if isinstance(tool, dict) and tool.get("name") == "manage_goal":
-            if tool.get("operation") == "remove_pdf":
-                return "REMOVE"
-            if tool.get("format_only") is True:
-                return "FORMAT"
+    tool = pending_management(history)
+    if tool.get("operation") == "remove_pdf":
+        return "REMOVE"
+    if tool.get("format_only") is True:
+        return "FORMAT"
     return None
 
 

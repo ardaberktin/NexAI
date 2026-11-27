@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from conversation_fixtures import UNSPECIFIED_PATTERN, goal_clock, model
 from nex.assistant import Assistant
 from nex.coding.sandbox import Run
+from nex.conversation.goal_authorization import CHECK_REQUEST
 from nex.conversation.schedule_pattern import READ_PATTERN
 from nex.conversation.tools import Evidence
 from nex.goal_follow_up_jobs import GoalFollowUpJobs
@@ -353,6 +354,8 @@ class NaturalGoalTests(unittest.TestCase):
             prompt = messages[0]["content"]
             if prompt.startswith("Select capabilities"):
                 return '{"capabilities":["check_in"],"language":"en"}'
+            if prompt == CHECK_REQUEST:
+                return json.dumps({"intent": "request", "words": text})
             if prompt == READ_PATTERN:
                 return UNSPECIFIED_PATTERN
             if prompt.startswith("Plan the requested personal outcome check-in"):

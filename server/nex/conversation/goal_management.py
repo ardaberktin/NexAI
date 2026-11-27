@@ -9,6 +9,7 @@ from ..workspace_features import FeatureDisabled
 from ..workspace_schema import WorkspaceConflict, WorkspaceMissing
 from .goal_context import clarification_exchange, pdf_removal_history
 from .goal_edit import plan_edit
+from .goal_edit_receipt import changed_settings
 from .goal_lookup import (
     PAGE_SIZE,
     clarify_target,
@@ -68,6 +69,8 @@ def apply_change(store, turn, goal, action, edit, *, format_instruction=None):
             saved = goals.save(identifier, data, request=request, language=turn.language, check_in=required)
         changed = saved["revision"] != revision
         receipt = goal_receipt(store, saved, updated=changed) | {"action": "updated" if changed else "unchanged"}
+        if changed and edit:
+            receipt["changed_settings"] = changed_settings(goal, saved, receipt["check_in"])
         if format_instruction:
             receipt["format_instruction"] = format_instruction.strip()
     return Evidence(receipt, engine="goal_" + receipt["action"], goal_id=identifier)
