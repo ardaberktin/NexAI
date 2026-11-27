@@ -385,9 +385,18 @@ async def compose_goal(turn, goal, generate, tokens, preferences):
             review = model_messages(verifier, {"draft": text, "goal": goal, "local_time": local_time})
             if yes_no(await generate(review, 8)) is True:
                 return text.strip()
-        correction = ("Copy the complete saved title verbatim and describe only the saved PDF setting." if pdf_format else
-                      "Check the next run against schedule_text, including its local date and time. "
-                      "Use the saved action and make no unsupported promises.")
+        if pdf_format:
+            correction = "Copy the complete saved title verbatim and describe only the saved PDF setting."
+        elif goal.get("schedule_text") is None:
+            correction = (
+                "schedule_text is null, so omit any date, time, or cadence. "
+                "Confirm only the saved goal using indirect speech without asking the user to answer now."
+            )
+        else:
+            correction = (
+                "Check the next run against schedule_text, including its local date and time. "
+                "Use the saved action and make no unsupported promises."
+            )
         instructions = f"{guidance}\n{correction}"
     return ""
 
@@ -531,6 +540,19 @@ async def compose(turn, evidence, generate, *, clarify=False, preferences="", ac
 async def run(store, turn, plan, generate, *, private=False, coordinates=None):
     if plan.private and not private:
         raise PermissionError("Unlock Nex to use the selected tools.")
+    if plan.error == "invalid_goal_plan":
+        preferences = await asyncio.to_thread(owner_preferences, store) if private else ""
+        outcome = {
+            "status": "clarification_needed",
+            "saved": False,
+            "detail": (
+                "No goal or reminder was saved because Nex could not confirm the requested "
+                "schedule or check-in details. Ask one short clarifying question."
+            ),
+        }
+        tokens = 180 if turn.spoken else 420
+        text = await compose_unsaved_goal(turn, outcome, generate, tokens, preferences)
+        return reply(turn, text, "local_model") if text else reply(turn, "", "model_unavailable")
     if plan.error:
         return reply(turn, "", "model_unavailable")
     evidence = await collect(store, turn, plan, generate, private, coordinates)

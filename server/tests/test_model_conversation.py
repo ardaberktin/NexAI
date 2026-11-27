@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from conversation_fixtures import model, tools, unlock
 from nex.assistant import Assistant
 from nex.conversation.calendar_scope import RESOLVE_SCOPE, repair_calendar_scopes
-from nex.conversation.catalog import REVIEW_SCHEDULE, WEATHER_SCOPE
+from nex.conversation.catalog import PLAN_CHECK_IN, REVIEW_SCHEDULE, WEATHER_SCOPE
 from nex.conversation.goal_management_prompts import GOAL_INTENT
 from nex.conversation.mail_watch_plan import PLAN_MAIL_WATCH
 from nex.conversation.plan import Plan, choose, validated
@@ -353,3 +353,99 @@ class ModelConversationTests(unittest.TestCase):
             with self.subTest(arguments=arguments), self.assertRaises(ValueError):
                 validated([{"name": "weather_city", **arguments}])
         self.assertTrue(validated([{"name":"weather_city","operation":"clear"}]).private)
+
+    def test_check_in_route_uses_focused_schema_and_normalizes_blank_optional_fields(self):
+        self.turn.text = "remind me that i'm waiting for my walmart credit card to arrive in the mail"
+        self.turn.started = datetime.now(UTC)
+        generate = AsyncMock(side_effect=[
+            '{"capabilities":["check_in"],"language":"en"}',
+            tools({
+                "name": "goal",
+                "query": "Ask whether the Walmart credit card arrived",
+                "check_in": True,
+                "start": "",
+                "timing": None,
+                "frequency": None,
+            }),
+        ])
+        plan = asyncio.run(choose(self.turn, generate))
+        self.assertEqual(plan.error, "")
+        self.assertEqual(plan.tools, ({
+            "name": "goal",
+            "query": "Ask whether the Walmart credit card arrived",
+            "check_in": True,
+        },))
+        self.assertEqual(generate.await_count, 2)
+        messages = generate.await_args.args[0]
+        self.assertEqual(messages[0]["content"], PLAN_CHECK_IN)
+        variants = messages.response_format["json_schema"]["schema"]["properties"]["tools"]["items"]["anyOf"]
+        self.assertEqual([tool["properties"]["name"]["const"] for tool in variants], ["goal"])
+        self.assertEqual(variants[0]["properties"]["check_in"], {"const": True})
+
+    def test_goal_start_normalizes_iso_seconds_and_guides_untimed_retry(self):
+        self.turn.text = "Remind me tomorrow at 2 pm to send an email"
+        self.turn.started = datetime.now(UTC)
+        tomorrow = self.turn.started.astimezone(ZoneInfo(ZONE)).date() + timedelta(days=1)
+        generate = AsyncMock(side_effect=[
+            '{"capabilities":["schedule"],"language":"en"}',
+            tools({
+                "name": "goal",
+                "query": "Send an email",
+                "start": f"{tomorrow}T14:00:00",
+                "timing": "tomorrow at 2 pm",
+            }),
+        ])
+        plan = asyncio.run(choose(self.turn, generate))
+        self.assertEqual(plan.tools[0]["start"], f"{tomorrow}T14:00")
+
+        self.turn.text = "remind me that i'm waiting for my credit card in the mail"
+        retry = AsyncMock(side_effect=[
+            '{"capabilities":["check_in"],"language":"en"}',
+            tools({
+                "name": "goal",
+                "query": "Ask whether the credit card arrived",
+                "check_in": True,
+                "start": f"{tomorrow}T09:00",
+                "timing": "tomorrow",
+            }),
+            tools({
+                "name": "goal",
+                "query": "Ask whether the credit card arrived",
+                "check_in": True,
+            }),
+        ])
+        recovered = asyncio.run(choose(self.turn, retry))
+        self.assertEqual(recovered.error, "")
+        self.assertEqual(recovered.tools, ({
+            "name": "goal",
+            "query": "Ask whether the credit card arrived",
+            "check_in": True,
+        },))
+        feedback = retry.await_args.args[0][-1]["content"]
+        self.assertIn("omit both start and timing", feedback)
+
+    def test_invalid_goal_plan_asks_for_clarification_instead_of_failing_silently(self):
+        self.turn.text = "remind me that i'm waiting for my walmart credit card to arrive in the mail"
+        question = "I didn't save a reminder yet. Would you like me to check in later about your Walmart card, or at a specific time?"
+        generate = AsyncMock(side_effect=[question, "YES"])
+        with patch("nex.conversation.reply.fetch") as fetch:
+            result = asyncio.run(run(self.store, self.turn, Plan((), "invalid_goal_plan"), generate, private=True))
+            fetch.assert_not_called()
+        self.assertEqual(result["engine"], "local_model")
+        self.assertEqual(result["text"], question)
+
+        # If verification fails or the model returns empty, fall back safely without saving a goal.
+        rejected = AsyncMock(side_effect=["I saved your reminder.", "NO", "Done!", "NO"])
+        with patch("nex.conversation.reply.fetch") as fetch:
+            failed = asyncio.run(run(self.store, self.turn, Plan((), "invalid_goal_plan"), rejected, private=True))
+            fetch.assert_not_called()
+        self.assertEqual((failed["engine"], failed["text"]), ("model_unavailable", ""))
+
+    def test_untimed_goal_writer_retry_does_not_ask_for_a_local_date_and_time(self):
+        goal = Evidence({"prompt": "Ask whether the card arrived", "schedule_text": None, "check_in": True})
+        expected = "I saved a check-in about whether your card arrived."
+        generate = AsyncMock(side_effect=["I’ll remind you tomorrow at 9:00 AM.", "NO", expected, "YES"])
+        self.assertEqual(asyncio.run(compose(self.turn, {"goal": goal}, generate)), expected)
+        retry_system = generate.await_args_list[2].args[0][0]["content"]
+        self.assertIn("schedule_text is null", retry_system)
+        self.assertNotIn("including its local date and time", retry_system)

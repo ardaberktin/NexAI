@@ -31,6 +31,7 @@ from .catalog import (
     CATALOG,
     CHOOSE_LANGUAGE,
     OPTIONS,
+    PLAN_CHECK_IN,
     PLANNING_TOOLS,
     PUBLIC,
     REVIEW_GOAL_EDIT,
@@ -446,6 +447,7 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
         instructions = REVIEW_GOAL_EDIT
     selected_type = goal_type if "edit_target" not in context else None
     names = SCHEDULE_TOOLS | {tool["name"] for tool in tools}
+    available = None
     frequency = None
     if connected and "edit_target" not in context:
         frequency, weekday = await connected_schedule(context, generate)
@@ -455,7 +457,9 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
         context["mcp_weekday"] = weekday
         context["mcp_sources"] = sorted({server for server, _ in turn.mcp_tools.values()})
         selected_type = "recurring" if frequency else "schedule"
-        names, instructions = {"goal"}, MCP_GOAL_PLAN
+        names, instructions, available = {"goal"}, MCP_GOAL_PLAN, {"goal"}
+    elif selected_type == "check_in" and proposal is None:
+        names, instructions, available = {"goal"}, PLAN_CHECK_IN, {"goal"}
     review = {
         **context, "first_choice": proposal["name"] if proposal else None, "proposal": proposal,
         "related_tools": [tool for tool in tools if tool is not proposal],
@@ -465,7 +469,8 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
     schema = plan_schema(names, goal_type=selected_type, goal_frequency=frequency)
     if "mcp_tools" in context:
         instructions += MCP_PROMPT + "For a saved goal, preserve named MCP sources and their purpose in query."
-    return await generate_plan(turn, generate, plan_messages(turn, instructions, review, names, schema), goal_review=context)
+    return await generate_plan(turn, generate, plan_messages(turn, instructions, review, names, schema),
+                               goal_review=context, available=available)
 
 
 def schedule_context(turn, data):
@@ -533,9 +538,24 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
     return Plan((), "model_unavailable")
 
 
+GOAL_OPTIONAL_FIELDS = frozenset({"start", "timing", "frequency", "check_in", "target", "watch_provider", "delay_minutes"})
+GOAL_START_SECONDS = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}):[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})?$")
+
+
 def normalize_plan_tool(turn, tool):
     if not isinstance(tool, dict):
         return tool
+    if tool.get("name") == "goal":
+        cleaned = {}
+        for key, value in tool.items():
+            if key in GOAL_OPTIONAL_FIELDS and value is None:
+                continue
+            if key in {"start", "timing"} and isinstance(value, str) and not value.strip():
+                continue
+            if key == "start" and isinstance(value, str) and (match := GOAL_START_SECONDS.fullmatch(value.strip())):
+                value = f"{match[1]}{match[2] or ''}"
+            cleaned[key] = value
+        tool = cleaned
     tool = normalize_calendar_dates(tool, turn.zone, turn.started)
     if (tool.get("name") == "weather" and isinstance(place := tool.get("query"), str)
             and place.strip().casefold() in {"local", "here", "my location", "current location"}):

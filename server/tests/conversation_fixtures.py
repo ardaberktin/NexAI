@@ -8,6 +8,7 @@ from nex.conversation.catalog import (
     CHOOSE_LANGUAGE,
     CLARITY,
     INSTRUCTIONS,
+    PLAN_CHECK_IN,
     REVIEW_GOAL_EDIT,
     REVIEW_SCHEDULE,
     VERIFY_GOAL_PLAN,
@@ -57,7 +58,7 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
             payload = json.loads(messages[1]["content"])
             selected = quotes(payload) if quotes else [item["number"] for item in payload["candidates"][:payload["count"]]]
             return json.dumps({"indices": selected})
-        if prompt in {REVIEW_GOAL_EDIT, PLAN_MAIL_WATCH, PLAN_CLOCK} or prompt.startswith((REVIEW_SCHEDULE, INSTRUCTIONS)):
+        if prompt in {REVIEW_GOAL_EDIT, PLAN_MAIL_WATCH, PLAN_CLOCK, PLAN_CHECK_IN} or prompt.startswith((REVIEW_SCHEDULE, INSTRUCTIONS)):
             payload = json.loads(messages[1]["content"])
             if len(messages) > 2:
                 payload["plan_feedback"] = messages[-1]["content"]

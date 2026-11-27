@@ -188,6 +188,7 @@ final class AppPrivacy: ObservableObject {
             throw error
         }
         guard !Task.isCancelled, opening == generation, fetch == inboxFetch, unlocked else { return }
+        if error != nil { error = nil }
         if items != result.items { items = result.items }
         #if os(macOS)
         if screenWork == nil, let work = items.first(where: { $0.state == "screen" }) {
