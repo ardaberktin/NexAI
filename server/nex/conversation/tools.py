@@ -107,6 +107,8 @@ def account_result(store, turn, tool):
                 {"status": "ok" if rows else "empty", "messages": [mail_context(row, 480) for row in rows[:6]]})
         if not error:
             data["search_scope"] = {field: value for field, value in tool.items() if field != "name" and value}
+            if not rows and data["search_scope"]:
+                data["search_result"] = {"matching_messages": 0, "total_messages_in_inbox": "unknown"}
         return Evidence(data, engine="account_read")
     return Evidence(error or rows[:12], engine="account_read")
 

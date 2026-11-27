@@ -46,6 +46,8 @@ async def verified_tool_reply(question, draft, tools, local_time, generate):
     goal = tools.get("goal") or tools.get("manage_goal") or {}
     data = {"question": excerpt(question, 900), "draft": draft, "local_time": local_time,
             "saved_next_run": goal.get("schedule_text")}
+    if isinstance(gmail := tools.get("gmail"), dict) and (receipt := gmail.get("search_result")):
+        data["gmail_search_result"] = receipt
     raw = await generate(model_messages(VERIFY_TOOL_REPLY, data, schema=CLAIMS_SCHEMA), 100)
     claims = json_object(raw if isinstance(raw, str) else "")
     if claims.keys() != CLAIMS_SCHEMA["properties"].keys() or not mail_claim_matches(claims["mail_search"], tools.get("gmail")):

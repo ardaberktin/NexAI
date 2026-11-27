@@ -357,7 +357,10 @@ class ModelConversationTests(unittest.TestCase):
         lookup.assert_not_called()
         supplied = json.loads(generate.await_args_list[0].args[0][1]["content"])["tools"]
         self.assertIn("unavailable", supplied["web"])
-        self.assertEqual(supplied["gmail"], {"status": "empty", "messages": [], "search_scope": {"query": MAIL["query"]}})
+        self.assertEqual(supplied["gmail"], {
+            "status": "empty", "messages": [], "search_scope": {"query": MAIL["query"]},
+            "search_result": {"matching_messages": 0, "total_messages_in_inbox": "unknown"},
+        })
         self.assertEqual(result["sources"], [])
 
     def test_setting_a_weather_city_requires_an_explicit_valid_operation(self):
