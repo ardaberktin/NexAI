@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from conversation_fixtures import model, tools, unlock
+from conversation_fixtures import action_claims, model, tools, unlock
 from nex.assistant import Assistant
 from nex.conversation.calendar_scope import RESOLVE_SCOPE, repair_calendar_scopes
 from nex.conversation.catalog import PLAN_CHECK_IN, REVIEW_SCHEDULE, WEATHER_SCOPE
 from nex.conversation.goal_management_prompts import GOAL_INTENT
-from nex.conversation.mail_watch_plan import PLAN_MAIL_WATCH
+from nex.conversation.mail_watch_plan import CHOOSE_MAIL_ACTION, PLAN_MAIL_WATCH
 from nex.conversation.plan import Plan, choose, validated
 from nex.conversation.reply import REVIEW_REPLY, VERIFY_WEB, compose, run
 from nex.conversation.sync import make_turn
@@ -194,13 +194,13 @@ class ModelConversationTests(unittest.TestCase):
             "start": first_run.isoformat(timespec="minutes"), "watch_provider": "gmail",
         }
         generate = AsyncMock(side_effect=['{"capabilities":["mail_watch"],"language":"en"}',
-                                          tools({"name": "agenda", "query": "committee decision"}), tools(proposed)])
+                                          '{"action":"mail_watch","start":"delay"}', tools({"name": "agenda", "query": "committee decision"}), tools(proposed)])
         with patch("nex.conversation.plan.repair_calendar_scopes", wraps=repair_calendar_scopes) as repair:
             self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan((watch,)))
             self.assertEqual(repair.await_args.args[1], (watch,))
             repair.assert_awaited_once()
         prompts = [call.args[0][0]["content"] for call in generate.await_args_list]
-        self.assertEqual(prompts, [GOAL_INTENT, PLAN_MAIL_WATCH, PLAN_MAIL_WATCH])
+        self.assertEqual(prompts, [GOAL_INTENT, CHOOSE_MAIL_ACTION, PLAN_MAIL_WATCH, PLAN_MAIL_WATCH])
 
     def test_reminder_feedback_includes_the_users_verbatim_time_phrase(self):
         self.turn.text = "Remind me tomorrow at 2 pm to send an email"
@@ -338,14 +338,14 @@ class ModelConversationTests(unittest.TestCase):
     def test_mixed_private_plan_never_sends_generated_private_terms_to_public_search(self):
         plan = validated([MAIL, {"name": "web", "query": "unpublished tuition correspondence"}])
         self.turn.text = "Search the web for campus deadlines and check my inbox"
-        generate = AsyncMock(return_value="I checked the inbox. I couldn’t verify public deadlines.")
-        with patch("nex.conversation.tools.prepare_account", return_value=("Gmail", [], "No matching email.")), \
+        generate = AsyncMock(side_effect=["I checked the inbox. I couldn’t verify public deadlines.", action_claims("checked")])
+        with patch("nex.conversation.tools.prepare_account", return_value=("Gmail", [], "")), \
                 patch("nex.web_answers.lookup") as lookup:
             result = asyncio.run(run(self.store, self.turn, plan, generate, private=True))
         lookup.assert_not_called()
-        supplied = json.loads(generate.await_args.args[0][1]["content"])["tools"]
+        supplied = json.loads(generate.await_args_list[0].args[0][1]["content"])["tools"]
         self.assertIn("unavailable", supplied["web"])
-        self.assertEqual(supplied["gmail"], "No matching email.")
+        self.assertEqual(supplied["gmail"], {"status": "empty", "messages": []})
         self.assertEqual(result["sources"], [])
 
     def test_setting_a_weather_city_requires_an_explicit_valid_operation(self):

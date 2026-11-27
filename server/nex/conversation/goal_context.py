@@ -69,6 +69,8 @@ def load_goal_state(goals, identifier):
     zone = time_zone(goal["zone"])
     state = {"title": goal["title"], "prompt": excerpt(goal["prompt"], 320), "status": goal["status"],
              "frequency_minutes": goal["frequency_minutes"], "time_zone": zone.key}
+    if provider := goal.get("watch_provider"):
+        state["watch_provider"] = provider
     if next_run := goal["next_run"]:
         state["next_run"] = datetime.fromisoformat(next_run).astimezone(zone).isoformat(timespec="minutes")
     if follow_up := goal["follow_up"]:

@@ -62,7 +62,14 @@ from .goal_plans import (
     review_goal_plan,
     validate_goal_action,
 )
-from .mail_watch_plan import PLAN_MAIL_WATCH, prepare_mail_watch
+from .mail_watch_plan import (
+    MAIL_WATCH_ROUTES,
+    PLAN_MAIL_CHECK_AND_WATCH,
+    PLAN_MAIL_WATCH,
+    mail_watch_history,
+    prepare_mail_watch,
+    review_mail_route,
+)
 from .planning_schema import plan_schema
 from .routing_prompt import Route, route_turn
 
@@ -230,7 +237,11 @@ def validated(tools):
                 ("operation" in tool and tool["operation"] not in OPERATIONS | {"keep_settings"}) or
                 ("format_only" in tool and tool.get("operation") != "edit")):
             raise ValueError("Use a supported manage_goal operation. format_only applies to an edit.")
-    if len(names) > 1 and names.intersection({"screen", "goal", "manage_goal", "save_memory", "weather_city", "clock"}):
+    mail_check_and_watch = names == {"gmail", "goal"} and any(
+        tool.get("watch_provider") == "gmail" and "target" not in tool for tool in tools
+    )
+    exclusive = {"screen", "goal", "manage_goal", "save_memory", "weather_city", "clock"}
+    if len(names) > 1 and names & exclusive and not mail_check_and_watch:
         raise ValueError("Request a change or a screen inspection on its own.")
     return Plan(tuple(tools))
 
@@ -298,6 +309,9 @@ async def route_with_context(turn, generate, data, recall):
 
 async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
     route = mcp_route or await route_with_context(turn, generate, data, recall)
+    route = await review_mail_route(turn, data, route, generate, connected=mcp_route is not None)
+    if route is None:
+        return Plan((), "invalid_goal_plan")
     label = route.label
     if label in {"answer", "clarify"}:
         return Plan((), clarify=label == "clarify")
@@ -318,11 +332,8 @@ async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
         return Plan((tool,))
     if not turn.journal and label in {"schedule", "recurring", "check_in"}:
         return await select_schedule(turn, generate, data, goal_type=label, connected=mcp_route is not None)
-    if not turn.journal and label == "mail_watch":
-        context = schedule_context(turn, data) | {"mail_watch": True}
-        watch = {key: context[key] for key in ("local_time", "goal_time_zone", "question")}
-        messages = model_messages(PLAN_MAIL_WATCH, watch, schema=plan_schema({"goal"}, goal_type=label))
-        return await generate_plan(turn, generate, messages, goal_review=context, available={"goal"})
+    if not turn.journal and label in MAIL_WATCH_ROUTES:
+        return await select_mail_watch(turn, generate, data, route)
     if not turn.journal and label == "clock":
         return await generate_plan(turn, generate, model_messages(PLAN_CLOCK, data), available={"clock"})
     if label == "document" and not turn.journal:
@@ -438,6 +449,21 @@ async def select_document(turn, generate, data):
     return Plan((), "model_unavailable")
 
 
+async def select_mail_watch(turn, generate, data, route):
+    check_existing = route.label == "mail_check_and_watch"
+    context = schedule_context(turn, data) | {
+        "mail_watch": True, "check_existing_mail": check_existing,
+        "history": mail_watch_history(turn), "goal_references": [], "watch_start": route.watch_start,
+    }
+    instructions = PLAN_MAIL_CHECK_AND_WATCH if check_existing else PLAN_MAIL_WATCH
+    names = {"goal", "gmail"} if check_existing else {"goal"}
+    schema = plan_schema(names, goal_type="mail_watch", goal_start_mode=route.watch_start)
+    request = {key: context[key] for key in ("question", "history", "local_time", "goal_time_zone", "watch_start")}
+    messages = model_messages(instructions, request, schema=schema)
+    plan = await generate_plan(turn, generate, messages, goal_review=context, available=names)
+    return Plan((), clarify=True) if not plan.tools and not plan.error else plan
+
+
 async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal_type=None, connected=False):
     context = schedule_context(turn, data)
     instructions = schedule_instructions(data["local_time"])
@@ -505,7 +531,7 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
             if required == "create_pdf":
                 tools = normalize_source_url(tools, turn.text)
             if goal_review and goal_review.get("mail_watch"):
-                tools = prepare_mail_watch(tools, turn)
+                tools = prepare_mail_watch(tools, turn, goal_review["watch_start"])
             plan = validated(tools)
             if any(is_alias(tool["name"]) and tool["name"] not in turn.mcp_tools for tool in plan.tools):
                 raise ValueError("Use only MCP tools advertised for this request.")
@@ -526,7 +552,7 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
                         await review_goal_plan(turn, tool, generate, goal_review)
             return plan
         except ValueError as error:
-            invalid_goal |= isinstance(error, GoalPlanError)
+            invalid_goal |= isinstance(error, GoalPlanError) or bool(goal_review and goal_review.get("mail_watch"))
             LOG.debug("Nex tool plan failed validation (%s)", type(error).__name__)
             messages = ModelMessages(
                 [*base, {"role": "assistant", "content": excerpt(raw, 400)},

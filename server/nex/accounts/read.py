@@ -12,7 +12,7 @@ from .intent import date_window
 from .ticktick import TickTick, ticktick_items
 
 
-def prepare_account(root, intent, query, zone, reference=None):
+def prepare_account(root, intent, query, zone, reference=None, *, describe_empty=True):
     label = LABELS[intent.provider]
     if intent.blocked:
         return label, [], f"Nex has read-only access to {label}. Changes have to be made in the account app."
@@ -43,7 +43,7 @@ def prepare_account(root, intent, query, zone, reference=None):
         return label, [], f"I couldn’t read {label} right now."
     except (AccountError, KeyError, ValueError, TypeError):
         return label, [], f"I couldn’t read {label}. Check the connection on Excalibur."
-    if not rows:
+    if not rows and describe_empty:
         return label, [], f"I found no matching items in {label}."
     return label, rows, ""
 

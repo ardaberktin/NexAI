@@ -96,6 +96,7 @@ class MailGoalsTests(unittest.TestCase):
         assistant.generate_conversation = model(
             [{"name": "goal", "query": "Watch Gmail for the committee's decision", "frequency": 60, "delay_minutes": 15}],
             compose="I saved your watch.", goal_intent='{"capabilities":["mail_watch"],"language":"en"}',
+            watch_start="delay",
         )
         with self.store.privacy.transaction(write=True) as db:
             db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest("open"), "mac", time() + 60))

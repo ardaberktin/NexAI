@@ -13,7 +13,7 @@ GENERAL_CAPABILITIES = {
     "past_questions", "activities", "daybook", "memory", "save_memory", "weather_city", "screen",
 }
 DEDICATED_WORKFLOWS = {
-    "answer", "clarify", "clock", "schedule", "recurring", "check_in", "mail_watch", "document",
+    "answer", "clarify", "clock", "schedule", "recurring", "check_in", "mail_watch", "mail_check_and_watch", "document",
     "edit", "delete", "manage", "complete", "keep",
 }
 GOAL_MANAGEMENT = {"edit", "delete", "complete", "keep", "manage"}
@@ -89,13 +89,17 @@ memory = read saved facts, preferences, or current focus. save_memory = store a 
 weather_city = change or forget the saved weather city. screen = inspect the shared Mac screen.
 clock = start, list, or cancel timers and alarms, including a request to wake the user.
 schedule = a NEW one-time reminder or watch for future external changes. Lookups use their read tool.
-mail_watch = notify the user when a matching future Gmail/email message arrives (not postal mail). Reading existing mail uses gmail.
-recurring = a NEW reminder or report that runs on a fixed cadence. check_in = remind or ask later whether a personal outcome or physical delivery occurred (including waiting for postal mail).
+mail_watch = start an ongoing watch for matching future inbox email, including a follow-up that supplies
+the cadence for an earlier email request without a matching saved goal.
+mail_check_and_watch = check existing inbox email now and keep monitoring for matching email that arrives later.
+Use gmail for an existing inbox search alone. Physical mail uses check_in when the user wants a reminder.
+recurring = a NEW reminder or report at a fixed cadence for a subject other than checking for new inbox email. check_in = remind or ask later whether a personal outcome or physical delivery occurred (including waiting for postal mail).
 document = create a PDF now or later, or add, change, or turn off a saved goal's PDF attachments. PDF advice uses answer.
 edit, delete, complete, keep = change a saved goal, cancel it, report a fulfilled outcome, or report it pending.
 manage = respond to a clarification about which existing goal to change.
 
-Select answer, clarify, clock, schedule, recurring, check_in, mail_watch, document, and goal-management actions alone.
+Select answer, clarify, clock, schedule, recurring, check_in, mail_watch, mail_check_and_watch, document, and
+goal-management actions alone. If the latest message only specifies a cadence, take the task from the most recent relevant user request. For checking for new email on any cadence, choose mail_watch, including short requests that only give a new cadence. Choose edit if goal_references contains a matching saved watch. An earlier assistant reply or a goal on a different subject cannot establish that an email watch exists.
 Use document for adding or removing PDF attachments, including switching a saved goal back to text-only.
 Use delete when the user wants the whole goal removed. Use keep for a tracked outcome that is still pending.
 Use history to connect a clarification answer to the original PDF request. Respect explicit opt-outs.
@@ -117,6 +121,10 @@ Examples:
 "Ask me later if I picked up my package" -> {"capabilities":["check_in"],"language":"en"}
 "Remind me that I'm waiting for my replacement card in the mail" -> {"capabilities":["check_in"],"language":"en"}
 "Tell me when admissions emails their decision" -> {"capabilities":["mail_watch"],"language":"en"}
+"Look through my university emails for upcoming lab work and let me know whenever more comes in" -> {"capabilities":["mail_check_and_watch"],"language":"en"}
+"Are there any grant decisions in my inbox?" -> {"capabilities":["gmail"],"language":"en"}
+Earlier user request: "Let me know about any school assignments in my email". With no matching saved goal, latest message "Check it hourly" -> {"capabilities":["mail_watch"],"language":"en"}
+With a matching saved inbox watch, "Switch that to once an hour" -> {"capabilities":["edit"],"language":"en"}
 "Keep in mind that I prefer black tea" -> {"capabilities":["save_memory"],"language":"en"}
 "Set my local forecast city to Seattle" -> {"capabilities":["weather_city"],"language":"en"}
 "Forget the city used for my weather" -> {"capabilities":["weather_city"],"language":"en"}
@@ -149,6 +157,7 @@ class Route:
     tools: frozenset = frozenset()
     recall_query: str | None = None
     exchange: int | None = None
+    watch_start: str | None = None
 
 
 def route_schema(schema, general):
@@ -164,6 +173,8 @@ def route_schema(schema, general):
 async def route_turn(turn, generate, data, *, allow_recall=False):
     request = {key: data[key] for key in ("local_time", "local_time_display", "local_time_zone", "language")}
     request.update(history=data["history"][-4:], latest_message=data["question"])
+    if references := data.get("goal_references"):
+        request["goal_references"] = references
     instructions = VOICE_ROUTE if turn.spoken else ROUTE
     schema, limit = ROUTE_SCHEMA, 65
     if allow_recall:

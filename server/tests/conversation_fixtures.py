@@ -15,10 +15,22 @@ from nex.conversation.catalog import (
     WEATHER_SCOPE,
 )
 from nex.conversation.clock_tool import PLAN_CLOCK
-from nex.conversation.mail_watch_plan import PLAN_MAIL_WATCH
+from nex.conversation.mail_watch_plan import (
+    CHOOSE_MAIL_ACTION,
+    MAIL_WATCH_ROUTES,
+    PLAN_MAIL_CHECK_AND_WATCH,
+    PLAN_MAIL_WATCH,
+)
 from nex.conversation.question_quotes import SELECT_QUOTES
-from nex.conversation.reply import VERIFY_GOAL, VERIFY_WEB, WRITE, WRITE_GOAL
+from nex.conversation.reply import (
+    VERIFY_GOAL,
+    VERIFY_WEB,
+    WRITE,
+    WRITE_GOAL,
+    WRITE_MAIL_WATCH,
+)
 from nex.conversation.routing_prompt import ROUTE_HEADER
+from nex.conversation.verify_tool_reply import VERIFY_TOOL_REPLY
 from nex.privacy.state import digest
 from nex.privacy.voice import WRITE_APPROVAL_NOTICE
 from nex.recorded_intent import INSTRUCTIONS as RECORDED_INTENT
@@ -28,15 +40,27 @@ def tools(*calls):
     return json.dumps({"tools": list(calls)})
 
 
+def action_claims(mail_search="none", *, saved_watch=False, cadence=None, next_run_matches=True, instant_detection=False):
+    return json.dumps({"mail_search": mail_search, "saved_watch": saved_watch, "cadence": cadence,
+                       "wrong_next_check": not next_run_matches, "unsupported_delivery": instant_detection})
+
+
 def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", recorded=None, quotes=None,
-          goal_intent="OTHER", approval_notice=None):
+          goal_intent="OTHER", approval_notice=None, mail_action=None, watch_start="cadence"):
     """Accept a fixed tool list or a callable of the actual turn payload."""
+    current_tools = {}
+
     def generate(messages, *_args, **_kwargs):
+        nonlocal current_tools
         prompt = messages[0]["content"]
         if prompt == CLARITY:
             return "CLEAR"
         if prompt.startswith(ROUTE_HEADER):
             return goal_intent
+        if prompt == CHOOSE_MAIL_ACTION:
+            capabilities = json.loads(goal_intent).get("capabilities", []) if goal_intent.startswith("{") else []
+            action = mail_action or next((value for value in capabilities if value in MAIL_WATCH_ROUTES), "other")
+            return json.dumps({"action": action, "start": watch_start})
         if prompt == WEATHER_SCOPE:
             return "USE"
         if prompt == CHOOSE_LANGUAGE:
@@ -48,6 +72,10 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
             return web_verdict
         if prompt in {VERIFY_GOAL, VERIFY_GOAL_PLAN}:
             return "YES"
+        if prompt == VERIFY_TOOL_REPLY:
+            gmail, goal = current_tools.get("gmail"), current_tools.get("goal", {})
+            mail_search = "none" if gmail is None else "unavailable" if gmail["status"] == "unavailable" else "checked"
+            return action_claims(mail_search, saved_watch="schedule_text" in goal or goal.get("saved") is True, cadence=goal.get("frequency_minutes"))
         if prompt == CHOOSE_GOAL_TARGET:
             return "1"
         if prompt == RECORDED_INTENT:
@@ -58,14 +86,16 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
             payload = json.loads(messages[1]["content"])
             selected = quotes(payload) if quotes else [item["number"] for item in payload["candidates"][:payload["count"]]]
             return json.dumps({"indices": selected})
-        if prompt in {REVIEW_GOAL_EDIT, PLAN_MAIL_WATCH, PLAN_CLOCK, PLAN_CHECK_IN} or prompt.startswith((REVIEW_SCHEDULE, INSTRUCTIONS)):
+        if prompt in {REVIEW_GOAL_EDIT, PLAN_MAIL_WATCH, PLAN_MAIL_CHECK_AND_WATCH, PLAN_CLOCK, PLAN_CHECK_IN} or (
+                prompt.startswith((REVIEW_SCHEDULE, INSTRUCTIONS, "Fill the arguments for the selected capabilities"))):
             payload = json.loads(messages[1]["content"])
             if len(messages) > 2:
                 payload["plan_feedback"] = messages[-1]["content"]
             calls = plan(payload) if callable(plan) else plan
             return tools(*calls)
-        if prompt.startswith((WRITE_GOAL, WRITE)):
+        if prompt.startswith((WRITE_GOAL, WRITE_MAIL_WATCH, WRITE)):
             payload = json.loads(messages[1]["content"])
+            current_tools = payload["tools"]
             if compose:
                 text = compose(payload) if callable(compose) else compose
                 schedule = payload["tools"].get("goal", {}).get("schedule_text")

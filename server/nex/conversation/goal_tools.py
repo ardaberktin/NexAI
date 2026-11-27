@@ -61,6 +61,8 @@ def goal_receipt(store, goal, *, updated):
         "check_in": bool(work and work["required"]),
         "schedule_text": display_time(local) if local else None,
     }
+    if provider := goal.get("watch_provider"):
+        receipt["watch_provider"] = provider
     if frequency := goal["frequency_minutes"]:
         receipt["frequency_minutes"] = frequency
     return receipt

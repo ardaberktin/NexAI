@@ -42,7 +42,7 @@ def argument_schema(name, field):
     return {"type": "string"}
 
 
-def tool_object(name, scheduled, goal_type, goal_frequency):
+def tool_object(name, scheduled, goal_type, goal_frequency, goal_start_mode):
     if is_alias(name):
         fields = ACTIONS[name].tool.schema if name in ACTIONS else {"type": "object", "additionalProperties": True}
         return {"type": "object", "properties": {"name": {"const": name}, "arguments": fields},
@@ -63,7 +63,14 @@ def tool_object(name, scheduled, goal_type, goal_frequency):
         properties.pop("frequency", None)
         required.extend(("query", "check_in"))
     if name == "goal" and goal_type == "mail_watch":
-        properties["delay_minutes"] = {"type": "integer", "minimum": 1}
+        if goal_start_mode == "delay":
+            properties["delay_minutes"] = {"type": "integer", "minimum": 1}
+            required.append("delay_minutes")
+        if goal_start_mode == "clock":
+            required.extend(("start", "timing"))
+        else:
+            properties.pop("start", None)
+            properties.pop("timing", None)
         properties["frequency"] = {"enum": [15, 60, 1440, 10080]}
         properties.pop("check_in", None)
         properties.pop("target", None)
@@ -76,11 +83,13 @@ def tool_object(name, scheduled, goal_type, goal_frequency):
             "additionalProperties": False}
 
 
-def plan_schema(names, *, scheduled=False, minimum=0, maximum=None, goal_type=None, goal_frequency=None):
+def plan_schema(names, *, scheduled=False, minimum=0, maximum=None, goal_type=None, goal_frequency=None,
+                goal_start_mode=None):
     limit = min(len(names), maximum or (5 if scheduled else 4))
     return {
         "type": "object", "required": ["tools"], "additionalProperties": False,
         "properties": {"tools": {"type": "array", "minItems": minimum, "maxItems": limit,
-                                 "items": {"anyOf": [tool_object(name, scheduled, goal_type, goal_frequency)
+                                 "items": {"anyOf": [tool_object(name, scheduled, goal_type, goal_frequency,
+                                                                    goal_start_mode)
                                                      for name in sorted(names)]}}},
     }

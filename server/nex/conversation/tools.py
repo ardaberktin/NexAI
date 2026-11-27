@@ -101,9 +101,12 @@ def account_result(store, turn, tool):
                            date_selection=date_selection(tool),
                            unread=tool.get("unread", False), lists=tool.get("lists", False),
                            priority=tool.get("priority", False), access_check=tool.get("access_check", False), include_body=name == "gmail")
-    _, rows, error = prepare_account(store.root, intent, query, turn.zone, turn.started)
-    items = [mail_context(row, 480) for row in rows[:6]] if name == "gmail" else rows[:12]
-    return Evidence(error or items, engine="account_read")
+    _, rows, error = prepare_account(store.root, intent, query, turn.zone, turn.started, describe_empty=name != "gmail")
+    if name == "gmail":
+        data = ({"status": "unavailable", "detail": error} if error else
+                {"status": "ok" if rows else "empty", "messages": [mail_context(row, 480) for row in rows[:6]]})
+        return Evidence(data, engine="account_read")
+    return Evidence(error or rows[:12], engine="account_read")
 
 
 def goal_result(store, turn, tool):
@@ -226,6 +229,8 @@ def fetch(store, turn, tool, *, private, coordinates):
             return PRIVATE_TOOLS[name](store, turn, tool)
         raise PermissionError("This tool requires an unlocked workspace.")
     except (WebReadError, AccountError, FeatureDisabled, ValueError, LookupError, TypeError, OSError, http.client.HTTPException) as exc:
+        if name == "gmail":
+            return Evidence({"status": "unavailable"}, engine="account_read")
         if isinstance(exc, WebReadError) and name == "web":
             return Evidence({"unavailable": str(exc)}, engine="web_lookup")
         return Evidence({"unavailable": str(exc) if isinstance(exc, (WebReadError, FeatureDisabled, ValueError))
