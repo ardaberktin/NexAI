@@ -89,8 +89,8 @@ memory = read saved facts, preferences, or current focus. save_memory = store a 
 weather_city = change or forget the saved weather city. screen = inspect the shared Mac screen.
 clock = start, list, or cancel timers and alarms, including a request to wake the user.
 schedule = a NEW one-time reminder or watch for future external changes. Lookups use their read tool.
-mail_watch = notify the user when a matching future inbox message arrives. Reading existing mail uses gmail.
-recurring = a NEW reminder or report that runs on a fixed cadence. check_in = ask if a personal outcome occurred.
+mail_watch = notify the user when a matching future Gmail/email message arrives (not postal mail). Reading existing mail uses gmail.
+recurring = a NEW reminder or report that runs on a fixed cadence. check_in = remind or ask later whether a personal outcome or physical delivery occurred (including waiting for postal mail).
 document = create a PDF now or later, or add, change, or turn off a saved goal's PDF attachments. PDF advice uses answer.
 edit, delete, complete, keep = change a saved goal, cancel it, report a fulfilled outcome, or report it pending.
 manage = respond to a clarification about which existing goal to change.
@@ -115,6 +115,7 @@ Examples:
 "Mark my prescription pickup reminder done" -> {"capabilities":["complete"],"language":"en"}
 "Remind me every morning at eight to walk the dog" -> {"capabilities":["recurring"],"language":"en"}
 "Ask me later if I picked up my package" -> {"capabilities":["check_in"],"language":"en"}
+"Remind me that I'm waiting for my replacement card in the mail" -> {"capabilities":["check_in"],"language":"en"}
 "Tell me when admissions emails their decision" -> {"capabilities":["mail_watch"],"language":"en"}
 "Keep in mind that I prefer black tea" -> {"capabilities":["save_memory"],"language":"en"}
 "Set my local forecast city to Seattle" -> {"capabilities":["weather_city"],"language":"en"}

@@ -107,11 +107,14 @@ def goal_start(turn, tool, anchor):
         phrases = list(dict.fromkeys(match[0] for match in SCHEDULE.finditer(turn.text)))[:4]
         if phrases:
             error += f" Possible timing phrases copied verbatim: {phrases!r}. Use one only if it requests the start."
+        else:
+            error += " If the request states no time, omit both start and timing."
         raise GoalPlanError(error)
     if start is None:
         return None
     if not tool.get("frequency") and not timing:
-        raise GoalPlanError("For a one-time start, quote the requested time in timing, or omit start and timing.")
+        detail = " For an untimed check-in, omit start and timing." if tool.get("check_in") else ""
+        raise GoalPlanError("For a one-time start, quote the requested time in timing, or omit start and timing." + detail)
     try:
         if not LOCAL_START.fullmatch(start):
             raise ValueError

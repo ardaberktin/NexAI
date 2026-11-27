@@ -343,3 +343,29 @@ class NaturalGoalTests(unittest.TestCase):
         due = datetime.fromisoformat(goal["scheduled_at"]).astimezone(ZoneInfo(ZONE))
         self.assertEqual((goal["prompt"], goal["frequency_minutes"], due.time()),
                          ("suggest a writing exercise", 1440, time(8, 30)))
+
+    def test_invalid_goal_plan_returns_private_clarification_instead_of_failing_inbox_item(self):
+        text = "remind me that i'm waiting for my walmart credit card to arrive in the mail"
+        clarification = "I didn't save a reminder yet—would you like me to check in later about your Walmart credit card?"
+
+        def generate(messages, *_args, **_kwargs):
+            prompt = messages[0]["content"]
+            if prompt.startswith("Select capabilities"):
+                return '{"capabilities":["check_in"],"language":"en"}'
+            if prompt.startswith("Plan the requested personal outcome check-in"):
+                # Both attempts propose an unquoted start time, triggering invalid_goal_plan.
+                return json.dumps({"tools": [{"name": "goal", "query": "Ask about card",
+                                              "check_in": True, "start": "2027-01-15T09:00"}]})
+            if prompt.startswith("In one or two short sentences, explain the goal outcome"):
+                return clarification
+            if prompt.startswith("Return YES if the draft is consistent with the tool outcome"):
+                return "YES"
+            raise AssertionError(f"Unexpected prompt: {prompt[:60]}")
+
+        self.assistant.generate_conversation = Mock(side_effect=generate)
+        result = self.ask(text, session="open")
+        self.assertEqual(result["engine"], "private_request")
+        self.assertNotIn("goal_id", result)
+        self.assertFalse(self.goals.overview())
+        item, = requests.inbox(self.store.privacy)["items"]
+        self.assertEqual((item["state"], item["answer"]), ("ready", clarification))
