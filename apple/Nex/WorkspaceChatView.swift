@@ -18,8 +18,8 @@ struct WorkspaceChatView: View {
     #endif
 
     var body: some View {
-        let items = privacy.unlocked && privacy.connected ? privacy.items : []
-        let messages = WorkspaceMessage.timeline(chat.messages, privateItems: items)
+        let inbox = privacy.unlocked && privacy.connected ? privacy.items : nil
+        let messages = chat.timeline(unlockedInbox: inbox)
         VStack(spacing: 0) {
             if model.workspaceFeatureEnabled(.activities) {
                 RecordingChatActivity(model: model, capture: model.capture, open: openActivities)

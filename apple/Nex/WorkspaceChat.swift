@@ -16,6 +16,7 @@ final class WorkspaceChat: ObservableObject {
     @Published private(set) var nextBefore: String?
     @Published private(set) var loadingOlder = false
     @Published private(set) var olderError: String?
+    @Published private var sendingMessage: WorkspaceMessage?
     private var archived: [WorkspaceMessage] = []
     private var current: [WorkspaceMessage] = []
     private var pending: (text: String, draft: String, id: String, access: ChatAccess)?
@@ -29,6 +30,14 @@ final class WorkspaceChat: ObservableObject {
     var replyingPrivately: Bool { privateDraftBackup != nil }
     var sendingPrivately: Bool { replyingPrivately || access.requiresPrivateReply }
 
+    func timeline(unlockedInbox: [PrivateAnswer]?) -> [WorkspaceMessage] {
+        guard let unlockedInbox else { return messages }
+        let timeline = WorkspaceMessage.timeline(messages, privateItems: unlockedInbox)
+        guard let sendingMessage, !isPrivateEcho(sendingMessage),
+              !timeline.contains(where: { $0.id == sendingMessage.id }) else { return timeline }
+        return (timeline + [sendingMessage]).sorted(by: WorkspaceMessage.chronological)
+    }
+
     func insertReply(to message: WorkspaceMessage) {
         guard message.offersReply, let text = message.copyableText else { return }
         if message.isPrivate && !replyingPrivately { privateDraftBackup = draft }
@@ -38,6 +47,7 @@ final class WorkspaceChat: ObservableObject {
 
     func clearPrivateReply() {
         privateDraftGeneration = UUID()
+        sendingMessage = nil
         if access.requiresPrivateReply { draft = "" }
         else if let backup = privateDraftBackup { draft = backup }
         privateDraftBackup = nil
@@ -191,17 +201,23 @@ final class WorkspaceChat: ObservableObject {
         pending = (text, value, id, requestAccess)
         sendError = nil
         sending = true
-        let date = NexDate.wire()
+        var question = WorkspaceMessage(id: "q-" + id, role: .user, text: value, date: NexDate.wire(), sources: [])
+        // Treat the preview as private until the server confirms where the exchange belongs.
+        question.privateQuestion = true
+        sendingMessage = question
         draft = ""
         attachments = []
-        defer { sending = false }
+        defer {
+            sendingMessage = nil
+            sending = false
+        }
         do {
             let reply = try await model.ask(text, id: id, publishReply: false, access: requestAccess,
                                             attachments: attached)
             guard generation == privateDraftGeneration else { return }
-            // Wait for the server to choose the storage path before displaying any local echoes.
             if !requestAccess.requiresPrivateReply && reply.engine != "private_request" {
-                add(WorkspaceMessage(id: "q-" + id, role: .user, text: value, date: date, sources: []))
+                question.privateQuestion = false
+                add(question)
                 add(WorkspaceMessage(id: "a-" + id, role: .assistant, text: reply.text, date: NexDate.wire(),
                                      sources: reply.sources, language: reply.language))
             }

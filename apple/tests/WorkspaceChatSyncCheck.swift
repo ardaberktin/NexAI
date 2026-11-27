@@ -43,6 +43,18 @@ enum WorkspaceChatSyncCheck {
             let chat = WorkspaceChat()
             model.answer = { id in
                 let rows = pair(id)
+                precondition(chat.sending && chat.draft.isEmpty && chat.messages.isEmpty)
+                precondition(chat.timeline(unlockedInbox: nil).isEmpty)
+                await chat.load(model)
+                let preview = chat.timeline(unlockedInbox: [])
+                precondition(preview.map(\.id) == [rows[0].id] && preview.first?.text == "Ready?")
+                precondition(preview.first?.isPrivate == true)
+
+                model.snapshot = WorkspaceHistory(items: [rows[0]], cursor: "accepted", watch: true)
+                await chat.load(model)
+                let accepted = chat.timeline(unlockedInbox: [])
+                precondition(accepted.map(\.id) == [rows[0].id] && accepted.first?.isPrivate == false)
+
                 model.snapshot = WorkspaceHistory(items: rows, cursor: "complete", watch: true)
                 await chat.load(model)
                 if loseResponse { throw URLError(.networkConnectionLost) }
@@ -68,6 +80,7 @@ enum WorkspaceChatSyncCheck {
         chat.draft = "Ready?"
         await chat.send(model)
         precondition(chat.sendError != nil && chat.draft == "Ready?")
+        precondition(!chat.sending && chat.timeline(unlockedInbox: []).isEmpty)
         chat.draft = "A new draft"
         model.snapshot = WorkspaceHistory(items: pair(requestID), cursor: "recovered", watch: true)
         await chat.load(model)
@@ -85,8 +98,19 @@ enum WorkspaceChatSyncCheck {
         let model = Controller()
         let chat = WorkspaceChat()
         let privateReply = Reply(text: "", language: "en", sources: [], engine: "private_request")
-        model.answer = { _ in
+        model.answer = { id in
             precondition(chat.messages.isEmpty)
+            let preview = chat.timeline(unlockedInbox: [])
+            precondition(preview.map(\.id) == ["q-" + id] && preview.first?.text == "A private draft")
+            precondition(preview.first?.isPrivate == true && chat.timeline(unlockedInbox: nil).isEmpty)
+
+            let item = PrivateAnswer(id: id, device: "iphone", question: "A private draft", subject: "fixture",
+                                     speaker: "unverified", state: "pending", answer: nil, needsLocation: false,
+                                     sources: [], askedAt: "2026-11-21T12:01:00.000+00:00", updatedAt: nil)
+            chat.reconcilePrivate([item])
+            let inbox = chat.timeline(unlockedInbox: [item])
+            precondition(inbox.map(\.id) == ["q-" + id, "a-" + id] && inbox[0].date == item.askedAt)
+            precondition(chat.timeline(unlockedInbox: []).isEmpty)
             return privateReply
         }
         for access in [ChatAccess.automatic, .privateMessage] {
@@ -98,9 +122,15 @@ enum WorkspaceChatSyncCheck {
         }
         chat.access = .standard
         chat.draft = "Keep this in Chat history"
-        model.answer = { _ in reply }
+        chat.attachments = ["fixture-image"]
+        model.answer = { id in
+            precondition(chat.timeline(unlockedInbox: []).map(\.id) == ["q-" + id])
+            precondition(model.requestedAttachments == ["fixture-image"] && chat.attachments.isEmpty)
+            return reply
+        }
         await chat.send(model)
         precondition(model.requestedAccess == .standard && chat.messages.count == 2)
+        precondition(chat.timeline(unlockedInbox: []).count == 2 && chat.messages.allSatisfy { !$0.isPrivate })
         precondition(ChatAccess.privateReply.requestValue == ChatAccess.privateMessage.requestValue)
 
         chat.access = .privateMessage
@@ -223,7 +253,9 @@ enum WorkspaceChatSyncCheck {
         precondition(chat.messages.isEmpty && chat.sendError != nil)
 
         model.answer = { _ in
+            precondition(chat.timeline(unlockedInbox: []).first?.text == privateAnswer.text)
             chat.clearPrivateReply()
+            precondition(chat.timeline(unlockedInbox: []).isEmpty)
             throw CancellationError()
         }
         await chat.send(model)
