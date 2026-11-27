@@ -2,6 +2,8 @@
 
 **November 26, 2026 · Typed Chat · Gemma 3 4B · America/Vancouver**
 
+For results from the model running on Excalibur, see the [live Qwen 3.5 4B evaluation](qwen.md). The figures below are the Gemma baseline.
+
 **Nex fully met the request in 10 of 34 Chat turns (29%).** Five were partial successes and 19 failed. A clear hourly job watch, a lease-renewal email watch and a one-time passport reminder worked. The most consequential failures were believable confirmations of changes that never happened. Nex promised ongoing monitoring after a one-time read, said it had paused an active watch, and acknowledged a filter it had never saved.
 
 Once an hourly Gmail watch had the correct definition, the scheduled worker passed all four checks. It selected both qualifying openings across six distinct sample emails, ignored four distractors, suppressed duplicate delivery, and recovered after losing its connection.
