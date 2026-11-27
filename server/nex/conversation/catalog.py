@@ -26,7 +26,7 @@ CATALOG = {
     "agenda": "The user's combined schedule, calendar and tasks unless a specific service is named. "
               "Use start_date and optional exclusive end_date (YYYY-MM-DD), or a relative day in query.",
     "gmail": "Read email. query = topic or empty for recent mail. terms = up to three alternative search strings. "
-             "Use exact:true only for a quoted exact phrase requested by the user. Optional unread and priority booleans.",
+             "Use exact:true only for a quoted exact phrase requested by the user. Omit unread and priority unless the user asks for those filters.",
     "calendar": "Events specifically from Google Calendar. Use this only when the Google service is requested.",
     "ticktick": "Tasks. Use start_date and optional exclusive end_date (YYYY-MM-DD). Optional lists and access_check booleans.",
     "archive": "Search only the user's recordings and past dialogue. query = topic keywords. "
@@ -48,7 +48,7 @@ CATALOG = {
             "timing = exact words in the latest request asking for this one-time run time. "
             "Set check_in:true to ask the user to confirm an outcome. "
             "To update a goal, use target from goal_references. Omitted fields keep their current values.",
-    "manage_goal": "Look up goals privately. Optional operation: complete, edit, delete, keep, remove_pdf. Use alone.",
+    "manage_goal": "Look up goals privately. Optional operation: inspect, pause, resume, complete, edit, delete, keep, remove_pdf. Use alone.",
     "screen": "Inspect the shared Mac screen. Use alone.",
 }
 PUBLIC = {"weather", "web", "python", "browser"}

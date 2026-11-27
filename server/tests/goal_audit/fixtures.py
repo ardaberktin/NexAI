@@ -97,7 +97,7 @@ class Mailbox:
         self.mode = mode
         self.reads = []
 
-    def read(self, root, intent, query, zone, started):
+    def read(self, root, intent, query, zone, started, **options):
         read = {"provider": intent.provider, "query": query}
         self.reads.append(read)
         if intent.provider != "gmail":
@@ -112,4 +112,4 @@ class Mailbox:
         ):
             vault.return_value.status.return_value = {"gmail": "reconnect" if self.mode == "outage" else "connected"}
             vault.return_value.token.return_value = "fixture"
-            return prepare_account(root, intent, query, zone, started)
+            return prepare_account(root, intent, query, zone, started, **options)

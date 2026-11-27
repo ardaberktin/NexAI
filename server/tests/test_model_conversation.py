@@ -8,7 +8,13 @@ from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from conversation_fixtures import action_claims, model, tools, unlock
+from conversation_fixtures import (
+    UNSPECIFIED_PATTERN,
+    action_claims,
+    model,
+    tools,
+    unlock,
+)
 from nex.assistant import Assistant
 from nex.conversation.calendar_scope import RESOLVE_SCOPE, repair_calendar_scopes
 from nex.conversation.catalog import PLAN_CHECK_IN, REVIEW_SCHEDULE, WEATHER_SCOPE
@@ -16,6 +22,7 @@ from nex.conversation.goal_management_prompts import GOAL_INTENT
 from nex.conversation.mail_watch_plan import CHOOSE_MAIL_ACTION, PLAN_MAIL_WATCH
 from nex.conversation.plan import Plan, choose, validated
 from nex.conversation.reply import REVIEW_REPLY, VERIFY_WEB, compose, run
+from nex.conversation.schedule_pattern import READ_PATTERN
 from nex.conversation.sync import make_turn
 from nex.conversation.tools import Evidence
 from nex.conversation.weather import hourly
@@ -166,7 +173,7 @@ class ModelConversationTests(unittest.TestCase):
     def test_schedule_review_can_discard_an_unsolicited_goal(self):
         self.turn.text = "My friend is going to be late."
         proposed = {"name": "goal", "query": "Check if my friend arrived", "start": "2026-11-22T13:00"}
-        generate = AsyncMock(side_effect=["OTHER", tools(proposed), tools()])
+        generate = AsyncMock(side_effect=["OTHER", tools(proposed), UNSPECIFIED_PATTERN, tools()])
         self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan(()))
         messages = generate.await_args.args[0]
         self.assertTrue(messages[0]["content"].startswith(REVIEW_SCHEDULE))
@@ -179,7 +186,7 @@ class ModelConversationTests(unittest.TestCase):
         self.turn.text = "Remind me yesterday at noon to move the car."
         expired = {"name": "goal", "query": "Move the car", "timing": "yesterday at noon",
                    "start": "2026-11-21T12:00"}
-        generate = AsyncMock(side_effect=["SCHEDULE", tools(expired), tools()])
+        generate = AsyncMock(side_effect=["SCHEDULE", UNSPECIFIED_PATTERN, tools(expired), tools()])
         self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan(()))
         correction = generate.await_args.args[0][-1]["content"]
         self.assertIn("Ask for clarification if the requested time has passed", correction)
@@ -194,13 +201,14 @@ class ModelConversationTests(unittest.TestCase):
             "start": first_run.isoformat(timespec="minutes"), "watch_provider": "gmail",
         }
         generate = AsyncMock(side_effect=['{"capabilities":["mail_watch"],"language":"en"}',
-                                          '{"action":"mail_watch","start":"delay"}', tools({"name": "agenda", "query": "committee decision"}), tools(proposed)])
+                                          '{"action":"mail_watch","start":"delay"}',
+                                          json.dumps(json.loads(UNSPECIFIED_PATTERN) | {"first_start": "delay"}), tools({"name": "agenda", "query": "committee decision"}), tools(proposed)])
         with patch("nex.conversation.plan.repair_calendar_scopes", wraps=repair_calendar_scopes) as repair:
             self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan((watch,)))
             self.assertEqual(repair.await_args.args[1], (watch,))
             repair.assert_awaited_once()
         prompts = [call.args[0][0]["content"] for call in generate.await_args_list]
-        self.assertEqual(prompts, [GOAL_INTENT, CHOOSE_MAIL_ACTION, PLAN_MAIL_WATCH, PLAN_MAIL_WATCH])
+        self.assertEqual(prompts, [GOAL_INTENT, CHOOSE_MAIL_ACTION, READ_PATTERN, PLAN_MAIL_WATCH, PLAN_MAIL_WATCH])
 
     def test_reminder_feedback_includes_the_users_verbatim_time_phrase(self):
         self.turn.text = "Remind me tomorrow at 2 pm to send an email"
@@ -208,7 +216,7 @@ class ModelConversationTests(unittest.TestCase):
         tomorrow = self.turn.started.astimezone(ZoneInfo(ZONE)).date() + timedelta(days=1)
         task = {"name": "goal", "query": "Send an email", "start": f"{tomorrow}T14:00"}
         corrected = task | {"timing": "tomorrow at 2 pm"}
-        generate = AsyncMock(side_effect=["SCHEDULE", tools(task | {"timing": "at 2 pm tomorrow"}), tools(corrected)])
+        generate = AsyncMock(side_effect=["SCHEDULE", UNSPECIFIED_PATTERN, tools(task | {"timing": "at 2 pm tomorrow"}), tools(corrected)])
         self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan((corrected,)))
         self.assertIn("tomorrow at 2 pm", generate.await_args.args[0][-1]["content"])
 
@@ -358,7 +366,7 @@ class ModelConversationTests(unittest.TestCase):
         self.turn.text = "remind me that i'm waiting for my walmart credit card to arrive in the mail"
         self.turn.started = datetime.now(UTC)
         generate = AsyncMock(side_effect=[
-            '{"capabilities":["check_in"],"language":"en"}',
+            '{"capabilities":["check_in"],"language":"en"}', UNSPECIFIED_PATTERN,
             tools({
                 "name": "goal",
                 "query": "Ask whether the Walmart credit card arrived",
@@ -375,7 +383,7 @@ class ModelConversationTests(unittest.TestCase):
             "query": "Ask whether the Walmart credit card arrived",
             "check_in": True,
         },))
-        self.assertEqual(generate.await_count, 2)
+        self.assertEqual(generate.await_count, 3)
         messages = generate.await_args.args[0]
         self.assertEqual(messages[0]["content"], PLAN_CHECK_IN)
         variants = messages.response_format["json_schema"]["schema"]["properties"]["tools"]["items"]["anyOf"]
@@ -387,7 +395,7 @@ class ModelConversationTests(unittest.TestCase):
         self.turn.started = datetime.now(UTC)
         tomorrow = self.turn.started.astimezone(ZoneInfo(ZONE)).date() + timedelta(days=1)
         generate = AsyncMock(side_effect=[
-            '{"capabilities":["schedule"],"language":"en"}',
+            '{"capabilities":["schedule"],"language":"en"}', UNSPECIFIED_PATTERN,
             tools({
                 "name": "goal",
                 "query": "Send an email",
@@ -400,7 +408,7 @@ class ModelConversationTests(unittest.TestCase):
 
         self.turn.text = "remind me that i'm waiting for my credit card in the mail"
         retry = AsyncMock(side_effect=[
-            '{"capabilities":["check_in"],"language":"en"}',
+            '{"capabilities":["check_in"],"language":"en"}', UNSPECIFIED_PATTERN,
             tools({
                 "name": "goal",
                 "query": "Ask whether the credit card arrived",

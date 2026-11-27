@@ -76,15 +76,13 @@ async def shortlist(descriptions, context, generate, *, verify_match=False):
         else:
             labels = [row["title"] if row["title"].casefold() == row["task"].casefold()
                       else f"{row['title']} — {row['task']}" for row in page]
-        data = {"goals": labels, "message": context["question"]}
+        data = {"goals": labels, "message": context["question"], "operation": context.get("requested_action")}
         if context.get("history"):
             data["history"] = context["history"]
-        schema = None
-        if format_only:
-            size = len(page)
-            schema = {"type": "object", "required": ["matches"], "additionalProperties": False,
-                      "properties": {"matches": {"type": "array", "items": {"type": "boolean"},
-                                                 "minItems": size, "maxItems": size}}}
+        size = len(page)
+        schema = {"type": "object", "required": ["matches"], "additionalProperties": False,
+                  "properties": {"matches": {"type": "array", "items": {"type": "boolean"},
+                                             "minItems": size, "maxItems": size}}}
         messages = model_messages(FIND_PDF_GOALS if format_only else FIND_GOALS, data, schema=schema)
         result = json_object(await generate(messages, 100) or "")
         mask = result.get("matches")

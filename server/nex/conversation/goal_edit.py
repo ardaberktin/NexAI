@@ -15,6 +15,18 @@ from .goal_management_prompts import (
 from .goal_plans import goal_start
 from .goal_tools import goal_data
 from .plan import validated
+from .schedule_pattern import UnsupportedSchedule, read_pattern
+
+EDIT_FIELDS = {
+    "title": {"type": "string"}, "query": {"type": "string"}, "start": {"type": "string"},
+    "timing": {"type": "string"}, "frequency": {"type": "integer"}, "check_in": {"type": "boolean"},
+    "format_instruction": {"type": "string"},
+}
+EDIT_SCHEMA = {"anyOf": [
+    {"type": "object", "properties": EDIT_FIELDS, "additionalProperties": False},
+    {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"],
+     "additionalProperties": False},
+]}
 
 
 def changes_for(turn, goal, changes):
@@ -68,11 +80,19 @@ async def plan_edit(turn, goal, context, generate):
     data["upcoming_days"] = scope_prompt(turn.text, turn.zone, turn.started, "")["upcoming_days"]
     instructions = EDIT_GOAL
     for _ in range(2):
-        changes = json_object(await generate(model_messages(instructions, data), 260) or "")
+        changes = json_object(await generate(model_messages(instructions, data, schema=EDIT_SCHEMA), 260) or "")
         if changes.keys() == {"question"}:
             question = changes["question"]
             if isinstance(question, str) and 0 < len(question.strip()) <= 480 and question.strip().endswith("?"):
                 return question.strip()
+        if "frequency" in changes:
+            pattern = await read_pattern(context, generate)
+            if pattern is None:
+                return None
+            if pattern.unsupported:
+                raise UnsupportedSchedule
+            if pattern.kind == "interval":
+                changes = pattern.bind(changes, turn)
         try:
             if (isinstance(start := changes.get("start"), str) and len(start) > 10
                     and (weekday := weekday_selector({"query": changes.get("timing")}))):

@@ -72,6 +72,7 @@ from .mail_watch_plan import (
 )
 from .planning_schema import plan_schema
 from .routing_prompt import Route, route_turn
+from .schedule_pattern import read_pattern
 
 LOG = logging.getLogger(__name__)
 SCHEDULE_TOOLS = {"goal", "manage_goal", "agenda", "calendar", "ticktick", "gmail"}
@@ -98,6 +99,7 @@ class Turn:
     mcp_tools: dict = field(default_factory=dict)
     attachments: tuple = ()
     agent_loop: bool = False
+    goal_titles: tuple = ()
 
     @property
     def language(self):
@@ -449,18 +451,34 @@ async def select_document(turn, generate, data):
     return Plan((), "model_unavailable")
 
 
+async def requested_schedule(context, generate):
+    pattern = await read_pattern(context, generate)
+    if pattern is None:
+        return None, Plan((), "model_unavailable")
+    if pattern.kind == "no_request":
+        return None, Plan((), clarify=True)
+    if pattern.unsupported:
+        return None, Plan((), "unsupported_goal_schedule")
+    return pattern, None
+
+
 async def select_mail_watch(turn, generate, data, route):
     check_existing = route.label == "mail_check_and_watch"
     context = schedule_context(turn, data) | {
         "mail_watch": True, "check_existing_mail": check_existing,
-        "history": mail_watch_history(turn), "goal_references": [], "watch_start": route.watch_start,
+        "history": mail_watch_history(turn), "goal_references": [],
     }
     instructions = PLAN_MAIL_CHECK_AND_WATCH if check_existing else PLAN_MAIL_WATCH
     names = {"goal", "gmail"} if check_existing else {"goal"}
-    schema = plan_schema(names, goal_type="mail_watch", goal_start_mode=route.watch_start)
+    pattern, problem = await requested_schedule(context, generate)
+    if problem:
+        return problem
+    frequency = pattern.minutes if pattern.kind == "interval" else None
+    context["watch_start"] = {"implicit": "cadence", "date": "clock"}.get(pattern.first_start, pattern.first_start)
+    schema = plan_schema(names, goal_type="mail_watch", goal_start_mode=context["watch_start"], goal_frequency=frequency)
     request = {key: context[key] for key in ("question", "history", "local_time", "goal_time_zone", "watch_start")}
     messages = model_messages(instructions, request, schema=schema)
-    plan = await generate_plan(turn, generate, messages, goal_review=context, available=names)
+    plan = await generate_plan(turn, generate, messages, goal_review=context, available=names, pattern=pattern)
     return Plan((), clarify=True) if not plan.tools and not plan.error else plan
 
 
@@ -474,7 +492,20 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
     selected_type = goal_type if "edit_target" not in context else None
     names = SCHEDULE_TOOLS | {tool["name"] for tool in tools}
     available = None
-    frequency = None
+    frequency = pattern = None
+    if not connected and "edit_target" not in context and (goal_type or (proposal and proposal["name"] == "goal")):
+        pattern, problem = await requested_schedule(context, generate)
+        if problem:
+            return problem
+        if goal_type == "check_in":
+            # A check-in is conditional on the user's answer. Its requested delivery clock is not a fixed recurrence.
+            pattern = None
+        elif pattern.kind == "interval":
+            selected_type, frequency = "recurring", pattern.minutes
+            names = available = {"goal"}
+            instructions = ("Plan the requested repeating task in one goal. Preserve the source, subject and "
+                            "constraints in query. Supply its first future occurrence in local time as start. "
+                            "Use the supplied calendar dates for weekday references. Return only JSON.")
     if connected and "edit_target" not in context:
         frequency, weekday = await connected_schedule(context, generate)
         if frequency is None:
@@ -496,7 +527,7 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
     if "mcp_tools" in context:
         instructions += MCP_PROMPT + "For a saved goal, preserve named MCP sources and their purpose in query."
     return await generate_plan(turn, generate, plan_messages(turn, instructions, review, names, schema),
-                               goal_review=context, available=available)
+                               goal_review=context, available=available, pattern=pattern)
 
 
 def schedule_context(turn, data):
@@ -505,16 +536,16 @@ def schedule_context(turn, data):
                "history": history, "goal_references": data.get("goal_references", []), "question": data["question"]}
     if turn.mcp_tools:
         context["mcp_tools"] = catalog_menu(turn.mcp_tools)
-        today = date.fromisoformat(data["local_date"])
-        days = [today + timedelta(days=offset) for offset in range(1, 8)]
-        context["upcoming_weekdays"] = {day.strftime("%A"): day.isoformat() for day in days}
+    today = date.fromisoformat(data["local_date"])
+    days = [today + timedelta(days=offset) for offset in range(1, 8)]
+    context["upcoming_weekdays"] = {day.strftime("%A"): day.isoformat() for day in days}
     if "recalled_chat" in data:
         context["recalled_chat"] = data["recalled_chat"]
     return context
 
 
 async def generate_plan(turn, generate, base, *, goal_review=None, available=None, required=None,
-                        required_mcp=False):
+                        required_mcp=False, pattern=None):
     if available is not None and not getattr(base, "response_format", None):
         base = constrained_messages(base, plan_schema(available))
     messages = base
@@ -532,6 +563,9 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
                 tools = normalize_source_url(tools, turn.text)
             if goal_review and goal_review.get("mail_watch"):
                 tools = prepare_mail_watch(tools, turn, goal_review["watch_start"])
+            if pattern and isinstance(tools, list):
+                tools = [pattern.bind(tool, turn, new_goal=True) if isinstance(tool, dict) and tool.get("name") == "goal" else tool
+                         for tool in tools]
             plan = validated(tools)
             if any(is_alias(tool["name"]) and tool["name"] not in turn.mcp_tools for tool in plan.tools):
                 raise ValueError("Use only MCP tools advertised for this request.")

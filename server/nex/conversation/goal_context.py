@@ -7,6 +7,7 @@ from ..goal_writing import json_value
 from ..goals import Goals
 from ..recall_dates import time_zone
 from ..store import excerpt
+from ..workspace_features import enabled
 from ..workspace_schema import WorkspaceMissing
 
 
@@ -46,6 +47,15 @@ def pdf_removal_history(history):
     return history[start:]
 
 
+def routing_titles(store):
+    """A bounded directory for the unlocked intent selector, never tool arguments or reply context."""
+    with store.connect() as db:
+        db.execute("BEGIN")
+        if not enabled(db, "goals"):
+            return ()
+        return tuple(row[0] for row in db.execute("SELECT title FROM goals ORDER BY updated DESC,id LIMIT 24"))
+
+
 def with_goal_state(store, history):
     goals = Goals(store)
     states = {}
@@ -71,6 +81,7 @@ def load_goal_state(goals, identifier):
              "frequency_minutes": goal["frequency_minutes"], "time_zone": zone.key}
     if provider := goal.get("watch_provider"):
         state["watch_provider"] = provider
+    state["pdf_enabled"] = bool(goal.get("pdf_instruction"))
     if next_run := goal["next_run"]:
         state["next_run"] = datetime.fromisoformat(next_run).astimezone(zone).isoformat(timespec="minutes")
     if follow_up := goal["follow_up"]:

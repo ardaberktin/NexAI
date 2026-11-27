@@ -30,6 +30,7 @@ from nex.conversation.reply import (
     WRITE_MAIL_WATCH,
 )
 from nex.conversation.routing_prompt import ROUTE_HEADER
+from nex.conversation.schedule_pattern import READ_PATTERN
 from nex.conversation.verify_tool_reply import VERIFY_TOOL_REPLY
 from nex.privacy.state import digest
 from nex.privacy.voice import WRITE_APPROVAL_NOTICE
@@ -45,6 +46,9 @@ def action_claims(mail_search="none", *, saved_watch=False, cadence=None, next_r
                        "wrong_next_check": not next_run_matches, "unsupported_delivery": instant_detection})
 
 
+UNSPECIFIED_PATTERN = json.dumps({"pattern": "unspecified", "minutes": None, "weekdays": [], "clock": None, "first_start": "implicit"})
+
+
 def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", recorded=None, quotes=None,
           goal_intent="OTHER", approval_notice=None, mail_action=None, watch_start="cadence"):
     """Accept a fixed tool list or a callable of the actual turn payload."""
@@ -57,6 +61,8 @@ def model(plan, *, compose=None, code=None, language="en", web_verdict="YES", re
             return "CLEAR"
         if prompt.startswith(ROUTE_HEADER):
             return goal_intent
+        if prompt == READ_PATTERN:
+            return json.dumps(json.loads(UNSPECIFIED_PATTERN) | {"first_start": "implicit" if watch_start == "cadence" else watch_start})
         if prompt == CHOOSE_MAIL_ACTION:
             capabilities = json.loads(goal_intent).get("capabilities", []) if goal_intent.startswith("{") else []
             action = mail_action or next((value for value in capabilities if value in MAIL_WATCH_ROUTES), "other")

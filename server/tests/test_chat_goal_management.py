@@ -20,6 +20,7 @@ from nex.conversation.reply import (
     VERIFY_GOAL_STATUS,
     VERIFY_UNSAVED_GOAL,
     WRITE_GOAL,
+    WRITE_GOAL_CLARIFICATION,
     WRITE_GOAL_STATUS,
     WRITE_UNSAVED_GOAL,
 )
@@ -84,6 +85,8 @@ class ChatGoalManagementTests(unittest.TestCase):
             return f"{text} Next check is {schedule}." if schedule else text
         if prompt in (VERIFY_GOAL, VERIFY_GOAL_STATUS):
             return "YES" if self.verify_receipt else "NO"
+        if prompt == WRITE_GOAL_CLARIFICATION:
+            return json.dumps({"question": "Which goal do you mean, " + " or ".join(data["candidate_titles"]) + "?"})
         if prompt == VERIFY_UNSAVED_GOAL:
             return "YES"
         if prompt.startswith(WRITE_UNSAVED_GOAL):
@@ -115,6 +118,39 @@ class ChatGoalManagementTests(unittest.TestCase):
 
         GoalFollowUpJobs(self.store, schedule).decide()
         return self.goals.detail(self.card["id"])["follow_up"]
+
+    def test_pause_inspect_and_resume_keep_the_definition_and_sibling(self):
+        session = unlock(self.store)
+        before = self.goals.detail(self.card["id"])
+        for action, status, revision in (("pause", "paused", 1), ("inspect", "paused", 1), ("resume", "active", 2)):
+            with self.subTest(action=action):
+                self.intent = json.dumps({"capabilities": [action], "language": "en"})
+                self.decision = action
+                self.ask(f"{action} the replacement library pass goal", session=session)
+                saved = self.goals.detail(self.card["id"])
+                self.assertEqual((saved["status"], saved["revision"]), (status, before["revision"] + revision))
+                self.assertEqual(saved["prompt"], before["prompt"])
+                self.assertEqual(self.receipt()["goal_id"], saved["id"])
+                self.assertEqual(self.goals.detail(self.other["id"])["revision"], self.other["revision"])
+
+    def test_private_goal_directory_only_enters_the_unlocked_selector(self):
+        from unittest.mock import patch
+
+        from nex.conversation.routing_prompt import SAVED_ACTION
+
+        seen = []
+        def capture(messages, *args, **kwargs):
+            seen.append((messages[0]["content"], json.loads(messages[1]["content"])))
+            return self.generate(messages, *args, **kwargs)
+
+        with patch.object(self.assistant, "generate_conversation", capture):
+            self.ask("Has my library pass arrived?")
+            self.assertFalse(any("saved_goal_titles" in data for _, data in seen))
+            self.ask("Has my library pass arrived?", session=unlock(self.store))
+        directories = [(prompt, data["saved_goal_titles"]) for prompt, data in seen if "saved_goal_titles" in data]
+        self.assertEqual(len(directories), 1)
+        self.assertEqual(directories[0][0], SAVED_ACTION)
+        self.assertCountEqual(directories[0][1], [self.card["title"], self.other["title"]])
 
     def test_cold_chat_completes_only_the_matched_goal_after_unlock_and_cancels_its_check(self):
         self.assertIsNotNone(self.schedule_check_in())

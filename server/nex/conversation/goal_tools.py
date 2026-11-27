@@ -39,7 +39,7 @@ def goal_data(tool, zone, start, existing):
     if "watch_provider" in tool:
         data["watch_provider"] = tool["watch_provider"]
     if existing is not None:
-        data.update(revision=existing["revision"], prompt=tool.get("query", existing["prompt"]),
+        data.update(title=existing["title"], revision=existing["revision"], prompt=tool.get("query", existing["prompt"]),
                     frequency_minutes=tool.get("frequency", existing["frequency_minutes"]),
                     scheduled_at=start or existing["scheduled_at"])
         if start is None:
@@ -61,6 +61,8 @@ def goal_receipt(store, goal, *, updated):
         "check_in": bool(work and work["required"]),
         "schedule_text": display_time(local) if local else None,
     }
+    if local:
+        receipt["next_weekday"] = local.strftime("%A")
     if provider := goal.get("watch_provider"):
         receipt["watch_provider"] = provider
     if frequency := goal["frequency_minutes"]:

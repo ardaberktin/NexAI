@@ -39,5 +39,6 @@ class GoalSubjectLookupTests(unittest.IsolatedAsyncioTestCase):
         generate.assert_awaited_once()
         messages, _ = generate.await_args.args
         self.assertEqual(json.loads(messages[1]["content"]),
-                         {"request": exchange[0]["content"], "goals": {"3. Pass renewal": candidate["task"]}})
+                         {"request": exchange[0]["content"], "goals": {"3. Pass renewal": candidate["task"]},
+                          "current_settings": {"3. Pass renewal": {"last_discussed": False, "pdf_enabled": False}}})
         self.assertEqual(messages[2:], [exchange[1], {"role": "user", "content": "the pass"}])

@@ -7,7 +7,7 @@ from functools import partial
 
 from ..conversation.access import can_preflight, needs_unlock
 from ..conversation.clock import DeviceClock
-from ..conversation.goal_context import with_goal_state
+from ..conversation.goal_context import routing_titles, with_goal_state
 from ..conversation.plan import validated
 from ..conversation.reply import reply, spoken_text
 from ..conversation.sync import execute, generator, make_turn, select
@@ -122,11 +122,14 @@ def plan_chat(assistant, turn, saved, session, *, force, defaults, lookup_only):
         plan = replace(validated(saved["pending_tools"]), clarify=bool(saved.get("clarify")))
     else:
         turn.history = with_goal_state(store, history)
+        if session and not lookup_only and not turn.journal:
+            turn.goal_titles = routing_titles(store)
         plan = select(assistant, turn, recall=recall)
     private = not saved and (needs_unlock(turn, plan, force) or chat_settings.prefers_private(defaults, plan))
     # A private follow-up's context must never enter a public answer or public search terms.
     if history and history[-1].get("private") and not private:
         turn.history = ()
+        turn.goal_titles = ()
         if not saved:
             turn.recalled_chat = None
             turn.resolved_language = None

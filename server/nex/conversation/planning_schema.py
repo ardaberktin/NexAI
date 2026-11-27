@@ -53,6 +53,8 @@ def tool_object(name, scheduled, goal_type, goal_frequency, goal_start_mode):
         fields.add("query")
     properties = {"name": {"const": name}} | {field: argument_schema(name, field) for field in sorted(fields)}
     required = [field for field in REQUIRED.get(name, ()) if field in fields]
+    if name == "goal" and goal_type:
+        properties["start"] = {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"}
     if name == "goal" and goal_type == "recurring":
         properties.pop("timing", None)
         properties.pop("check_in", None)
