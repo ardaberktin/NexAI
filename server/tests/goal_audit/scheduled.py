@@ -55,14 +55,7 @@ def poll(goals, model, goal_id, arrived, case, messages, connected, expected):
             "next_run": after["next_run"], "last_checked": after["last_checked"], "model_calls": model.calls - start_calls}
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("socket", type=Path)
-    args = parser.parse_args()
-    if not args.socket.is_socket():
-        parser.error("Supply the Unix socket of the disposable model server.")
-    only_model_socket(args.socket)
-    model = LocalModel(args.socket)
+def evaluate_polls(model):
     with TemporaryDirectory() as root:
         goals = Goals(Store(root, 0, 2**20), classify=lambda messages: model.generate(messages, 8),
                       generate=model.generate)
@@ -73,7 +66,19 @@ def main():
                    request=PROMPT, language="en")
         arrived = {}
         for inputs in POLLS:
-            print(json.dumps(poll(goals, model, goal_id, arrived, *inputs), ensure_ascii=False), flush=True)
+            yield poll(goals, model, goal_id, arrived, *inputs)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("socket", type=Path)
+    args = parser.parse_args()
+    if not args.socket.is_socket():
+        parser.error("Supply the Unix socket of the disposable model server.")
+    only_model_socket(args.socket)
+    model = LocalModel(args.socket)
+    for result in evaluate_polls(model):
+        print(json.dumps(result, ensure_ascii=False), flush=True)
 
 
 if __name__ == "__main__":

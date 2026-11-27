@@ -23,7 +23,9 @@ LOG = logging.getLogger(__name__)
 
 
 class LiveWorkspaces:
-    def __init__(self, root, runtime, admin_key, speech, room, verifier, model_socket, mac_socket):
+    def __init__(self, root, runtime, admin_key, speech, room, verifier, model_socket, mac_socket, *,
+                 local_model_id=None):
+        self.local_model_id = local_model_id
         self.root, self.runtime, self.admin_key = root, runtime, admin_key
         self.accounts = Accounts(root)
         self.speech, self.room, self.verifier = speech, room, verifier
@@ -39,7 +41,7 @@ class LiveWorkspaces:
         async with self.services:
             self.owner = await self.services.enter_async_context(self.open_workspace(self.root))
             # Archive requests from extra accounts can only reach the server's own model.
-            hosted_model = Dialogue(None, self.model_socket, None)
+            hosted_model = Dialogue(None, self.model_socket, None, local_model_id=self.local_model_id)
             self.services.push_async_callback(hosted_model.close)
             await self.services.enter_async_context(daybook_socket(self.runtime / "hosted-model.sock", hosted_model))
             monitor = asyncio.create_task(self.monitor())
@@ -82,7 +84,8 @@ class LiveWorkspaces:
         memory = LiveMemory(root)
         with memory.connect() as db:
             db.execute("SELECT 1 FROM live_turn_results LIMIT 1")
-        dialogue = Dialogue(memory, self.model_socket, None if account else self.mac_socket)
+        dialogue = Dialogue(memory, self.model_socket, None if account else self.mac_socket,
+                            local_model_id=self.local_model_id)
         async with AsyncExitStack() as stack:
             stack.push_async_callback(dialogue.close)
             if not account:

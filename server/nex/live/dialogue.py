@@ -41,11 +41,15 @@ def reply(text, language, sources=(), engine="local_model"):
     return {"text": text, "language": language, "sources": list(sources), "engine": engine}
 
 
+QWEN_THINKING_TOKENS = 256
+
+
 class Dialogue:
-    def __init__(self, memory, local_socket, mac_socket):
+    def __init__(self, memory, local_socket, mac_socket, *, local_model_id=None):
         self.memory = memory
         self.local = self.client(local_socket)
         self.mac = self.client(mac_socket) if mac_socket else None
+        self.local_model_id = local_model_id
         self.local_context = DEFAULT_CONTEXT
         self.background_slot = asyncio.Lock()
         self.priority_waiters = 0
@@ -77,7 +81,7 @@ class Dialogue:
                         self.local_context = context_size(props.json(), DEFAULT_CONTEXT)
                 except (httpx.HTTPError, ValueError):
                     pass
-                await self.complete(self.local, [{"role": "user", "content": "Say ready."}], 4)
+                await self.complete(self.local, [{"role": "user", "content": "Say ready."}], 4, immediate=True)
                 return
             except httpx.HTTPError:
                 await asyncio.sleep(0.5)
@@ -113,13 +117,26 @@ class Dialogue:
             result["reasoning_effort"] = reasoning_effort
         return result
 
-    async def complete(self, client, messages, limit, *, temperature=None, thinking=None, reasoning_effort=None):
+    async def completion_options(self, client, messages, limit, *, temperature, thinking, reasoning_effort,
+                                 stream=False, immediate=False):
         use_thinking = (client is self.mac) if thinking is None else thinking
-        options = self.request(messages, limit, thinking=use_thinking, reasoning_effort=reasoning_effort)
+        options = self.request(messages, limit, stream=stream, thinking=use_thinking, reasoning_effort=reasoning_effort)
         if temperature is not None:
             options["temperature"] = temperature
-        started = monotonic()
+        if immediate or client is not self.local or not self.local_model_id or self.local_model_id() != "qwen-3.5-4b":
+            return await self.budget_completion(client, options)
+        # Qwen shares its completion limit between reasoning, delimiters and the visible answer.
+        options["chat_template_kwargs"] = {"enable_thinking": True}
+        options["max_tokens"] += QWEN_THINKING_TOKENS + 8
         options = await self.budget_completion(client, options)
+        options["reasoning_budget_tokens"] = max(0, min(QWEN_THINKING_TOKENS, options["max_tokens"] - limit - 8))
+        return options
+
+    async def complete(self, client, messages, limit, *, temperature=None, thinking=None, reasoning_effort=None,
+                       immediate=False):
+        started = monotonic()
+        options = await self.completion_options(client, messages, limit, temperature=temperature, thinking=thinking,
+                                                reasoning_effort=reasoning_effort, immediate=immediate)
         response = await client.post("/v1/chat/completions", json=options)
         response.raise_for_status()
         payload = response.json()
@@ -128,12 +145,9 @@ class Dialogue:
 
     async def stream_complete(self, client, messages, limit, on_delta, *, temperature=None, thinking=None,
                               reasoning_effort=None):
-        use_thinking = (client is self.mac) if thinking is None else thinking
-        options = self.request(messages, limit, stream=True, thinking=use_thinking, reasoning_effort=reasoning_effort)
-        if temperature is not None:
-            options["temperature"] = temperature
         started = monotonic()
-        options = await self.budget_completion(client, options)
+        options = await self.completion_options(client, messages, limit, temperature=temperature, thinking=thinking,
+                                                reasoning_effort=reasoning_effort, stream=True)
         parts = []
         async with client.stream("POST", "/v1/chat/completions", json=options,
                                  headers={"Accept": "text/event-stream"}) as response:
@@ -197,7 +211,7 @@ class Dialogue:
         self.update_priority()
         try:
             async with asyncio.timeout(3.5):
-                return await self.complete(self.local, messages, 4, temperature=0, thinking=False)
+                return await self.complete(self.local, messages, 4, temperature=0, thinking=False, immediate=True)
         except (TimeoutError, httpx.HTTPError, KeyError, ValueError, IndexError, TypeError):
             return ""
         finally:
