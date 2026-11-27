@@ -32,7 +32,9 @@ class UnsupportedSchedule(ValueError):
 def unsupported_schedule():
     return {"status": "unsupported_schedule", "saved": False, "changed": False,
             "supported_intervals_minutes": list(FREQUENCIES[1:]),
-            "detail": "The requested recurrence is unavailable. Ask which supported alternative the user prefers."}
+            "single_weekly_weekday": True, "weekday_subsets": False,
+            "detail": "Fixed intervals run continuously. A single weekday can repeat weekly. "
+                      "A recurring subset of weekdays cannot be represented. Ask before changing the schedule."}
 
 
 UNIT_MINUTES = {"minute": 1, "hour": 60, "day": 1440, "week": 10080}

@@ -29,7 +29,7 @@ def handoff(assistant, turn, plan, **options):
     return queue(assistant.store.privacy, turn.id, turn.device, turn.text, turn.language, turn.zone,
                  journal=turn.journal, screen=plan.screen, plan=plan, history=turn.history, assistant=assistant,
                  exclude=turn.exclude, device_clock=turn.device_clock, recalled_chat=turn.recalled_chat,
-                 attachments=turn.attachments, agent_loop=turn.agent_loop, **options)
+                 attachments=turn.attachments, agent_loop=turn.agent_loop, thinking=turn.thinking, **options)
 
 
 def answer(assistant, state, identifier, device, text, preference, zone, *, journal=None, force=False, spoken=False,
@@ -119,6 +119,7 @@ def plan_chat(assistant, turn, saved, session, *, force, defaults, lookup_only):
         turn.resolved_language = saved.get("language")
         turn.device_clock = DeviceClock.read(saved.get("device_clock"))
         turn.recalled_chat = saved.get("recalled_chat")
+        turn.thinking = saved.get("thinking", turn.thinking)
         plan = replace(validated(saved["pending_tools"]), clarify=bool(saved.get("clarify")))
     else:
         turn.history = with_goal_state(store, history)
@@ -140,12 +141,15 @@ def plan_chat(assistant, turn, saved, session, *, force, defaults, lookup_only):
 
 def chat(assistant, identifier, device, text, preference, zone, *, journal=None, force=False, lookup_only=False,
          followups=None, session=None, ask_location=False, location=None, device_clock=None,
-         standard=False, private_reply=False, attachments=(), agent_loop=False):
+         standard=False, private_reply=False, attachments=(), agent_loop=False, thinking=None):
+    if thinking is not None and not isinstance(thinking, bool):
+        raise ValueError("Chat thinking must be a boolean.")
     store = assistant.store
     history = followups.previous(device, session) if followups else ()
     clock = DeviceClock.read(device_clock)
     turn = make_turn(identifier, device, text, preference, zone, history=history, journal=journal,
-                     device_clock=clock, attachments=tuple(attachments or ()), agent_loop=bool(agent_loop))
+                     device_clock=clock, attachments=tuple(attachments or ()), agent_loop=bool(agent_loop),
+                     thinking=thinking)
     existing = previous_private(store, turn, session, location, ask_location, lookup_only)
     if existing is not None:
         if isinstance(existing, tuple):
@@ -184,6 +188,8 @@ def chat(assistant, identifier, device, text, preference, zone, *, journal=None,
         return result
     if not saved and not lookup_only:
         pending = {"pending_tools": plan.tools, "started": turn.started.isoformat(), "language": turn.language}
+        if turn.thinking is not None:
+            pending["thinking"] = turn.thinking
         if turn.device_clock is not None:
             pending["device_clock"] = asdict(turn.device_clock)
         if turn.recalled_chat is not None:

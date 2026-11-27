@@ -3,6 +3,7 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from ..goal_schedule import FREQUENCIES
 from ..goal_writing import json_object, model_messages, yes_no
 from ..store import excerpt
 from .calendar_scope import scope_prompt, weekday_selector, with_weekday
@@ -16,7 +17,7 @@ from .goal_management_prompts import (
 from .goal_plans import goal_start
 from .goal_tools import goal_data
 from .plan import validated
-from .schedule_pattern import UnsupportedSchedule, read_pattern
+from .schedule_pattern import UnsupportedSchedule
 
 
 def changes_for(turn, goal, changes):
@@ -82,14 +83,8 @@ async def plan_edit(turn, goal, context, generate):
             question = changes["question"]
             if isinstance(question, str) and 0 < len(question.strip()) <= 480 and question.strip().endswith("?"):
                 return question.strip()
-        if "frequency" in changes:
-            pattern = await read_pattern(context, generate)
-            if pattern is None:
-                return None
-            if pattern.unsupported:
-                raise UnsupportedSchedule
-            if pattern.kind == "interval":
-                changes = pattern.bind(changes, turn)
+        if "frequency" in changes and (type(changes["frequency"]) is not int or changes["frequency"] not in FREQUENCIES):
+            raise UnsupportedSchedule
         try:
             if (isinstance(start := changes.get("start"), str) and len(start) > 10
                     and (weekday := weekday_selector({"query": changes.get("timing")}))):

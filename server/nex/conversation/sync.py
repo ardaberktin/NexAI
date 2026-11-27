@@ -15,9 +15,11 @@ def make_turn(identifier, device, text, preference, zone, *, asked_at=None, **kw
 def generator(assistant, turn):
     config = assistant.settings.read() if assistant.settings else {}
 
+    options = {"thinking": turn.thinking} if turn.thinking is not None else {}
+
     async def generate(messages, tokens):
         value = await asyncio.to_thread(assistant.generate_conversation, messages, config, turn.language,
-                                        tokens, None, use_warm=True, temperature=0)
+                                        tokens, None, use_warm=True, temperature=0, **options)
         return value if isinstance(value, str) else None
     return generate
 

@@ -119,11 +119,14 @@ class Dialogue:
 
     async def completion_options(self, client, messages, limit, *, temperature, thinking, reasoning_effort,
                                  stream=False, immediate=False):
-        use_thinking = (client is self.mac) if thinking is None else thinking
+        qwen = client is self.local and self.local_model_id and self.local_model_id() == "qwen-3.5-4b"
+        if immediate or getattr(messages, "direct", False):
+            thinking = False
+        use_thinking = (client is self.mac or bool(qwen)) if thinking is None else thinking
         options = self.request(messages, limit, stream=stream, thinking=use_thinking, reasoning_effort=reasoning_effort)
         if temperature is not None:
             options["temperature"] = temperature
-        if immediate or client is not self.local or not self.local_model_id or self.local_model_id() != "qwen-3.5-4b":
+        if not qwen or not use_thinking:
             return await self.budget_completion(client, options)
         # Qwen shares its completion limit between reasoning, delimiters and the visible answer.
         options["chat_template_kwargs"] = {"enable_thinking": True}

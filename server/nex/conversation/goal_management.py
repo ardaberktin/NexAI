@@ -5,6 +5,7 @@ import asyncio
 from ..conversation_history import prompt_history
 from ..goal_writing import json_object, model_messages, yes_no
 from ..goals import Goals
+from ..model_context import direct_generation
 from ..workspace_features import FeatureDisabled
 from ..workspace_schema import WorkspaceConflict, WorkspaceMissing
 from .goal_context import clarification_exchange, pdf_removal_history
@@ -147,14 +148,16 @@ async def manage_goal(store, turn, generate, operation=None, *, format_only=Fals
         check_matches = bool(operation and not offered and not format_only and len(named) != 1 and
                              (len(descriptions) > 1 or operation == "delete"))
         check_pdf_matches = format_only and not offered and len(descriptions) > 1
+        resolved = None
         if operation == "edit" and not format_only and offered and len(descriptions) > 1:
             matches = await clarified_edit_target(descriptions, context, generate)
             if len(matches) != 1:
                 return clarify_target(descriptions, goals)
+            resolved = matches[0]
         elif operation == "delete" and len(named) > 1:
             matches = [row for row in descriptions if await authorized_deletion(row["title"], context, generate)]
         else:
-            matches = await shortlist(descriptions, context, generate, verify_match=check_matches or check_pdf_matches)
+            matches = await shortlist(descriptions, context, direct_generation(generate), verify_match=check_matches or check_pdf_matches)
         if format_only and exact_titles and exact_titles.isdisjoint(row["target"] for row in matches):
             matches.extend(row for row in descriptions if row["target"] in exact_titles)
         if format_only and len(matches) < len(descriptions) <= PAGE_SIZE:
@@ -170,15 +173,15 @@ async def manage_goal(store, turn, generate, operation=None, *, format_only=Fals
         if check_matches and len(matches) > 1:
             return clarify_target(matches, goals)
         pdf_candidates = descriptions if format_only and len(descriptions) <= PAGE_SIZE else matches
-        return await decide_change(store, turn, generate, goals, context | {"goals": matches}, named, pdf_candidates,
-                                   exact_titles=exact_titles)
+        return await decide_change(store, turn, direct_generation(generate), goals, context | {"goals": matches},
+                                   named, pdf_candidates, exact_titles=exact_titles, resolved=resolved)
     except UnsupportedSchedule:
         return Evidence(unsupported_schedule(), engine="goal_management")
     except (FeatureDisabled, ValueError, WorkspaceConflict, WorkspaceMissing) as error:
         return outcome("change_rejected", detail=str(error))
 
 
-async def decide_change(store, turn, generate, goals, context, named, pdf_candidates, *, exact_titles):
+async def decide_change(store, turn, generate, goals, context, named, pdf_candidates, *, exact_titles, resolved=None):
     operation = context.get("requested_action")
     format_only = context.get("format_only", False)
     guidance = SELECT_PDF_GOAL if format_only else SELECT_GOAL if operation else MANAGE_GOALS
@@ -189,7 +192,10 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
         selection["goals"] = [{k: v for k, v in row.items() if k != "last_discussed_goal"} for row in context["goals"]]
     instructions = guidance
     for _ in range(3):
-        result = json_object(await generate(model_messages(instructions, selection, schema=schema), 280) or "")
+        if resolved:
+            result = {"target": resolved["target"], "title": resolved["title"]}
+        else:
+            result = json_object(await generate(model_messages(instructions, selection, schema=schema), 280) or "")
         if (result.get("action") in ("use_history", "clarify")
                 and "history" not in selection and context["history"] and not named):
             selection = context
@@ -230,7 +236,9 @@ async def decide_change(store, turn, generate, goals, context, named, pdf_candid
         except ValueError as error:
             instructions = f"{guidance}\nCorrect the previous proposal {result!r}. {error}"
             continue
-        verdict = action == "inspect" or await confirmed_change(goal, result, selection, generate, named)
+        # Ordinary patches already have a selected target, quoted authorization and validated field values.
+        grounded_patch = action == "edit" and edit is not None and not format_only
+        verdict = action == "inspect" or grounded_patch or await confirmed_change(goal, result, selection, generate, named)
         if verdict is True:
             fields = result.get("changes", {})
             format_instruction = fields.get("format_instruction") if fields.keys() == {"format_instruction"} else None

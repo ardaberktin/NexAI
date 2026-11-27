@@ -26,10 +26,12 @@ def prune(db, now):
 def queue(state, identifier, device, text, language, zone, *, journal=None, screen=False,
           speaker="unverified", asked_at=None, exclude=None, mail=None, session=None, coordinates=None,
           assistant=None, action=None, plan=None, history=(), defer=False, device_clock=None,
-          recalled_chat=None, spoken=False, typed_chat=False, attachments=(), agent_loop=False):
+          recalled_chat=None, spoken=False, typed_chat=False, attachments=(), agent_loop=False, thinking=None):
     data = {"text": text, "language": language, "zone": zone, "screen": screen,
             "needs_location": bool(plan and plan.location and not journal), "exclude": exclude,
             "asked_at": asked_at, "journal": asdict(journal) if journal else None}
+    if thinking is not None:
+        data["thinking"] = thinking
     if typed_chat:
         data["private_chat"] = True
     if attachments:

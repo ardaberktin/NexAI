@@ -81,7 +81,7 @@ def follow_up(store, model, goal_id, request_id):
     return {"attempts": attempts, "card": saved, "chat_state": item.get("state"), "chat_reply": item.get("answer")}
 
 
-def evaluate(model, scenario, *, check_follow_up=False):
+def evaluate(model, scenario, *, check_follow_up=False, thinking=None):
     with TemporaryDirectory() as root:
         store = Store(root, 0, 2**20)
         seed(store, scenario.seeds)
@@ -95,6 +95,8 @@ def evaluate(model, scenario, *, check_follow_up=False):
             calls = model.calls
             mailbox.reads.clear()
             options = {"agent_loop": True} if "agent_loop" in inspect.signature(public.chat).parameters else {}
+            if thinking is not None:
+                options["thinking"] = thinking
             with patch("nex.conversation.tools.prepare_account", side_effect=mailbox.read), observe_plan() as plan:
                 result = public.chat(assistant, request_id, "mac", turn.prompt, "en", ZONE,
                                      session=unlock(store), followups=history, **options)

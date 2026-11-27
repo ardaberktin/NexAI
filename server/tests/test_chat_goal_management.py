@@ -81,7 +81,8 @@ class ChatGoalManagementTests(unittest.TestCase):
         if prompt == PDF_MODE:
             return json.dumps({"setting": self.pdf_mode})
         if prompt == CHOOSE_FIELDS:
-            return json.dumps({"fields": [key for key in self.edit if key not in {"question", "timing"}]})
+            return json.dumps({"fields": [key for key in self.edit if key not in {"question", "timing"}],
+                               "authorization": data["latest_edit_request"]})
         if prompt.startswith(EDIT_GOAL):
             return json.dumps(self.edit)
         if prompt.startswith(VERIFY_CHANGE):
@@ -95,6 +96,8 @@ class ChatGoalManagementTests(unittest.TestCase):
             return "YES"
         if prompt.startswith((WRITE_GOAL, WRITE_GOAL_STATUS, WRITE_EDIT)):
             receipt = data["tools"]["goal"]
+            if prompt.startswith(WRITE_EDIT):
+                return f"Updated {receipt['changed_settings']}."
             text = f"Goal {receipt['action']}: {receipt['title']}."
             schedule = receipt.get("schedule_text")
             return f"{text} Next check is {schedule}." if schedule else text
@@ -181,6 +184,25 @@ class ChatGoalManagementTests(unittest.TestCase):
         self.assertEqual(len(directories), 1)
         self.assertEqual(directories[0][0], SAVED_ACTION)
         self.assertCountEqual(directories[0][1], [self.card["title"], self.other["title"]])
+
+    def test_queued_chat_keeps_the_requested_reasoning_mode_across_unlock(self):
+        from unittest.mock import patch
+
+        self.decision = "inspect"
+        for selected in (True, False):
+            with self.subTest(thinking=selected):
+                key = str(uuid4())
+                question = "What does the library pass goal check?"
+                with patch.object(self.assistant, "generate_conversation", wraps=self.generate) as model:
+                    self.ask(question, key, thinking=selected)
+                    planned = model.call_count
+                    self.ask(question, key, session=unlock(self.store), thinking=not selected)
+                self.assertGreater(planned, 0)
+                self.assertGreater(model.call_count, planned)
+                self.assertTrue(all(call.kwargs["thinking"] is selected for call in model.call_args_list))
+                self.assertEqual(self.receipt()["state"], "ready")
+        with self.assertRaises(ValueError):
+            self.ask(question, thinking="false")
 
     def test_cold_chat_completes_only_the_matched_goal_after_unlock_and_cancels_its_check(self):
         self.assertIsNotNone(self.schedule_check_in())

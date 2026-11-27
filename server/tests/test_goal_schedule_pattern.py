@@ -74,7 +74,7 @@ class GoalSchedulePatternTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_filter_edit_exposes_only_the_task_field(self):
         data = {"selected_goal": {"title": "Paid shifts"}, "latest_edit_request": "Only weekend openings now."}
-        result = await edit_schema(data, AsyncMock(return_value='{"fields":["query"]}'))
+        result = await edit_schema(data, AsyncMock(return_value='{"fields":["query"],"authorization":"Only weekend openings"}'))
         self.assertEqual(result["required"], ["query"])
         self.assertEqual(set(result["properties"]), {"query"})
         self.assertFalse(result["additionalProperties"])

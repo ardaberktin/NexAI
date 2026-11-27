@@ -9,6 +9,7 @@ from ..coding.answers import CODE_TOKENS, execute_python
 from ..coding.intent import ENGINE as PYTHON_ENGINE
 from ..coding.intent import PythonRequest, pasted_python
 from ..conversation_recall import QuestionCandidates
+from ..goal_schedule import FREQUENCIES
 from ..goal_writing import json_object, model_messages, yes_no
 from ..mcp import MCPError
 from ..mcp.call_intent import review_messages, reviewed_operation
@@ -20,6 +21,7 @@ from ..mcp.execution import (
 from ..mcp.execution import execute as execute_mcp
 from ..mcp.permissions import CallApproval
 from ..mcp.tool import is_alias
+from ..model_context import direct_generation
 from ..personal_files import owner_preferences
 from ..privacy.voice import voice_reply_text
 from ..sentinel import (
@@ -75,7 +77,8 @@ Use the whole day's prevailing_conditions for the overall sky. Zero hours with m
 means it stayed dry. Use intervals when the person asks how things changed or asks about specific hours."""
 WRITE_MAIL = """Read the Gmail status before describing inbox results. If unavailable, explain the failure and
 include the recovery detail if supplied. Only ok or empty confirms the inbox was searched. For ok, use
-the sender, subject, and excerpt to identify relevant messages. For empty, report zero matches within search_scope. A scoped search provides no evidence about other mail in the inbox."""
+the sender, subject, and excerpt to identify relevant messages. Report only messages that meet the request.
+The number retrieved by the provider counts candidates, not semantic matches. For empty, report zero matches within search_scope. A scoped search provides no evidence about other mail in the inbox."""
 WRITE_MAIL_WATCH = """You are Nex. Answer question in language using the two tool outcomes from this turn.
 Give one short sentence about the inbox search and one about the watch. If gmail.status is unavailable,
 explain that the inbox could not be checked and pass on gmail.detail. The outcome supplies no evidence
@@ -398,8 +401,9 @@ async def compose_goal(turn, goal, generate, tokens, preferences):
     editing = bool(goal.get("changed_settings"))
     if editing:
         guidance, verifier = WRITE_EDIT, VERIFY_EDIT
-        goal = {key: goal[key] for key in ("action", "title", "changed_settings")}
-        data["tools"] = {"goal": goal}
+        # The goal link identifies the record. Only changed fields belong in the confirmation.
+        goal = {key: goal[key] for key in ("action", "changed_settings")}
+        data = {"language": turn.language, "tools": {"goal": goal}}
     if pdf_format:
         guidance, verifier = (WRITE_GOAL_PDF_REMOVAL, VERIFY_GOAL_PDF_REMOVAL) if format_removed else (
             WRITE_GOAL_FORMAT, VERIFY_GOAL_FORMAT)
@@ -519,6 +523,11 @@ async def compose(turn, evidence, generate, *, clarify=False, preferences="", ac
     budget = min(4300, 6800 // max(1, len(evidence)))
     data = {"spoken": turn.spoken, "clarify_transcript": clarify, "tools": {
         name: bounded(item.data, budget) for name, item in evidence.items()}, **turn.prompt()}
+    if not evidence:
+        data["goal_schedule_capabilities"] = {
+            "fixed_intervals_minutes": list(FREQUENCIES[1:]), "single_weekly_weekday": True,
+            "weekday_subsets": False, "automatic_end_date": False,
+        }
     current_tools = data["tools"]
     watch_with_search = goal is not None and "gmail" in evidence
     instructions = WRITE_MAIL_WATCH if watch_with_search else WRITE
@@ -604,7 +613,7 @@ async def run(store, turn, plan, generate, *, private=False, coordinates=None):
         if plan.error == "unsupported_goal_schedule":
             outcome = unsupported_schedule()
         tokens = 180 if turn.spoken else 420
-        text = await compose_unsaved_goal(turn, outcome, generate, tokens, preferences)
+        text = await compose_unsaved_goal(turn, outcome, direct_generation(generate), tokens, preferences)
         return reply(turn, text, "local_model") if text else reply(turn, "", "model_unavailable")
     if plan.error:
         return reply(turn, "", "model_unavailable")
@@ -620,6 +629,8 @@ async def run(store, turn, plan, generate, *, private=False, coordinates=None):
     active_memory = (await asyncio.to_thread(ActiveMemory(store).context_bundle, turn.text)
                      if private and not turn.spoken and not turn.journal else None)
     verify_actions = "gmail" in evidence or (turn.private_chat and not evidence)
+    if evidence.keys() & {"goal", "manage_goal", "gmail"}:
+        generate = direct_generation(generate)
     text = await compose(turn, evidence, generate, clarify=plan.clarify, preferences=preferences,
                          active_memory=active_memory, verify_actions=verify_actions)
     if text is None:

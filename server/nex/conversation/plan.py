@@ -15,7 +15,7 @@ from ..goal_writing import json_object, model_messages
 from ..mcp.planning import choose_connected
 from ..mcp.tool import PROMPT as MCP_PROMPT
 from ..mcp.tool import catalog_menu, is_alias, planning_context, validate_call
-from ..model_context import ModelMessages, constrained_messages
+from ..model_context import ModelMessages, constrained_messages, direct_generation
 from ..news_sources import validate_news_date
 from ..recall_dates import time_zone
 from ..store import excerpt
@@ -101,6 +101,7 @@ class Turn:
     attachments: tuple = ()
     agent_loop: bool = False
     goal_titles: tuple = ()
+    thinking: bool | None = None
 
     @property
     def language(self):
@@ -312,6 +313,9 @@ async def route_with_context(turn, generate, data, recall):
 
 async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
     route = mcp_route or await route_with_context(turn, generate, data, recall)
+    goal_workflows = MAIL_WATCH_ROUTES | OPERATIONS | {"schedule", "recurring", "check_in", "document", "manage"}
+    if route.label in goal_workflows or "gmail" in route.tools:
+        generate = direct_generation(generate)
     route = await review_mail_route(turn, data, route, generate, connected=mcp_route is not None)
     if route is None:
         return Plan((), "invalid_goal_plan")

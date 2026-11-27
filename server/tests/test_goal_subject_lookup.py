@@ -2,6 +2,7 @@ import json
 import unittest
 from unittest.mock import AsyncMock
 
+from nex.conversation.goal_edit_fields import edit_schema
 from nex.conversation.goal_lookup import PAGE_SIZE, clarified_edit_target
 from nex.conversation.goal_management_prompts import RESOLVE_PDF_REMOVAL
 from nex.conversation.goal_pdf_removal import decide_page, remove_pdf
@@ -9,14 +10,24 @@ from nex.conversation.goal_pdf_removal import decide_page, remove_pdf
 
 class GoalSubjectLookupTests(unittest.IsolatedAsyncioTestCase):
     async def test_clarification_separates_requested_and_protected_targets(self):
-        candidates = [{"title": "Greenhouse humidity"}, {"title": "Greenhouse temperature"}]
+        candidates = [{"target": 3, "title": "Greenhouse humidity"}, {"target": 7, "title": "Greenhouse temperature"}]
         context = {"question": "Humidity, please. Leave temperature alone.",
                    "clarification": [{"content": "Move the greenhouse check to noon."}]}
-        preserve = '{"role":"preserve","words":"Leave temperature alone"}'
         for quote, expected in (("Humidity", candidates[:1]), ("Watering", [])):
-            model = AsyncMock(side_effect=[json.dumps({"role": "change", "words": quote}), preserve])
+            model = AsyncMock(return_value=json.dumps({"target": 3, "reference": quote}))
             self.assertEqual(await clarified_edit_target(candidates, context, model), expected)
-            self.assertEqual(model.await_count, 2)
+            model.assert_awaited_once()
+
+    async def test_edit_field_authorization_can_only_quote_the_current_request_or_its_clarification(self):
+        data = {"latest_edit_request": "The humidity one.", "selected_goal": {"title": "Greenhouse humidity"}}
+        edit = AsyncMock(return_value=json.dumps({"fields": ["start"], "authorization": "Move it to noon"}))
+        self.assertIsNone(await edit_schema(data, edit))
+        clarification = [{"role": "user", "content": "Move it to noon please."},
+                         {"role": "assistant", "content": "Which greenhouse check?"}]
+        selected = await edit_schema(data | {"clarification": clarification}, edit)
+        self.assertEqual(set(selected["properties"]), {"start", "timing"})
+        edit.return_value = json.dumps({"fields": ["query"], "authorization": "Which greenhouse check?"})
+        self.assertIsNone(await edit_schema(data | {"clarification": clarification}, edit))
 
     async def test_a_shared_subject_on_different_pages_cannot_be_treated_as_unique(self):
         goals = [{"id": str(n), "target": n, "title": f"Task {n}", "task": "Routine update."}
