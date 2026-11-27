@@ -488,7 +488,7 @@ class API(BaseHTTPRequestHandler):
             result = public.chat(self.app.assistant, identifier, device, message, language, zone,
                                   journal=journal, force=access == "private", standard=access == "standard",
                                   private_reply=access == "private" and data.get("private_reply") is True,
-                                  lookup_only=lookup_only,
+                                  lookup_only=lookup_only, thinking=data.get("thinking"),
                                   followups=self.chat_followups, location=data.get("weather_location"),
                                   ask_location=data.get("weather_location_supported") is True,
                                   device_clock=data.get("device_clock"),

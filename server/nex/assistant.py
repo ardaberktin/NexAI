@@ -33,7 +33,8 @@ class Assistant:
 
         return chat(self, request_id, device, query, preference, zone, journal=journal, lookup_only=lookup_only)
 
-    def generate_conversation(self, messages, config, language, limit, on_speech, *, use_warm, temperature=None):
+    def generate_conversation(self, messages, config, language, limit, on_speech, *, use_warm, temperature=None,
+                              thinking=None):
         if self.engines is None:
             return None
         chunks = SpeechChunks(on_speech) if on_speech is not None else None
@@ -41,11 +42,11 @@ class Assistant:
         sampling = {"temperature": temperature} if temperature is not None else {}
         with self.interactive:
             try:
-                reply = self.engines.generate(messages, limit, config, thinking=False, **stream, **sampling)
+                reply = self.engines.generate(messages, limit, config, thinking=thinking, **stream, **sampling)
             except ModelError:
                 reply = None
             if not reply and use_warm and not self.engines.managed_live():
-                reply = self.engines.generate_warm(messages, limit, **sampling)
+                reply = self.engines.generate_warm(messages, limit, thinking=thinking, **sampling)
                 if reply and chunks:
                     chunks.add(reply, language)
         if reply and chunks:

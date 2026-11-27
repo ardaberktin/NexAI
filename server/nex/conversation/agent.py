@@ -84,10 +84,12 @@ def has_recoverable_gap(evidence, plan_tools=()):
     for name, item in evidence.items():
         data = item.data if hasattr(item, "data") else item
         if isinstance(data, dict):
+            if name == "gmail" and data.get("status") == "empty" and not queries.get(name):
+                continue
             if data.get("unavailable") or data.get("status") in {"error", "timeout", "empty"}:
                 return True
         elif (isinstance(data, list) and not data
-              and (name in {"web", "archive", "memory"} or (name in {"gmail", "agenda"} and queries.get(name)))):
+              and (name in {"web", "archive", "memory"} or (name == "agenda" and queries.get(name)))):
             return True
     return False
 

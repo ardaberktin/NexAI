@@ -15,7 +15,7 @@ from ..goal_writing import json_object, model_messages
 from ..mcp.planning import choose_connected
 from ..mcp.tool import PROMPT as MCP_PROMPT
 from ..mcp.tool import catalog_menu, is_alias, planning_context, validate_call
-from ..model_context import ModelMessages, constrained_messages
+from ..model_context import ModelMessages, constrained_messages, direct_generation
 from ..news_sources import validate_news_date
 from ..recall_dates import time_zone
 from ..store import excerpt
@@ -52,7 +52,8 @@ from .document_routing import (
     normalize_source_url,
     repair_document_search,
 )
-from .goal_context import goal_references, pending_pdf_action
+from .goal_authorization import requested_future_action
+from .goal_context import goal_references, pending_management, pending_pdf_action
 from .goal_management_prompts import CHOOSE_DELETION_SCOPE, OPERATIONS
 from .goal_plans import (
     MCP_GOAL_PLAN,
@@ -62,9 +63,17 @@ from .goal_plans import (
     review_goal_plan,
     validate_goal_action,
 )
-from .mail_watch_plan import PLAN_MAIL_WATCH, prepare_mail_watch
+from .mail_watch_plan import (
+    MAIL_WATCH_ROUTES,
+    PLAN_MAIL_CHECK_AND_WATCH,
+    PLAN_MAIL_WATCH,
+    mail_watch_history,
+    prepare_mail_watch,
+    review_mail_route,
+)
 from .planning_schema import plan_schema
 from .routing_prompt import Route, route_turn
+from .schedule_pattern import read_delivery, read_pattern
 
 LOG = logging.getLogger(__name__)
 SCHEDULE_TOOLS = {"goal", "manage_goal", "agenda", "calendar", "ticktick", "gmail"}
@@ -91,6 +100,8 @@ class Turn:
     mcp_tools: dict = field(default_factory=dict)
     attachments: tuple = ()
     agent_loop: bool = False
+    goal_titles: tuple = ()
+    thinking: bool | None = None
 
     @property
     def language(self):
@@ -230,7 +241,11 @@ def validated(tools):
                 ("operation" in tool and tool["operation"] not in OPERATIONS | {"keep_settings"}) or
                 ("format_only" in tool and tool.get("operation") != "edit")):
             raise ValueError("Use a supported manage_goal operation. format_only applies to an edit.")
-    if len(names) > 1 and names.intersection({"screen", "goal", "manage_goal", "save_memory", "weather_city", "clock"}):
+    mail_check_and_watch = names == {"gmail", "goal"} and any(
+        tool.get("watch_provider") == "gmail" and "target" not in tool for tool in tools
+    )
+    exclusive = {"screen", "goal", "manage_goal", "save_memory", "weather_city", "clock"}
+    if len(names) > 1 and names & exclusive and not mail_check_and_watch:
         raise ValueError("Request a change or a screen inspection on its own.")
     return Plan(tuple(tools))
 
@@ -298,12 +313,23 @@ async def route_with_context(turn, generate, data, recall):
 
 async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
     route = mcp_route or await route_with_context(turn, generate, data, recall)
+    goal_workflows = MAIL_WATCH_ROUTES | OPERATIONS | {"schedule", "recurring", "check_in", "document", "manage"}
+    if route.label in goal_workflows or "gmail" in route.tools:
+        generate = direct_generation(generate)
+    route = await review_mail_route(turn, data, route, generate, connected=mcp_route is not None)
+    if route is None:
+        return Plan((), "invalid_goal_plan")
     label = route.label
+    if (not turn.journal and label == "general" and route.tools and not mcp_route
+            and route.tools <= {"agenda", "calendar", "ticktick", "weather"}):
+        label = await read_delivery(turn.text, generate) or label
     if label in {"answer", "clarify"}:
         return Plan((), clarify=label == "clarify")
     if label == "manage" and pending_pdf_action(turn.history):
         return await select_document(turn, generate, data)
-    if label == "delete" and not turn.journal:
+    if label == "manage" and (previous := pending_management(turn.history).get("operation")) in OPERATIONS:
+        label = previous
+    elif label == "delete" and not turn.journal:
         request = {"latest_message": turn.text, "history": data["history"][-4:]}
         raw = await generate(model_messages(CHOOSE_DELETION_SCOPE, request), 8)
         scope = raw.strip().upper().rstrip(".") if isinstance(raw, str) else ""
@@ -318,11 +344,8 @@ async def select_tools(turn, generate, data, *, recall=None, mcp_route=None):
         return Plan((tool,))
     if not turn.journal and label in {"schedule", "recurring", "check_in"}:
         return await select_schedule(turn, generate, data, goal_type=label, connected=mcp_route is not None)
-    if not turn.journal and label == "mail_watch":
-        context = schedule_context(turn, data) | {"mail_watch": True}
-        watch = {key: context[key] for key in ("local_time", "goal_time_zone", "question")}
-        messages = model_messages(PLAN_MAIL_WATCH, watch, schema=plan_schema({"goal"}, goal_type=label))
-        return await generate_plan(turn, generate, messages, goal_review=context, available={"goal"})
+    if not turn.journal and label in MAIL_WATCH_ROUTES:
+        return await select_mail_watch(turn, generate, data, route)
     if not turn.journal and label == "clock":
         return await generate_plan(turn, generate, model_messages(PLAN_CLOCK, data), available={"clock"})
     if label == "document" and not turn.journal:
@@ -438,6 +461,43 @@ async def select_document(turn, generate, data):
     return Plan((), "model_unavailable")
 
 
+async def requested_schedule(context, generate, *, check_in=False):
+    pattern = await read_pattern(context, generate)
+    if pattern is None:
+        return None, Plan((), "model_unavailable")
+    if pattern.kind == "no_request":
+        return None, Plan((), clarify=True)
+    if check_in or pattern.kind in {"once", "unspecified"}:
+        authorized = await requested_future_action(context, generate)
+        if authorized is None:
+            return None, Plan((), "model_unavailable")
+        if not authorized:
+            return None, Plan((), clarify=True)
+    if pattern.unsupported:
+        return None, Plan((), "unsupported_goal_schedule")
+    return pattern, None
+
+
+async def select_mail_watch(turn, generate, data, route):
+    check_existing = route.label == "mail_check_and_watch"
+    context = schedule_context(turn, data) | {
+        "mail_watch": True, "check_existing_mail": check_existing,
+        "history": mail_watch_history(turn), "goal_references": [],
+    }
+    instructions = PLAN_MAIL_CHECK_AND_WATCH if check_existing else PLAN_MAIL_WATCH
+    names = {"goal", "gmail"} if check_existing else {"goal"}
+    pattern, problem = await requested_schedule(context, generate)
+    if problem:
+        return problem
+    frequency = pattern.minutes if pattern.kind == "interval" else 60
+    context["watch_start"] = {"implicit": "cadence", "date": "clock"}.get(pattern.first_start, pattern.first_start)
+    schema = plan_schema(names, goal_type="mail_watch", goal_start_mode=context["watch_start"], goal_frequency=frequency)
+    request = {key: context[key] for key in ("question", "history", "local_time", "goal_time_zone", "watch_start")}
+    messages = model_messages(instructions, request, schema=schema)
+    plan = await generate_plan(turn, generate, messages, goal_review=context, available=names, pattern=pattern)
+    return Plan((), clarify=True) if not plan.tools and not plan.error else plan
+
+
 async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal_type=None, connected=False):
     context = schedule_context(turn, data)
     instructions = schedule_instructions(data["local_time"])
@@ -448,7 +508,20 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
     selected_type = goal_type if "edit_target" not in context else None
     names = SCHEDULE_TOOLS | {tool["name"] for tool in tools}
     available = None
-    frequency = None
+    frequency = pattern = None
+    if not connected and "edit_target" not in context and (goal_type or (proposal and proposal["name"] == "goal")):
+        pattern, problem = await requested_schedule(context, generate, check_in=goal_type == "check_in")
+        if problem:
+            return problem
+        if goal_type == "check_in":
+            # A check-in is conditional on the user's answer. Its requested delivery clock is not a fixed recurrence.
+            pattern = None
+        elif pattern.kind == "interval":
+            selected_type, frequency = "recurring", pattern.minutes
+            names = available = {"goal"}
+            instructions = ("Plan the requested repeating task in one goal. Preserve the source, subject and "
+                            "constraints in query. Supply its first future occurrence in local time as start. "
+                            "Use the supplied calendar dates for weekday references. Return only JSON.")
     if connected and "edit_target" not in context:
         frequency, weekday = await connected_schedule(context, generate)
         if frequency is None:
@@ -470,7 +543,7 @@ async def select_schedule(turn, generate, data, proposal=None, tools=(), *, goal
     if "mcp_tools" in context:
         instructions += MCP_PROMPT + "For a saved goal, preserve named MCP sources and their purpose in query."
     return await generate_plan(turn, generate, plan_messages(turn, instructions, review, names, schema),
-                               goal_review=context, available=available)
+                               goal_review=context, available=available, pattern=pattern)
 
 
 def schedule_context(turn, data):
@@ -479,16 +552,16 @@ def schedule_context(turn, data):
                "history": history, "goal_references": data.get("goal_references", []), "question": data["question"]}
     if turn.mcp_tools:
         context["mcp_tools"] = catalog_menu(turn.mcp_tools)
-        today = date.fromisoformat(data["local_date"])
-        days = [today + timedelta(days=offset) for offset in range(1, 8)]
-        context["upcoming_weekdays"] = {day.strftime("%A"): day.isoformat() for day in days}
+    today = date.fromisoformat(data["local_date"])
+    days = [today + timedelta(days=offset) for offset in range(1, 8)]
+    context["upcoming_weekdays"] = {day.strftime("%A"): day.isoformat() for day in days}
     if "recalled_chat" in data:
         context["recalled_chat"] = data["recalled_chat"]
     return context
 
 
 async def generate_plan(turn, generate, base, *, goal_review=None, available=None, required=None,
-                        required_mcp=False):
+                        required_mcp=False, pattern=None):
     if available is not None and not getattr(base, "response_format", None):
         base = constrained_messages(base, plan_schema(available))
     messages = base
@@ -505,7 +578,10 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
             if required == "create_pdf":
                 tools = normalize_source_url(tools, turn.text)
             if goal_review and goal_review.get("mail_watch"):
-                tools = prepare_mail_watch(tools, turn)
+                tools = prepare_mail_watch(tools, turn, goal_review["watch_start"])
+            if pattern and isinstance(tools, list):
+                tools = [pattern.bind(tool, turn, new_goal=True) if isinstance(tool, dict) and tool.get("name") == "goal" else tool
+                         for tool in tools]
             plan = validated(tools)
             if any(is_alias(tool["name"]) and tool["name"] not in turn.mcp_tools for tool in plan.tools):
                 raise ValueError("Use only MCP tools advertised for this request.")
@@ -526,7 +602,7 @@ async def generate_plan(turn, generate, base, *, goal_review=None, available=Non
                         await review_goal_plan(turn, tool, generate, goal_review)
             return plan
         except ValueError as error:
-            invalid_goal |= isinstance(error, GoalPlanError)
+            invalid_goal |= isinstance(error, GoalPlanError) or bool(goal_review and goal_review.get("mail_watch"))
             LOG.debug("Nex tool plan failed validation (%s)", type(error).__name__)
             messages = ModelMessages(
                 [*base, {"role": "assistant", "content": excerpt(raw, 400)},

@@ -53,6 +53,7 @@ async def lifespan(app):
         workspaces = LiveWorkspaces(
             DATA, RUNTIME, read_access(DATA)["keys"]["admin"], speech, room, Verifier(assets, RUNTIME),
             models.socket if models else RUNTIME / "model.sock", mac,
+            local_model_id=(lambda: models.selected_id) if models else None,
         )
         app.state.workspaces = workspaces
         await stack.enter_async_context(workspaces.running())

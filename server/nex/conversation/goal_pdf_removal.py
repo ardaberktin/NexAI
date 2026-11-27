@@ -50,6 +50,9 @@ async def decide_page(page, context, generate):
         data = {"goals": goals, "latest_message": context["question"]}
         if history := context.get("history"):
             data["history"] = history
+    data["current_settings"] = {numbered_title(row): {"pdf_enabled": bool(row.get("pdf_instruction")),
+                                                       "last_discussed": bool(row.get("last_discussed_goal"))}
+                                for row in page}
     schema = removal_schema(goals)
     tokens = 180 + sum(len(label.encode()) for label in goals)
     for _ in range(2):

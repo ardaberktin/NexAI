@@ -3,10 +3,12 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from ..goal_schedule import FREQUENCIES
 from ..goal_writing import json_object, model_messages, yes_no
 from ..store import excerpt
 from .calendar_scope import scope_prompt, weekday_selector, with_weekday
 from .goal_context import clarification_exchange
+from .goal_edit_fields import edit_schema
 from .goal_lookup import describe
 from .goal_management_prompts import (
     EDIT_GOAL,
@@ -15,6 +17,7 @@ from .goal_management_prompts import (
 from .goal_plans import goal_start
 from .goal_tools import goal_data
 from .plan import validated
+from .schedule_pattern import UnsupportedSchedule
 
 
 def changes_for(turn, goal, changes):
@@ -65,23 +68,53 @@ async def plan_edit(turn, goal, context, generate):
     data["selected_goal"] = describe(goal, 1, None) | {"task": goal["prompt"]}
     if data.get("format_only"):
         return await plan_pdf_format(turn, data, generate)
+    data["latest_edit_request"] = data.pop("question")
     data["upcoming_days"] = scope_prompt(turn.text, turn.zone, turn.started, "")["upcoming_days"]
+    schema = await edit_schema(data, generate)
+    if schema is None:
+        return None
     instructions = EDIT_GOAL
     for _ in range(2):
-        changes = json_object(await generate(model_messages(instructions, data), 260) or "")
+        changes = json_object(await generate(model_messages(instructions, data, schema=schema), 260) or "")
+        if changes.keys() != schema["properties"].keys():
+            instructions = EDIT_GOAL + "\nReturn exactly the requested fields."
+            continue
         if changes.keys() == {"question"}:
             question = changes["question"]
             if isinstance(question, str) and 0 < len(question.strip()) <= 480 and question.strip().endswith("?"):
                 return question.strip()
+        if "frequency" in changes and (type(changes["frequency"]) is not int or changes["frequency"] not in FREQUENCIES):
+            raise UnsupportedSchedule
         try:
             if (isinstance(start := changes.get("start"), str) and len(start) > 10
                     and (weekday := weekday_selector({"query": changes.get("timing")}))):
                 day = with_weekday({}, weekday, turn.zone, turn.started)["start_date"]
                 changes = changes | {"start": day + start[10:]}
+            if changes.keys() == {"format_instruction"}:
+                result = await plan_output_edit(turn, data, generate)
+                if result != "other":
+                    return result
             return changes, changes_for(turn, goal, changes)
         except ValueError as error:
             instructions = f"{instructions}\nCorrect the previous edit {changes!r}. {error}"
     return None
+
+
+PDF_MODE = """Identify the requested change to this goal's output. Choose enable_pdf for additional
+or reformatted PDF copies, remove_pdf for disabling future attachments, and other for a different format.
+Respect negation and use the discussion to resolve references."""
+
+
+async def plan_output_edit(turn, data, generate):
+    schema = {"type": "object", "required": ["setting"], "additionalProperties": False,
+              "properties": {"setting": {"enum": ["enable_pdf", "remove_pdf", "other"]}}}
+    raw = await generate(model_messages(PDF_MODE, data, schema=schema), 30)
+    setting = json_object(raw or "").get("setting")
+    if setting == "enable_pdf":
+        return await plan_pdf_format(turn, data, generate)
+    if setting == "remove_pdf":
+        return {"pdf_enabled": False}, None
+    return "other" if setting == "other" else None
 
 
 async def plan_pdf_format(turn, data, generate):

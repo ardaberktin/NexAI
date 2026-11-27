@@ -7,6 +7,7 @@ from ..goal_writing import json_value
 from ..goals import Goals
 from ..recall_dates import time_zone
 from ..store import excerpt
+from ..workspace_features import enabled
 from ..workspace_schema import WorkspaceMissing
 
 
@@ -21,18 +22,20 @@ def clarification_exchange(history):
     return ()
 
 
+def pending_management(history):
+    exchange = clarification_exchange(history)
+    tools = json_value(exchange[1].get("selected") or "") if exchange else None
+    if isinstance(tools, list):
+        return next((tool for tool in tools if isinstance(tool, dict) and tool.get("name") == "manage_goal"), {})
+    return {}
+
+
 def pending_pdf_action(history):
-    if not (exchange := clarification_exchange(history)):
-        return None
-    tools = json_value(exchange[1].get("selected") or "")
-    if not isinstance(tools, list):
-        return None
-    for tool in tools:
-        if isinstance(tool, dict) and tool.get("name") == "manage_goal":
-            if tool.get("operation") == "remove_pdf":
-                return "REMOVE"
-            if tool.get("format_only") is True:
-                return "FORMAT"
+    tool = pending_management(history)
+    if tool.get("operation") == "remove_pdf":
+        return "REMOVE"
+    if tool.get("format_only") is True:
+        return "FORMAT"
     return None
 
 
@@ -44,6 +47,15 @@ def pdf_removal_history(history):
     while start >= 2 and pending_pdf_action(history[start - 2:start]) == "REMOVE":
         start -= 2
     return history[start:]
+
+
+def routing_titles(store):
+    """A bounded directory for the unlocked intent selector, never tool arguments or reply context."""
+    with store.connect() as db:
+        db.execute("BEGIN")
+        if not enabled(db, "goals"):
+            return ()
+        return tuple(row[0] for row in db.execute("SELECT title FROM goals ORDER BY updated DESC,id LIMIT 24"))
 
 
 def with_goal_state(store, history):
@@ -69,6 +81,9 @@ def load_goal_state(goals, identifier):
     zone = time_zone(goal["zone"])
     state = {"title": goal["title"], "prompt": excerpt(goal["prompt"], 320), "status": goal["status"],
              "frequency_minutes": goal["frequency_minutes"], "time_zone": zone.key}
+    if provider := goal.get("watch_provider"):
+        state["watch_provider"] = provider
+    state["pdf_enabled"] = bool(goal.get("pdf_instruction"))
     if next_run := goal["next_run"]:
         state["next_run"] = datetime.fromisoformat(next_run).astimezone(zone).isoformat(timespec="minutes")
     if follow_up := goal["follow_up"]:

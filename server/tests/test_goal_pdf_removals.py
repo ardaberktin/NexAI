@@ -250,7 +250,7 @@ class GoalPDFRemovalTests(unittest.TestCase):
             prompt = messages[0]["content"]
             if prompt.startswith(ROUTE_HEADER):
                 routes.append(messages)
-                return "DOCUMENT"
+                return '{"capabilities":["document"],"language":"en"}'
             if prompt == CHOOSE_DOCUMENT_ACTION:
                 self.assertEqual(json.loads(messages[1]["content"])["pending_pdf_action"], "REMOVE")
                 return '{"action":"SKIP","sources":[]}'

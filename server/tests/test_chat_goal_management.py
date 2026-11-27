@@ -6,6 +6,9 @@ from uuid import uuid4
 
 from conversation_fixtures import unlock
 from nex.assistant import Assistant
+from nex.conversation.goal_edit import PDF_MODE
+from nex.conversation.goal_edit_fields import CHOOSE_FIELDS
+from nex.conversation.goal_edit_receipt import VERIFY_EDIT, WRITE_EDIT
 from nex.conversation.goal_management_prompts import (
     CHOOSE_DELETION_SCOPE,
     EDIT_GOAL,
@@ -17,9 +20,14 @@ from nex.conversation.goal_management_prompts import (
 )
 from nex.conversation.reply import (
     VERIFY_GOAL,
+    VERIFY_GOAL_FORMAT,
+    VERIFY_GOAL_PDF_REMOVAL,
     VERIFY_GOAL_STATUS,
     VERIFY_UNSAVED_GOAL,
     WRITE_GOAL,
+    WRITE_GOAL_CLARIFICATION,
+    WRITE_GOAL_FORMAT,
+    WRITE_GOAL_PDF_REMOVAL,
     WRITE_GOAL_STATUS,
     WRITE_UNSAVED_GOAL,
 )
@@ -70,6 +78,11 @@ class ChatGoalManagementTests(unittest.TestCase):
                 return json.dumps(self.decision)
             selected, = [row for row in data["goals"] if row["title"] == self.card["title"]]
             return json.dumps({"action": self.decision, "target": selected["target"], "title": selected["title"]})
+        if prompt == PDF_MODE:
+            return json.dumps({"setting": self.pdf_mode})
+        if prompt == CHOOSE_FIELDS:
+            return json.dumps({"fields": [key for key in self.edit if key not in {"question", "timing"}],
+                               "authorization": data["latest_edit_request"]})
         if prompt.startswith(EDIT_GOAL):
             return json.dumps(self.edit)
         if prompt.startswith(VERIFY_CHANGE):
@@ -77,13 +90,21 @@ class ChatGoalManagementTests(unittest.TestCase):
         if prompt == VERIFY_NAMED_DELETE:
             self.deletion_review = data
             return "YES" if self.verify() == "MATCH" else "NO"
-        if prompt.startswith((WRITE_GOAL, WRITE_GOAL_STATUS)):
+        if prompt in (WRITE_GOAL_FORMAT, WRITE_GOAL_PDF_REMOVAL):
+            return f"Updated PDF copies for {data['tools']['goal']['title']}."
+        if prompt in (VERIFY_GOAL_FORMAT, VERIFY_GOAL_PDF_REMOVAL):
+            return "YES"
+        if prompt.startswith((WRITE_GOAL, WRITE_GOAL_STATUS, WRITE_EDIT)):
             receipt = data["tools"]["goal"]
+            if prompt.startswith(WRITE_EDIT):
+                return f"Updated {receipt['changed_settings']}."
             text = f"Goal {receipt['action']}: {receipt['title']}."
-            schedule = receipt["schedule_text"]
+            schedule = receipt.get("schedule_text")
             return f"{text} Next check is {schedule}." if schedule else text
-        if prompt in (VERIFY_GOAL, VERIFY_GOAL_STATUS):
+        if prompt in (VERIFY_GOAL, VERIFY_GOAL_STATUS, VERIFY_EDIT):
             return "YES" if self.verify_receipt else "NO"
+        if prompt == WRITE_GOAL_CLARIFICATION:
+            return json.dumps({"question": "Which goal do you mean, " + " or ".join(data["candidate_titles"]) + "?"})
         if prompt == VERIFY_UNSAVED_GOAL:
             return "YES"
         if prompt.startswith(WRITE_UNSAVED_GOAL):
@@ -115,6 +136,73 @@ class ChatGoalManagementTests(unittest.TestCase):
 
         GoalFollowUpJobs(self.store, schedule).decide()
         return self.goals.detail(self.card["id"])["follow_up"]
+
+    def test_generic_edit_adds_and_removes_the_actual_pdf_setting(self):
+        session = unlock(self.store)
+        self.intent = "EDIT"
+        self.decision = "edit"
+        for mode, request in (("enable_pdf", "Add a PDF copy to the library pass updates"),
+                              ("remove_pdf", "Switch the library pass updates back to text only")):
+            with self.subTest(mode=mode):
+                self.pdf_mode = mode
+                self.edit = {"format_instruction": request}
+                self.ask(request, session=session)
+                saved = self.goals.detail(self.card["id"])
+                self.assertEqual(saved.get("pdf_instruction"), request if mode == "enable_pdf" else None)
+                self.assertEqual(saved["prompt"], self.card["prompt"])
+                self.assertEqual(self.receipt()["goal_id"], self.card["id"])
+
+    def test_pause_inspect_and_resume_keep_the_definition_and_sibling(self):
+        session = unlock(self.store)
+        before = self.goals.detail(self.card["id"])
+        for action, status, revision in (("pause", "paused", 1), ("inspect", "paused", 1), ("resume", "active", 2)):
+            with self.subTest(action=action):
+                self.intent = json.dumps({"capabilities": [action], "language": "en"})
+                self.decision = action
+                self.ask(f"{action} the replacement library pass goal", session=session)
+                saved = self.goals.detail(self.card["id"])
+                self.assertEqual((saved["status"], saved["revision"]), (status, before["revision"] + revision))
+                self.assertEqual(saved["prompt"], before["prompt"])
+                self.assertEqual(self.receipt()["goal_id"], saved["id"])
+                self.assertEqual(self.goals.detail(self.other["id"])["revision"], self.other["revision"])
+
+    def test_private_goal_directory_only_enters_the_unlocked_selector(self):
+        from unittest.mock import patch
+
+        from nex.conversation.routing_prompt import SAVED_ACTION
+
+        seen = []
+        def capture(messages, *args, **kwargs):
+            seen.append((messages[0]["content"], json.loads(messages[1]["content"])))
+            return self.generate(messages, *args, **kwargs)
+
+        with patch.object(self.assistant, "generate_conversation", capture):
+            self.ask("Has my library pass arrived?")
+            self.assertFalse(any("saved_goal_titles" in data for _, data in seen))
+            self.ask("Has my library pass arrived?", session=unlock(self.store))
+        directories = [(prompt, data["saved_goal_titles"]) for prompt, data in seen if "saved_goal_titles" in data]
+        self.assertEqual(len(directories), 1)
+        self.assertEqual(directories[0][0], SAVED_ACTION)
+        self.assertCountEqual(directories[0][1], [self.card["title"], self.other["title"]])
+
+    def test_queued_chat_keeps_the_requested_reasoning_mode_across_unlock(self):
+        from unittest.mock import patch
+
+        self.decision = "inspect"
+        for selected in (True, False):
+            with self.subTest(thinking=selected):
+                key = str(uuid4())
+                question = "What does the library pass goal check?"
+                with patch.object(self.assistant, "generate_conversation", wraps=self.generate) as model:
+                    self.ask(question, key, thinking=selected)
+                    planned = model.call_count
+                    self.ask(question, key, session=unlock(self.store), thinking=not selected)
+                self.assertGreater(planned, 0)
+                self.assertGreater(model.call_count, planned)
+                self.assertTrue(all(call.kwargs["thinking"] is selected for call in model.call_args_list))
+                self.assertEqual(self.receipt()["state"], "ready")
+        with self.assertRaises(ValueError):
+            self.ask(question, thinking="false")
 
     def test_cold_chat_completes_only_the_matched_goal_after_unlock_and_cancels_its_check(self):
         self.assertIsNotNone(self.schedule_check_in())

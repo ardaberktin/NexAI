@@ -8,14 +8,22 @@ from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from conversation_fixtures import model, tools, unlock
+from conversation_fixtures import (
+    UNSPECIFIED_PATTERN,
+    action_claims,
+    model,
+    tools,
+    unlock,
+)
 from nex.assistant import Assistant
 from nex.conversation.calendar_scope import RESOLVE_SCOPE, repair_calendar_scopes
 from nex.conversation.catalog import PLAN_CHECK_IN, REVIEW_SCHEDULE, WEATHER_SCOPE
+from nex.conversation.goal_authorization import CHECK_REQUEST
 from nex.conversation.goal_management_prompts import GOAL_INTENT
-from nex.conversation.mail_watch_plan import PLAN_MAIL_WATCH
+from nex.conversation.mail_watch_plan import CHOOSE_MAIL_ACTION, PLAN_MAIL_WATCH
 from nex.conversation.plan import Plan, choose, validated
 from nex.conversation.reply import REVIEW_REPLY, VERIFY_WEB, compose, run
+from nex.conversation.schedule_pattern import READ_PATTERN
 from nex.conversation.sync import make_turn
 from nex.conversation.tools import Evidence
 from nex.conversation.weather import hourly
@@ -38,6 +46,9 @@ class ModelConversationTests(unittest.TestCase):
         self.assistant = Assistant(self.store, None, None)
         self.id = str(uuid4())
         self.turn = make_turn(self.id, "watch", QUESTION, "en", ZONE, asked_at=ANCHOR)
+
+    def authorized_request(self):
+        return json.dumps({"intent": "request", "words": self.turn.text})
 
     def test_same_text_can_select_different_tools_or_no_tool(self):
         for calls in ([], [PAST], [MAIL], [PAST, MAIL]):
@@ -62,12 +73,12 @@ class ModelConversationTests(unittest.TestCase):
         question = "Is it likely to rain tomorrow?"
         self.turn.text = question
         generate = AsyncMock(side_effect=[
-            '{"capabilities":["weather"],"language":"en"}',
+            '{"capabilities":["weather"],"language":"en"}', '{"when":"now","delivery_words":null}',
             tools({"name": "weather", "period": "forecast", "date": "tomorrow"}),
         ])
         plan = asyncio.run(choose(self.turn, generate))
         self.assertEqual(plan.tools, ({"name": "weather", "period": "forecast", "date": "2026-11-23"},))
-        self.assertEqual(generate.await_count, 2)
+        self.assertEqual(generate.await_count, 3)
         messages = generate.await_args.args[0]
         schema = messages.response_format["json_schema"]["schema"]
         variants = schema["properties"]["tools"]["items"]["anyOf"]
@@ -77,12 +88,12 @@ class ModelConversationTests(unittest.TestCase):
     def test_equivalent_calendar_timestamp_and_repeated_call_need_no_model_retry(self):
         args = {"name": "calendar", "start_date": "2026-11-22 00:00:00-08:00"}
         generate = AsyncMock(side_effect=[
-            '{"capabilities":["calendar"],"language":"en"}',
+            '{"capabilities":["calendar"],"language":"en"}', '{"when":"now","delivery_words":null}',
             tools(args, {"name": "calendar", "start_date": "2026-11-22"}),
         ])
         self.assertEqual(asyncio.run(choose(self.turn, generate)).tools,
                          ({"name": "calendar", "start_date": "2026-11-22"},))
-        self.assertEqual(generate.await_count, 2)
+        self.assertEqual(generate.await_count, 3)
 
     def test_long_pasted_python_has_an_explicit_preview_and_keeps_the_original_source(self):
         program = "# synthetic program\n" * 350 + 'print("done")'
@@ -166,7 +177,7 @@ class ModelConversationTests(unittest.TestCase):
     def test_schedule_review_can_discard_an_unsolicited_goal(self):
         self.turn.text = "My friend is going to be late."
         proposed = {"name": "goal", "query": "Check if my friend arrived", "start": "2026-11-22T13:00"}
-        generate = AsyncMock(side_effect=["OTHER", tools(proposed), tools()])
+        generate = AsyncMock(side_effect=["OTHER", tools(proposed), UNSPECIFIED_PATTERN, self.authorized_request(), tools()])
         self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan(()))
         messages = generate.await_args.args[0]
         self.assertTrue(messages[0]["content"].startswith(REVIEW_SCHEDULE))
@@ -179,7 +190,7 @@ class ModelConversationTests(unittest.TestCase):
         self.turn.text = "Remind me yesterday at noon to move the car."
         expired = {"name": "goal", "query": "Move the car", "timing": "yesterday at noon",
                    "start": "2026-11-21T12:00"}
-        generate = AsyncMock(side_effect=["SCHEDULE", tools(expired), tools()])
+        generate = AsyncMock(side_effect=["SCHEDULE", UNSPECIFIED_PATTERN, self.authorized_request(), tools(expired), tools()])
         self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan(()))
         correction = generate.await_args.args[0][-1]["content"]
         self.assertIn("Ask for clarification if the requested time has passed", correction)
@@ -191,16 +202,17 @@ class ModelConversationTests(unittest.TestCase):
         proposed = {"name": "goal", "query": "Watch Gmail for the committee’s decision", "frequency": 60,
                     "delay_minutes": 60}
         watch = {key: value for key, value in proposed.items() if key != "delay_minutes"} | {
-            "start": first_run.isoformat(timespec="minutes"), "watch_provider": "gmail",
+            "start": first_run.isoformat(timespec="minutes"), "watch_provider": "gmail", "query": self.turn.text,
         }
         generate = AsyncMock(side_effect=['{"capabilities":["mail_watch"],"language":"en"}',
-                                          tools({"name": "agenda", "query": "committee decision"}), tools(proposed)])
+                                          '{"action":"mail_watch","start":"delay"}',
+                                          json.dumps(json.loads(UNSPECIFIED_PATTERN) | {"first_start": "delay"}), self.authorized_request(), tools({"name": "agenda", "query": "committee decision"}), tools(proposed)])
         with patch("nex.conversation.plan.repair_calendar_scopes", wraps=repair_calendar_scopes) as repair:
             self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan((watch,)))
             self.assertEqual(repair.await_args.args[1], (watch,))
             repair.assert_awaited_once()
         prompts = [call.args[0][0]["content"] for call in generate.await_args_list]
-        self.assertEqual(prompts, [GOAL_INTENT, PLAN_MAIL_WATCH, PLAN_MAIL_WATCH])
+        self.assertEqual(prompts, [GOAL_INTENT, CHOOSE_MAIL_ACTION, READ_PATTERN, CHECK_REQUEST, PLAN_MAIL_WATCH, PLAN_MAIL_WATCH])
 
     def test_reminder_feedback_includes_the_users_verbatim_time_phrase(self):
         self.turn.text = "Remind me tomorrow at 2 pm to send an email"
@@ -208,7 +220,7 @@ class ModelConversationTests(unittest.TestCase):
         tomorrow = self.turn.started.astimezone(ZoneInfo(ZONE)).date() + timedelta(days=1)
         task = {"name": "goal", "query": "Send an email", "start": f"{tomorrow}T14:00"}
         corrected = task | {"timing": "tomorrow at 2 pm"}
-        generate = AsyncMock(side_effect=["SCHEDULE", tools(task | {"timing": "at 2 pm tomorrow"}), tools(corrected)])
+        generate = AsyncMock(side_effect=["SCHEDULE", UNSPECIFIED_PATTERN, self.authorized_request(), tools(task | {"timing": "at 2 pm tomorrow"}), tools(corrected)])
         self.assertEqual(asyncio.run(choose(self.turn, generate)), Plan((corrected,)))
         self.assertIn("tomorrow at 2 pm", generate.await_args.args[0][-1]["content"])
 
@@ -338,14 +350,17 @@ class ModelConversationTests(unittest.TestCase):
     def test_mixed_private_plan_never_sends_generated_private_terms_to_public_search(self):
         plan = validated([MAIL, {"name": "web", "query": "unpublished tuition correspondence"}])
         self.turn.text = "Search the web for campus deadlines and check my inbox"
-        generate = AsyncMock(return_value="I checked the inbox. I couldn’t verify public deadlines.")
-        with patch("nex.conversation.tools.prepare_account", return_value=("Gmail", [], "No matching email.")), \
+        generate = AsyncMock(side_effect=["I checked the inbox. I couldn’t verify public deadlines.", action_claims("checked")])
+        with patch("nex.conversation.tools.prepare_account", return_value=("Gmail", [], "")), \
                 patch("nex.web_answers.lookup") as lookup:
             result = asyncio.run(run(self.store, self.turn, plan, generate, private=True))
         lookup.assert_not_called()
-        supplied = json.loads(generate.await_args.args[0][1]["content"])["tools"]
+        supplied = json.loads(generate.await_args_list[0].args[0][1]["content"])["tools"]
         self.assertIn("unavailable", supplied["web"])
-        self.assertEqual(supplied["gmail"], "No matching email.")
+        self.assertEqual(supplied["gmail"], {
+            "status": "empty", "messages": [], "search_scope": {"query": MAIL["query"]},
+            "search_result": {"matching_messages": 0, "total_messages_in_inbox": "unknown"},
+        })
         self.assertEqual(result["sources"], [])
 
     def test_setting_a_weather_city_requires_an_explicit_valid_operation(self):
@@ -358,7 +373,7 @@ class ModelConversationTests(unittest.TestCase):
         self.turn.text = "remind me that i'm waiting for my walmart credit card to arrive in the mail"
         self.turn.started = datetime.now(UTC)
         generate = AsyncMock(side_effect=[
-            '{"capabilities":["check_in"],"language":"en"}',
+            '{"capabilities":["check_in"],"language":"en"}', UNSPECIFIED_PATTERN, self.authorized_request(),
             tools({
                 "name": "goal",
                 "query": "Ask whether the Walmart credit card arrived",
@@ -375,7 +390,7 @@ class ModelConversationTests(unittest.TestCase):
             "query": "Ask whether the Walmart credit card arrived",
             "check_in": True,
         },))
-        self.assertEqual(generate.await_count, 2)
+        self.assertEqual(generate.await_count, 4)
         messages = generate.await_args.args[0]
         self.assertEqual(messages[0]["content"], PLAN_CHECK_IN)
         variants = messages.response_format["json_schema"]["schema"]["properties"]["tools"]["items"]["anyOf"]
@@ -387,7 +402,7 @@ class ModelConversationTests(unittest.TestCase):
         self.turn.started = datetime.now(UTC)
         tomorrow = self.turn.started.astimezone(ZoneInfo(ZONE)).date() + timedelta(days=1)
         generate = AsyncMock(side_effect=[
-            '{"capabilities":["schedule"],"language":"en"}',
+            '{"capabilities":["schedule"],"language":"en"}', UNSPECIFIED_PATTERN, self.authorized_request(),
             tools({
                 "name": "goal",
                 "query": "Send an email",
@@ -400,7 +415,7 @@ class ModelConversationTests(unittest.TestCase):
 
         self.turn.text = "remind me that i'm waiting for my credit card in the mail"
         retry = AsyncMock(side_effect=[
-            '{"capabilities":["check_in"],"language":"en"}',
+            '{"capabilities":["check_in"],"language":"en"}', UNSPECIFIED_PATTERN, self.authorized_request(),
             tools({
                 "name": "goal",
                 "query": "Ask whether the credit card arrived",

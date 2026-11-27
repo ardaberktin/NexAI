@@ -69,9 +69,18 @@ def validate_goal_action(tools, review):
             "Supply start for the first run. For repeating delivery supply frequency in minutes as a separate "
             "field. Use 1440 for daily and 10080 for weekly. For a one-time start supply timing instead."
         )
-    if review.get("mail_watch") and (
-        other or tool["name"] != "goal" or not tool.get("frequency") or "target" in tool
-    ):
+    if review.get("mail_watch"):
+        validate_mail_watch(tools, check_existing=review["check_existing_mail"])
+
+
+def validate_mail_watch(tools, *, check_existing):
+    calls = {tool["name"]: tool for tool in tools}
+    expected = {"gmail", "goal"} if check_existing else {"goal"}
+    if calls.keys() != expected:
+        names = "gmail for the inbox search and goal for the recurring watch" if check_existing else "goal alone"
+        raise GoalPlanError(f"Use {names} for this email request.")
+    goal = calls["goal"]
+    if not goal.get("frequency") or "target" in goal or not goal.get("watch_provider"):
         raise GoalPlanError("For an email watch, return one new repeating goal with a future start.")
 
 

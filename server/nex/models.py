@@ -284,6 +284,8 @@ class Engines:
             body["decision"] = True
         if temperature is not None:
             body["temperature"] = temperature
+        if getattr(messages, "direct", False):
+            thinking = False
         if thinking is not None:
             body["thinking"] = bool(thinking)
         if reasoning_effort in {"low", "medium", "high"}:
@@ -349,6 +351,8 @@ class Engines:
             return None
         options = {"messages": messages, "max_tokens": tokens, "temperature": 0.25 if temperature is None else temperature,
                    "stream": on_text is not None} | response_options(messages)
+        if getattr(messages, "direct", False):
+            thinking = False
         if decision or not thinking:
             options["chat_template_kwargs"] = {"enable_thinking": False}
         elif reasoning_effort in {"low", "medium", "high"}:

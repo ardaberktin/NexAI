@@ -23,9 +23,18 @@ class ContextLimit(ValueError):
 class ModelMessages(list):
     """A normal message list with optional decoding constraints for the model transport."""
 
-    def __init__(self, messages, response_format):
+    def __init__(self, messages, response_format=None, *, direct=False):
         super().__init__(messages)
         self.response_format = response_format
+        self.direct = direct
+
+
+def direct_generation(generate):
+    """Decode fields and describe receipts directly after the model has interpreted the request."""
+    async def direct(messages, tokens):
+        marked = ModelMessages(messages, getattr(messages, "response_format", None), direct=True)
+        return await generate(marked, tokens)
+    return direct
 
 
 def constrained_messages(messages, schema):

@@ -5,10 +5,11 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
-from conversation_fixtures import unlock
+from conversation_fixtures import action_claims, unlock
 from nex.conversation.reply import WRITE, WRITE_MATCHED
 from nex.conversation.routing_prompt import OFFER_RECALL
 from nex.conversation.sync import make_turn
+from nex.conversation.verify_tool_reply import VERIFY_TOOL_REPLY
 from nex.conversation_history import time_key
 from nex.privacy import public
 from nex.privacy.chat_history import ChatFollowups
@@ -57,6 +58,8 @@ class ChatHistoryRecallTests(unittest.TestCase):
                 if OFFER_RECALL in instructions:
                     return json.dumps({"capabilities": ["recall_chat"], "language": "en", "query": query})
                 return '{"capabilities":["answer"],"language":"en"}'
+            if instructions == VERIFY_TOOL_REPLY:
+                return action_claims()
             if instructions.startswith((WRITE, WRITE_MATCHED)):
                 return compose(data)
             self.assertTrue(tools, instructions)

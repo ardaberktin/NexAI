@@ -36,7 +36,9 @@ def write_notice(generate, row):
             "local_due": local_due.isoformat(), "question": row["question"]}
     instructions = WRITE_NOTICE
     for _ in range(2):
-        raw = ask(generate, instructions, data, 220)
+        schema = {"type": "object", "additionalProperties": False, "required": ["message"],
+                  "properties": {"message": {"type": "string"}}}
+        raw = ask(generate, instructions, data, 220, schema=schema)
         if not raw:
             return None
         result = json_object(raw)
