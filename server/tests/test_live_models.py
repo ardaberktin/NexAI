@@ -19,9 +19,9 @@ class ModelRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.model = ModelRuntime(root, root, root / "live-model")
         self.model.weights.touch()
         (root / "qwen.gguf").touch()
-        self.start = AsyncMock(side_effect=self.start_gemma)
+        self.start = AsyncMock(side_effect=self.start_model)
 
-    async def start_gemma(self):
+    async def start_model(self):
         await asyncio.sleep(0)
         self.model.device = "Vulkan"
         process = SimpleNamespace(returncode=None)
@@ -48,6 +48,24 @@ class ModelRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first, second)
         self.assertEqual(first["active"], "gemma")
         self.start.assert_awaited_once()
+
+    async def test_staged_qwen_can_be_selected_and_restored_on_restart(self):
+        from nex.live.model_runtime import ModelRuntime
+        weights = self.model.assets / "Qwen3.5-4B-Q4_K_M.gguf"
+        weights.touch()
+        self.model.start = self.start
+        self.model.mark_managed()
+        self.assertEqual(self.model.marker.read_text(), "gemma\n")
+
+        status = await self.model.select("qwen-3.5-4b")
+        self.addAsyncCleanup(self.model.stop)
+        self.assertEqual(status["active"], "qwen-3.5-4b")
+        self.assertEqual(self.model.marker.read_text(), "qwen-3.5-4b\n")
+
+        restarted = ModelRuntime(self.model.assets, self.model.socket.parent, self.model.marker)
+        restarted.mark_managed()
+        self.assertEqual(restarted.current_spec().path, weights)
+        self.assertTrue(restarted.current_spec().reasoning)
 
     async def test_missing_gemma_fails_even_with_qwen_installed(self):
         self.model.weights.unlink()

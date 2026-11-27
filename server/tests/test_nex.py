@@ -46,6 +46,16 @@ class NexArchiveTests(unittest.TestCase):
         self.worker.process(row)
         return self.store.recording(identifier)
 
+    def test_recording_notes_reserve_the_completion_budget_for_the_notes(self):
+        transcript = "Casey will send the revised agenda on Friday."
+        config = self.settings.read()
+        with patch.object(self.engines, "generate", return_value=transcript) as generate:
+            self.assertEqual(self.assistant.process_notes(transcript, config), (transcript, "local_model"))
+        messages, limit, used_config = generate.call_args.args
+        self.assertEqual(messages[-1], {"role": "user", "content": transcript})
+        self.assertEqual((limit, used_config), (160, config))
+        self.assertEqual(generate.call_args.kwargs, {"thinking": False})
+
     def test_live_result_is_archived_once_in_both_arrival_orders(self):
         live = LiveMemory(self.root)
         for device, early in product(("mac", "watch"), (False, True)):
